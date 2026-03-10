@@ -51,6 +51,15 @@ trap "rm -rf $TEMP_DIR" EXIT
 echo "    Zipping ec2_controller..."
 (cd "$SCRIPT_DIR/lambda/ec2_controller" && zip -qr "$TEMP_DIR/ec2-controller.zip" .)
 
+# Idle Checker (M4) — includes ec2_controller modules for accounts.py + audit.py
+echo "    Zipping idle_checker..."
+(cd "$SCRIPT_DIR/lambda/idle_checker" && \
+  cp "$SCRIPT_DIR/lambda/ec2_controller/accounts.py" . && \
+  cp "$SCRIPT_DIR/lambda/ec2_controller/audit.py" . && \
+  cp "$SCRIPT_DIR/lambda/ec2_controller/utils.py" . && \
+  zip -qr "$TEMP_DIR/idle-checker.zip" . && \
+  rm -f accounts.py audit.py utils.py)
+
 # Config Injector
 echo "    Zipping config_injector..."
 (cd "$SCRIPT_DIR/lambda/config_injector" && zip -qr "$TEMP_DIR/config-injector.zip" .)
@@ -68,6 +77,10 @@ aws s3 cp "$TEMP_DIR/ec2-controller.zip" \
   "s3://${CODE_BUCKET}/lambda/ec2-controller-${ENVIRONMENT}-${LAMBDA_VERSION}.zip" \
   --region "$AWS_REGION" --quiet
 
+aws s3 cp "$TEMP_DIR/idle-checker.zip" \
+  "s3://${CODE_BUCKET}/lambda/idle-checker-${ENVIRONMENT}-${LAMBDA_VERSION}.zip" \
+  --region "$AWS_REGION" --quiet
+
 aws s3 cp "$TEMP_DIR/config-injector.zip" \
   "s3://${CODE_BUCKET}/lambda/config-injector-${ENVIRONMENT}.zip" \
   --region "$AWS_REGION" --quiet
@@ -76,7 +89,7 @@ aws s3 cp "$TEMP_DIR/frontend.zip" \
   "s3://${CODE_BUCKET}/frontend/frontend-${ENVIRONMENT}.zip" \
   --region "$AWS_REGION" --quiet
 
-echo "    Uploaded 3 artifacts."
+echo "    Uploaded 4 artifacts."
 
 # ─── Step 5: Deploy CloudFormation stack ───
 echo ""
@@ -84,16 +97,24 @@ echo "==> Deploying CloudFormation stack: $STACK_NAME"
 echo "    This may take 8-12 minutes on first deploy..."
 echo ""
 
+# Build parameter overrides — NotificationEmail is optional
+PARAM_OVERRIDES=(
+  "AdminEmail=${ADMIN_EMAIL}"
+  "CognitoDomainPrefix=${COGNITO_DOMAIN_PREFIX}"
+  "Environment=${ENVIRONMENT}"
+  "LambdaCodeS3Bucket=${CODE_BUCKET}"
+  "LambdaCodeVersion=${LAMBDA_VERSION}"
+)
+
+if [ -n "${NOTIFICATION_EMAIL:-}" ]; then
+  PARAM_OVERRIDES+=("NotificationEmail=${NOTIFICATION_EMAIL}")
+fi
+
 aws cloudformation deploy \
   --template-file "$SCRIPT_DIR/cloudformation/central-stack.yaml" \
   --stack-name "$STACK_NAME" \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides \
-    AdminEmail="$ADMIN_EMAIL" \
-    CognitoDomainPrefix="$COGNITO_DOMAIN_PREFIX" \
-    Environment="$ENVIRONMENT" \
-    LambdaCodeS3Bucket="$CODE_BUCKET" \
-    LambdaCodeVersion="$LAMBDA_VERSION" \
+  --parameter-overrides "${PARAM_OVERRIDES[@]}" \
   --region "$AWS_REGION" \
   --no-fail-on-empty-changeset
 

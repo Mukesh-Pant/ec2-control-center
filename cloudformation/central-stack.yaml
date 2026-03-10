@@ -38,6 +38,32 @@ Parameters:
     Default: '1'
     Description: Change this to force Lambda code update on stack update.
 
+  NotificationEmail:
+    Type: String
+    Default: ''
+    Description: >
+      Email address to receive idle auto-stop notifications (M4).
+      Leave blank to create the SNS topic without a subscription.
+    AllowedPattern: '(|[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})'
+    ConstraintDescription: Must be a valid email address or empty.
+
+  CpuThreshold:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 50
+    Description: 'CPU % below which an instance is considered idle (default: 5)'
+
+  IdleWindowMinutes:
+    Type: Number
+    Default: 60
+    MinValue: 15
+    MaxValue: 240
+    Description: 'Minutes of sustained low CPU before auto-stop is triggered (default: 60)'
+
+Conditions:
+  HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, '']]
+
 Resources:
 
   # =============================================
@@ -345,6 +371,17 @@ Resources:
                   - dynamodb:Scan
                   - dynamodb:UpdateItem
                   - dynamodb:DeleteItem
+                Resource: '*'
+              - Sid: CloudWatchMetrics
+                Effect: Allow
+                Action:
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                Resource: '*'
+              - Sid: SNSPublish
+                Effect: Allow
+                Action:
+                  - sns:Publish
                 Resource: '*'
               - Sid: CloudWatchLogs
                 Effect: Allow
@@ -826,6 +863,81 @@ Resources:
       TableName: !Ref AccountRegistryTable
       AccountId: !Ref 'AWS::AccountId'
 
+  # =============================================
+  # SNS TOPIC - Idle auto-stop notifications (M4)
+  # =============================================
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'ec2-control-alerts-${Environment}'
+      DisplayName: EC2 Control Portal Alerts
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  NotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasNotificationEmail
+    Properties:
+      TopicArn: !Ref NotificationTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  # =============================================
+  # IDLE CHECKER LAMBDA (M4)
+  # =============================================
+  IdleCheckerLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaExecutionRole
+    Properties:
+      FunctionName: !Sub 'ec2-idle-checker-${Environment}'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Sub 'lambda/idle-checker-${Environment}-${LambdaCodeVersion}.zip'
+      Environment:
+        Variables:
+          ACCOUNTS_TABLE: !Ref AccountRegistryTable
+          AUDIT_TABLE: !Ref AuditLogTable
+          SNS_TOPIC_ARN: !Ref NotificationTopic
+          ENVIRONMENT: !Ref Environment
+          CENTRAL_ACCOUNT_ID: !Ref 'AWS::AccountId'
+          CPU_THRESHOLD: !Sub '${CpuThreshold}'
+          IDLE_WINDOW_MIN: !Sub '${IdleWindowMinutes}'
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
+  # EVENTBRIDGE RULE - Trigger idle checker every 15 min (M4)
+  # =============================================
+  IdleCheckerSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'ec2-idle-checker-schedule-${Environment}'
+      Description: Triggers idle checker Lambda every 15 minutes
+      ScheduleExpression: rate(15 minutes)
+      State: ENABLED
+      Targets:
+        - Id: IdleCheckerTarget
+          Arn: !GetAtt IdleCheckerLambda.Arn
+
+  IdleCheckerSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt IdleCheckerLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt IdleCheckerSchedule.Arn
+
 # =============================================
 # OUTPUTS
 # =============================================
@@ -862,3 +974,11 @@ Outputs:
   AuditLogTable:
     Description: DynamoDB audit log table (90-day TTL). M2.
     Value: !Ref AuditLogTable
+
+  NotificationTopicArn:
+    Description: SNS topic ARN for idle auto-stop alerts. M4.
+    Value: !Ref NotificationTopic
+
+  IdleCheckerFunction:
+    Description: Idle checker Lambda function name. M4.
+    Value: !Ref IdleCheckerLambda
