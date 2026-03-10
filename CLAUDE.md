@@ -337,6 +337,47 @@ DynamoDB AuditLog Table design:
 
 Deploy approach for M2: Use `aws cloudformation deploy` (stack already exists — update, not create).
 
+## Git & GitHub Workflow
+
+This project uses Git (local) + GitHub (remote) for version control. **Always keep the repo in sync.**
+
+### Repository
+- GitHub repo: `ec2-control-center` (private)
+- Branch: `main`
+
+### Rules for Every Session
+- **Commit frequently** — after completing any logical unit of work (new file, feature working, bug fixed)
+- **Push after every commit** — `git push origin main` — so GitHub always has the latest
+- **Never leave uncommitted changes** at the end of a session
+- **Never commit**: `.zip` files, AWS credentials, `.env` secrets, `__pycache__/`
+
+### Commit Message Convention
+```
+<type>: <short summary>
+
+<optional body — what changed and why>
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+```
+
+Types: `feat` (new feature), `fix` (bug fix), `chore` (infra/config), `docs` (docs only), `refactor`
+
+Examples:
+- `feat(m2): add AuditLog DynamoDB table to CloudFormation stack`
+- `feat(m2): implement audit.py — log_action() with 90-day TTL`
+- `fix: correct CORS headers in Lambda error responses`
+- `chore: update deploy.sh to include scheduler Lambda zip`
+
+### Commit Checkpoints Per Milestone
+Commit at minimum after each of these:
+1. CloudFormation changes (stack yaml updated)
+2. Each new Lambda file or significant Lambda change
+3. Each new frontend file or significant frontend change
+4. After successful deploy and smoke test
+5. At end of every working session
+
+---
+
 ## Next Session Checklist
 
 Before starting development, always:
@@ -345,3 +386,5 @@ Before starting development, always:
 3. Check `C:\Users\MUKESH\.claude\plans\tender-kindling-peach.md` for detailed implementation plan
 4. Never modify files in `AutomateServer-main/` — that's the old v1 code kept for reference
 5. Stack is LIVE — test changes carefully; don't delete/recreate the stack unnecessarily
+6. `git status` — ensure working tree is clean before starting new work
+7. `git push origin main` — ensure latest is on GitHub
