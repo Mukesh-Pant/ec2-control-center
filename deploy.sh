@@ -134,7 +134,7 @@ if [ -n "$REST_API_ID" ] && [ "$REST_API_ID" != "None" ]; then
     --rest-api-id "$REST_API_ID" \
     --stage-name prod \
     --description "Post-deploy flush ${LAMBDA_VERSION}" \
-    --region "$AWS_REGION" --output none
+    --region "$AWS_REGION" --output text > /dev/null
   echo "    REST API deployment flushed (ID: $REST_API_ID)"
 else
   echo "    Skipped (RestApiId output not found in stack)"

@@ -19,10 +19,10 @@ var App = (function () {
   // ─── Activity Log ───
 
   var TAGS = {
-    ok: '<span class="log-tag tag-ok">OK</span>',
-    err: '<span class="log-tag tag-err">ERR</span>',
+    ok:   '<span class="log-tag tag-ok">OK</span>',
+    err:  '<span class="log-tag tag-err">ERR</span>',
     info: '<span class="log-tag tag-info">INFO</span>',
-    sys: '<span class="log-tag tag-sys">SYS</span>',
+    sys:  '<span class="log-tag tag-sys">SYS</span>',
   };
 
   function addLog(msg, type) {
@@ -44,12 +44,29 @@ var App = (function () {
     addLog('Log cleared.', 'sys');
   }
 
+  // ─── Theme Toggle ───
+
+  function initThemeToggle() {
+    var btn = document.getElementById('btn-theme-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      if (isLight) {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.removeItem('theme');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        localStorage.setItem('theme', 'light');
+      }
+    });
+  }
+
   // ─── Session Countdown ───
 
   function updateCountdown() {
-    var expiry = Auth.getExpiry();
+    var expiry    = Auth.getExpiry();
     var remaining = expiry - Date.now();
-    var el = document.getElementById('session-timer');
+    var el        = document.getElementById('session-timer');
     if (remaining <= 0) {
       Auth.logout();
       return;
@@ -63,11 +80,9 @@ var App = (function () {
   // ─── Tab Routing ───
 
   function switchTab(tabName) {
-    // Update tab buttons
     document.querySelectorAll('.tab').forEach(function (btn) {
       btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
     });
-    // Show/hide panels
     document.querySelectorAll('.panel').forEach(function (panel) {
       panel.style.display = panel.id === 'panel-' + tabName ? 'block' : 'none';
     });
@@ -77,19 +92,15 @@ var App = (function () {
 
   function updateClock() {
     var el = document.getElementById('clock');
-    if (el) {
-      el.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
-    }
+    if (el) el.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
   }
 
   // ─── Init ───
 
   async function init() {
-    // Auth guard
     var ok = await Auth.init();
     if (!ok) return;
 
-    // Update UI with user info
     document.getElementById('user-email').textContent = Auth.getEmail();
 
     // Wire up event listeners
@@ -97,7 +108,7 @@ var App = (function () {
     document.getElementById('btn-refresh').addEventListener('click', Instances.loadInstances);
     document.getElementById('btn-clear-log').addEventListener('click', clearLog);
     document.getElementById('btn-start').addEventListener('click', function () { Instances.controlServer('start'); });
-    document.getElementById('btn-stop').addEventListener('click', function () { Instances.controlServer('stop'); });
+    document.getElementById('btn-stop').addEventListener('click',  function () { Instances.controlServer('stop'); });
 
     // Tab buttons
     document.querySelectorAll('.tab').forEach(function (tab) {
@@ -112,6 +123,8 @@ var App = (function () {
     // Init modules
     Audit.init();
     Accounts.init();
+    Instances.initDrawerControls();
+    initThemeToggle();
 
     // Start timers
     updateCountdown();
@@ -121,18 +134,17 @@ var App = (function () {
 
     addLog('Portal initialized. Loading instances...', 'sys');
 
-    // Load instances
     Instances.loadInstances();
   }
 
   // ─── Public API ───
 
   return {
-    init: init,
-    showToast: showToast,
-    addLog: addLog,
-    clearLog: clearLog,
-    switchTab: switchTab,
+    init:       init,
+    showToast:  showToast,
+    addLog:     addLog,
+    clearLog:   clearLog,
+    switchTab:  switchTab,
   };
 
 })();
