@@ -313,7 +313,7 @@ These issues were hit during M1 deployment — avoid repeating them in future mi
 - **S3 portal bucket** has versioning enabled — when deleting stack, must delete all object versions first before CloudFormation can delete the bucket. Use: `aws s3api delete-objects` with version listing
 - **IAM policy Resource fields** — avoid `!GetAtt` cross-references that EarlyValidation rejects; use computed ARNs (`!Sub 'arn:aws:s3:::bucket-name'`) or `'*'`
 - **CloudFront `ForwardedValues`** — use instead of `CachePolicyId` to avoid EarlyValidation errors on managed cache policy IDs
-- **Lambda code not updating on stack update** — CloudFormation won't re-fetch the Lambda zip from S3 when the S3Key string is unchanged, even if the file in S3 changed. Fix: add `DEPLOY_VERSION: !Ref LambdaCodeVersion` to the Lambda's env vars. Since `deploy.sh` sets `LambdaCodeVersion=$(date +%s)`, this guarantees CloudFormation sees a changed property and does a full code update on every deploy.
+- **Lambda code not updating on stack update** — CloudFormation only calls `UpdateFunctionCode` when the `S3Key` string in the template changes. Changing env vars alone (e.g. adding `DEPLOY_VERSION`) is NOT enough — CF only calls `UpdateFunctionConfiguration`. Fix: include `LambdaCodeVersion` in the S3Key itself: `S3Key: !Sub 'lambda/ec2-controller-${Environment}-${LambdaCodeVersion}.zip'`. deploy.sh uploads to that same versioned key, so every deploy uses a new S3Key → guaranteed code update.
 
 ## Milestone 2 Starting Point
 

@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   EC2 Control Portal v2 - Central Stack
-  Deploys S3, CloudFront, Cognito (PKCE), HTTP API, Lambda, DynamoDB, SNS, EventBridge.
+  Deploys S3, CloudFront, Cognito (PKCE), REST API, Lambda, DynamoDB.
   Zero manual steps after deployment. Config auto-injected into frontend.
 
 Parameters:
@@ -372,7 +372,7 @@ Resources:
       MemorySize: 256
       Code:
         S3Bucket: !Ref LambdaCodeS3Bucket
-        S3Key: !Sub 'lambda/ec2-controller-${Environment}.zip'
+        S3Key: !Sub 'lambda/ec2-controller-${Environment}-${LambdaCodeVersion}.zip'
       Environment:
         Variables:
           ACCOUNTS_TABLE: !Ref AccountRegistryTable
@@ -380,9 +380,6 @@ Resources:
           ENVIRONMENT: !Ref Environment
           ALLOWED_ORIGIN: '*'
           CENTRAL_ACCOUNT_ID: !Ref 'AWS::AccountId'
-          # Changing this on every deploy forces CloudFormation to re-fetch
-          # the Lambda zip from S3, even when the S3 key filename is unchanged.
-          DEPLOY_VERSION: !Ref LambdaCodeVersion
       Tags:
         - Key: Project
           Value: EC2Control
@@ -467,7 +464,7 @@ Resources:
     DependsOn:
       - CloudFrontDistribution
       - CognitoAppClient
-      - HttpApi
+      - RestApiStage
       - PortalBucketPolicy
     Properties:
       ServiceToken: !GetAtt ConfigInjectorLambda.Arn
@@ -478,110 +475,284 @@ Resources:
       CognitoDomain: !Sub 'https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
       ClientId: !Ref CognitoAppClient
       RedirectUri: !Sub 'https://${CloudFrontDistribution.DomainName}/index.html'
-      ApiUrl: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+      ApiUrl: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
       UserPoolId: !Ref CognitoUserPool
       Version: !Ref LambdaCodeVersion
 
   # =============================================
-  # HTTP API (API Gateway v2)
+  # REST API (API Gateway v1)
   # =============================================
-  HttpApi:
-    Type: AWS::ApiGatewayV2::Api
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub 'ec2-control-api-${Environment}'
-      ProtocolType: HTTP
-      CorsConfiguration:
-        AllowOrigins:
-          - '*'
-        AllowMethods:
-          - POST
-          - GET
-          - OPTIONS
-        AllowHeaders:
-          - Content-Type
-          - Authorization
-        MaxAge: 3600
+      Description: EC2 Control Portal REST API
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
 
   # =============================================
-  # HTTP API - JWT Authorizer (Cognito)
+  # REST API - Cognito Authorizer
   # =============================================
-  HttpApiAuthorizer:
-    Type: AWS::ApiGatewayV2::Authorizer
+  RestApiAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
     Properties:
-      ApiId: !Ref HttpApi
-      AuthorizerType: JWT
-      IdentitySource:
-        - '$request.header.Authorization'
-      Name: CognitoJWT
-      JwtConfiguration:
-        Audience:
-          - !Ref CognitoAppClient
-        Issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
+      RestApiId: !Ref RestApi
+      Name: CognitoAuthorizer
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.Authorization
+      ProviderARNs:
+        - !GetAtt CognitoUserPool.Arn
 
   # =============================================
-  # HTTP API - Lambda Integration
+  # REST API - Resources (URL paths)
   # =============================================
-  HttpApiIntegration:
-    Type: AWS::ApiGatewayV2::Integration
+  ResourceEc2:
+    Type: AWS::ApiGateway::Resource
     Properties:
-      ApiId: !Ref HttpApi
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt MainLambda.Arn
-      PayloadFormatVersion: '2.0'
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: ec2
+
+  ResourceAccounts:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: accounts
+
+  ResourceAudit:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: audit
+
+  ResourceAuditDaily:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResourceAudit
+      PathPart: daily
 
   # =============================================
-  # HTTP API - Routes
+  # REST API - CORS Gateway Responses
+  # Adds CORS headers to 4xx/5xx error responses
   # =============================================
-  RoutePostEc2:
-    Type: AWS::ApiGatewayV2::Route
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
     Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: 'POST /ec2'
-      AuthorizationType: JWT
-      AuthorizerId: !Ref HttpApiAuthorizer
-      Target: !Sub 'integrations/${HttpApiIntegration}'
+      RestApiId: !Ref RestApi
+      ResponseType: DEFAULT_4XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
 
-  RouteGetAccounts:
-    Type: AWS::ApiGatewayV2::Route
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
     Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: 'GET /accounts'
-      AuthorizationType: JWT
-      AuthorizerId: !Ref HttpApiAuthorizer
-      Target: !Sub 'integrations/${HttpApiIntegration}'
-
-  # M2 — Audit routes
-  RouteGetAudit:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: 'GET /audit'
-      AuthorizationType: JWT
-      AuthorizerId: !Ref HttpApiAuthorizer
-      Target: !Sub 'integrations/${HttpApiIntegration}'
-
-  RouteGetAuditDaily:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: 'GET /audit/daily'
-      AuthorizationType: JWT
-      AuthorizerId: !Ref HttpApiAuthorizer
-      Target: !Sub 'integrations/${HttpApiIntegration}'
+      RestApiId: !Ref RestApi
+      ResponseType: DEFAULT_5XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
 
   # =============================================
-  # HTTP API - Stage (auto-deploy)
+  # REST API - POST /ec2
   # =============================================
-  HttpApiStage:
-    Type: AWS::ApiGatewayV2::Stage
+  MethodPostEc2:
+    Type: AWS::ApiGateway::Method
     Properties:
-      ApiId: !Ref HttpApi
-      StageName: '$default'
-      AutoDeploy: true
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceEc2
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsEc2:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceEc2
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   # =============================================
-  # LAMBDA PERMISSION - HTTP API
-  # Single wildcard covers all routes
+  # REST API - GET /accounts
+  # =============================================
+  MethodGetAccounts:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceAccounts
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsAccounts:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceAccounts
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
+  # REST API - GET /audit
+  # =============================================
+  MethodGetAudit:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceAudit
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsAudit:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceAudit
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
+  # REST API - GET /audit/daily
+  # =============================================
+  MethodGetAuditDaily:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceAuditDaily
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsAuditDaily:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceAuditDaily
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
+  # REST API - Deployment + Stage
+  # =============================================
+  RestApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - MethodPostEc2
+      - MethodOptionsEc2
+      - MethodGetAccounts
+      - MethodOptionsAccounts
+      - MethodGetAudit
+      - MethodOptionsAudit
+      - MethodGetAuditDaily
+      - MethodOptionsAuditDaily
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: !Sub 'Deployment ${LambdaCodeVersion}'
+
+  RestApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestApiDeployment
+      StageName: prod
+      Description: !Sub 'Production stage - ${Environment}'
+
+  # =============================================
+  # LAMBDA PERMISSION - REST API
   # =============================================
   MainLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -589,7 +760,7 @@ Resources:
       FunctionName: !GetAtt MainLambda.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*'
 
   # =============================================
   # SEED ACCOUNT - Registers central account
@@ -669,8 +840,8 @@ Outputs:
     Value: !Ref PortalBucket
 
   ApiURL:
-    Description: HTTP API endpoint URL.
-    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+    Description: 'REST API endpoint URL (stage: prod).'
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
 
   CognitoUserPoolId:
     Description: Use this to add more users via CLI.

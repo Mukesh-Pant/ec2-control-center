@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Finance Server Control</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#080e1a;--bg2:#0b1220;--surface:#0f1928;--surface2:#131f30;
+      --border:#1e2d42;--border2:#263547;
+      --blue:#3b82f6;--blue-light:#60a5fa;--blue-dim:rgba(59,130,246,0.12);
+      --blue-glow:rgba(59,130,246,0.25);
+      --cyan:#06b6d4;--cyan-dim:rgba(6,182,212,0.10);
+      --red:#f43f5e;--red-dim:rgba(244,63,94,0.10);--red-glow:rgba(244,63,94,0.22);
+      --green:#10b981;--green-dim:rgba(16,185,129,0.10);
+      --yellow:#f59e0b;--yellow-dim:rgba(245,158,11,0.10);
+      --text:#e2e8f0;--text2:#94a3b8;--text3:#4a6080;
+      --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
+      --radius:10px;--radius-sm:6px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{background:var(--bg);font-family:var(--sans);color:var(--text);min-height:100vh;
+      display:none;flex-direction:column;align-items:center;justify-content:center;
+      padding:24px;position:relative;overflow-x:hidden}
+    body.ready{display:flex}
+    .bg-grid{position:fixed;inset:0;background-image:linear-gradient(rgba(59,130,246,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,0.03) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+    .bg-glow{position:fixed;top:-120px;left:50%;transform:translateX(-50%);width:800px;height:500px;background:radial-gradient(ellipse at center,rgba(59,130,246,0.07) 0%,rgba(6,182,212,0.03) 40%,transparent 70%);pointer-events:none;z-index:0}
+    .bg-glow2{position:fixed;bottom:-200px;right:-100px;width:600px;height:600px;background:radial-gradient(ellipse,rgba(59,130,246,0.04) 0%,transparent 65%);pointer-events:none;z-index:0}
+    .wrapper{position:relative;z-index:1;width:100%;max-width:640px;animation:pageIn 0.7s cubic-bezier(0.16,1,0.3,1) both}
+
+    /* Navbar */
+    .navbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px}
+    .nav-brand{display:flex;align-items:center;gap:12px}
+    .nav-logo{width:36px;height:36px;background:linear-gradient(135deg,var(--blue),var(--cyan));border-radius:var(--radius-sm);display:grid;place-items:center;flex-shrink:0}
+    .nav-logo svg{width:19px;height:19px;fill:#fff}
+    .nav-title{font-size:15px;font-weight:700;letter-spacing:-0.2px}
+    .nav-subtitle{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1px;margin-top:1px}
+    .nav-right{display:flex;align-items:center;gap:10px}
+    .nav-user{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:20px}
+    .nav-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse-dot 2s infinite;flex-shrink:0}
+    .nav-email{font-family:var(--mono);font-size:11px;color:var(--text2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .btn-logout{display:flex;align-items:center;gap:6px;padding:7px 14px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all 0.2s}
+    .btn-logout:hover{border-color:var(--red);color:var(--red);background:var(--red-dim)}
+
+    /* Session bar */
+    .session-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--yellow-dim);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius-sm);margin-bottom:14px}
+    .session-bar-left{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--yellow)}
+    .session-timer{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--yellow);letter-spacing:1px}
+    .session-timer.warning{color:var(--red);animation:blink-text 1s infinite}
+
+    /* Selector card */
+    .selector-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:14px}
+    .selector-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+    .selector-label::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 6px var(--cyan);display:inline-block}
+    .selector-row{display:flex;align-items:center;gap:10px}
+    .instance-select{flex:1;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:var(--mono);font-size:12px;padding:10px 36px 10px 14px;cursor:pointer;transition:border-color 0.2s;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234a6080' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+    .instance-select:focus{outline:none;border-color:var(--blue)}
+    .instance-select option{background:var(--surface2);color:var(--text)}
+    .instance-select:disabled{opacity:0.5;cursor:not-allowed}
+    .btn-refresh{display:flex;align-items:center;gap:6px;padding:10px 16px;background:var(--blue-dim);border:1px solid rgba(59,130,246,0.3);border-radius:var(--radius-sm);color:var(--blue-light);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all 0.2s;white-space:nowrap}
+    .btn-refresh:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .btn-refresh:disabled{opacity:0.4;cursor:not-allowed}
+    .btn-refresh.spinning svg{animation:spin 0.7s linear infinite}
+    .selector-hint{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+
+    /* Server card */
+    .server-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;transition:opacity 0.3s}
+    .server-card.dimmed{opacity:0.4;pointer-events:none}
+    .card-stripe{height:3px;background:linear-gradient(90deg,var(--blue) 0%,var(--cyan) 50%,transparent 100%);opacity:0.8}
+    .card-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 18px;border-bottom:1px solid var(--border)}
+    .card-header-left{display:flex;align-items:center;gap:14px}
+    .server-icon{width:46px;height:46px;background:var(--blue-dim);border:1px solid rgba(59,130,246,0.25);border-radius:var(--radius-sm);display:grid;place-items:center;flex-shrink:0}
+    .server-icon svg{width:22px;height:22px;stroke:var(--blue-light);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+    .server-name{font-size:18px;font-weight:700;letter-spacing:-0.3px}
+    .server-instance{font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:4px}
+    .status-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:20px;border:1px solid;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;transition:all 0.4s ease}
+    .status-badge.running{color:var(--green);border-color:rgba(16,185,129,0.4);background:var(--green-dim)}
+    .status-badge.stopped{color:var(--red);border-color:rgba(244,63,94,0.35);background:var(--red-dim)}
+    .status-badge.pending{color:var(--yellow);border-color:rgba(245,158,11,0.35);background:var(--yellow-dim)}
+    .status-dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex-shrink:0}
+    .status-badge.running .status-dot{animation:pulse-dot 1.8s infinite}
+    .status-badge.pending .status-dot{animation:spin 0.7s linear infinite;border-radius:2px}
+
+    /* Metrics */
+    .metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0}
+    .metric-cell{padding:16px 20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+    .metric-cell:last-child{border-right:none}
+    .metric-label{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:6px}
+    .metric-value{font-size:13px;font-weight:600;color:var(--text);font-family:var(--mono)}
+    .metric-value.blue{color:var(--blue-light)}
+    .metric-value.muted{color:var(--text3)}
+
+    /* Actions */
+    .actions-section{padding:22px 24px;border-bottom:1px solid var(--border)}
+    .actions-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:14px}
+    .actions-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .action-btn{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;padding:18px 20px;border:1.5px solid;border-radius:var(--radius-sm);background:transparent;cursor:pointer;font-family:var(--sans);font-size:14px;font-weight:600;letter-spacing:0.2px;transition:all 0.22s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
+    .action-btn:active:not(:disabled){transform:scale(0.98)}
+    .action-btn:disabled{opacity:0.28;cursor:not-allowed;transform:none!important}
+    .btn-start{color:var(--blue-light);border-color:rgba(59,130,246,0.4)}
+    .btn-start:hover:not(:disabled){background:linear-gradient(135deg,var(--blue),#2563eb);border-color:var(--blue);color:#fff;box-shadow:0 0 32px var(--blue-glow),0 4px 16px rgba(59,130,246,0.28);transform:translateY(-2px)}
+    .btn-stop{color:var(--red);border-color:rgba(244,63,94,0.4)}
+    .btn-stop:hover:not(:disabled){background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 0 32px var(--red-glow),0 4px 16px rgba(244,63,94,0.22);transform:translateY(-2px)}
+    .btn-icon-wrap{width:28px;height:28px;border-radius:50%;background:currentColor;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform 0.25s}
+    .action-btn:hover:not(:disabled) .btn-icon-wrap{transform:scale(1.12)}
+    .btn-icon-inner{font-size:11px;color:var(--bg);font-weight:900;line-height:1}
+    .btn-spinner{display:none;width:18px;height:18px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin 0.65s linear infinite;flex-shrink:0}
+
+    /* Log */
+    .log-section{padding:18px 24px 22px}
+    .log-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .log-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);display:flex;align-items:center;gap:8px}
+    .log-title::before{content:'';display:inline-block;width:6px;height:6px;background:var(--blue);border-radius:50%;box-shadow:0 0 6px var(--blue)}
+    .log-clear{background:none;border:none;font-family:var(--mono);font-size:10px;color:var(--text3);cursor:pointer;letter-spacing:1px;padding:2px 6px;transition:color 0.2s}
+    .log-clear:hover{color:var(--blue-light)}
+    .log-list{list-style:none;max-height:160px;overflow-y:auto;padding-right:2px}
+    .log-list::-webkit-scrollbar{width:3px}
+    .log-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+    .log-entry{display:grid;grid-template-columns:70px 1fr 44px;gap:10px;align-items:center;padding:7px 10px;border-radius:var(--radius-sm);transition:background 0.15s;animation:logIn 0.25s ease both}
+    .log-entry:hover{background:var(--surface2)}
+    .log-time{font-family:var(--mono);font-size:10px;color:var(--text3);white-space:nowrap}
+    .log-msg{font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .log-tag{font-family:var(--mono);font-size:9px;letter-spacing:1px;padding:3px 7px;border-radius:4px;text-align:center;font-weight:500}
+    .tag-ok{background:var(--green-dim);color:var(--green)}
+    .tag-err{background:var(--red-dim);color:var(--red)}
+    .tag-info{background:var(--blue-dim);color:var(--blue-light)}
+    .tag-sys{background:var(--surface2);color:var(--text3)}
+
+    /* Footer */
+    .footer{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+    .footer-left{display:flex;align-items:center;gap:18px}
+    .footer-item{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--text3)}
+    .footer-dot{width:5px;height:5px;border-radius:50%;background:var(--blue);opacity:0.6}
+    .footer-clock{font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:1px}
+
+    /* Toast */
+    #toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(80px);display:flex;align-items:center;gap:10px;padding:12px 20px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:500;transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);pointer-events:none;white-space:nowrap;z-index:9999}
+    #toast.show{transform:translateX(-50%) translateY(0)}
+    #toast.ok{border-color:rgba(16,185,129,0.4);color:var(--green)}
+    #toast.err{border-color:rgba(244,63,94,0.4);color:var(--red)}
+    #toast.info{border-color:rgba(59,130,246,0.4);color:var(--blue-light)}
+
+    /* No selection */
+    .no-selection{text-align:center;padding:40px 24px;font-family:var(--mono);font-size:12px;color:var(--text3);border-top:1px solid var(--border)}
+    .no-selection-icon{font-size:28px;margin-bottom:10px;opacity:0.4}
+
+    @keyframes pageIn{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.75)}}
+    @keyframes blink-text{0%,100%{opacity:1}50%{opacity:.4}}
+    @keyframes logIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+    @media(max-width:520px){
+      .metrics-grid{grid-template-columns:repeat(2,1fr)}
+      .metrics-grid .metric-cell:nth-child(2){border-right:none}
+      .nav-email{max-width:100px}
+      .selector-row{flex-direction:column}
+      .btn-refresh{width:100%;justify-content:center}
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+  <div class="bg-glow2"></div>
+
+  <div class="wrapper">
+
+    <!-- Navbar -->
+    <nav class="navbar">
+      <div class="nav-brand">
+        <div class="nav-logo">
+          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="5" rx="1.5"/><rect x="2" y="10" width="20" height="5" rx="1.5"/><rect x="2" y="17" width="20" height="5" rx="1.5"/><circle cx="18.5" cy="5.5" r="1" fill="rgba(255,255,255,0.5)"/><circle cx="18.5" cy="12.5" r="1" fill="rgba(255,255,255,0.5)"/><circle cx="18.5" cy="19.5" r="1" fill="rgba(255,255,255,0.5)"/></svg>
+        </div>
+        <div>
+          <div class="nav-title">FinanceOps</div>
+          <div class="nav-subtitle">SERVER CONTROL PANEL</div>
+        </div>
+      </div>
+      <div class="nav-right">
+        <div class="nav-user">
+          <div class="nav-dot"></div>
+          <span class="nav-email" id="user-email">loading...</span>
+        </div>
+        <button class="btn-logout" onclick="logout()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Logout
+        </button>
+      </div>
+    </nav>
+
+    <!-- Session bar -->
+    <div class="session-bar">
+      <div class="session-bar-left">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Session expires in
+      </div>
+      <span class="session-timer" id="session-timer">--:--</span>
+    </div>
+
+    <!-- Instance Selector -->
+    <div class="selector-card">
+      <div class="selector-label">Select EC2 Instance</div>
+      <div class="selector-row">
+        <select class="instance-select" id="instance-select" onchange="onInstanceSelected()" disabled>
+          <option value="">Loading instances...</option>
+        </select>
+        <button class="btn-refresh" id="btn-refresh" onclick="loadInstances()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div class="selector-hint" id="selector-hint">Loading all EC2 instances from your account...</div>
+    </div>
+
+    <!-- Server card -->
+    <div class="server-card dimmed" id="server-card">
+      <div class="card-stripe"></div>
+      <div class="card-header">
+        <div class="card-header-left">
+          <div class="server-icon">
+            <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          </div>
+          <div>
+            <div class="server-name" id="server-name">—</div>
+            <div class="server-instance" id="instance-display">Select an instance above</div>
+          </div>
+        </div>
+        <div class="status-badge stopped" id="status-badge">
+          <div class="status-dot"></div>
+          <span id="status-text">—</span>
+        </div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-cell"><div class="metric-label">Region</div><div class="metric-value blue" id="metric-region">—</div></div>
+        <div class="metric-cell"><div class="metric-label">Instance Type</div><div class="metric-value" id="metric-type">—</div></div>
+        <div class="metric-cell"><div class="metric-label">Public IP</div><div class="metric-value muted" id="metric-ip">—</div></div>
+        <div class="metric-cell"><div class="metric-label">Triggered By</div><div class="metric-value muted" id="triggered-by">—</div></div>
+      </div>
+
+      <!-- Shown when no instance selected -->
+      <div class="no-selection" id="no-selection">
+        <div class="no-selection-icon">⚡</div>
+        Select an instance from the dropdown above to control it
+      </div>
+
+      <!-- Shown when instance selected -->
+      <div id="controls-section" style="display:none">
+        <div class="actions-section">
+          <div class="actions-label">Server Controls</div>
+          <div class="actions-row">
+            <button class="action-btn btn-start" id="btn-start" onclick="controlServer('start')" disabled>
+              <div class="btn-spinner" id="spin-start"></div>
+              <div class="btn-icon-wrap" id="icon-start"><span class="btn-icon-inner">▶</span></div>
+              <span id="label-start">Start Server</span>
+            </button>
+            <button class="action-btn btn-stop" id="btn-stop" onclick="controlServer('stop')" disabled>
+              <div class="btn-spinner" id="spin-stop"></div>
+              <div class="btn-icon-wrap" id="icon-stop"><span class="btn-icon-inner">■</span></div>
+              <span id="label-stop">Stop Server</span>
+            </button>
+          </div>
+        </div>
+        <div class="log-section">
+          <div class="log-header">
+            <div class="log-title">Activity Log</div>
+            <button class="log-clear" onclick="clearLog()">CLEAR</button>
+          </div>
+          <ul class="log-list" id="log-list">
+            <li class="log-entry">
+              <span class="log-time">--:--:--</span>
+              <span class="log-msg">Session initialised. Portal ready.</span>
+              <span class="log-tag tag-sys">SYS</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-left">
+        <div class="footer-item"><div class="footer-dot"></div>AWS Lambda</div>
+        <div class="footer-item"><div class="footer-dot"></div>API Gateway</div>
+        <div class="footer-item"><div class="footer-dot"></div>Cognito Auth</div>
+      </div>
+      <div class="footer-clock" id="clock">--:--:--</div>
+    </div>
+
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+  // ══════════════════════════════════════════════════
+  //  ⚙️  CONFIG — Fill these in before uploading
+  // ══════════════════════════════════════════════════
+  const CONFIG = {
+    COGNITO_DOMAIN : 'https://myec2.auth.ap-south-1.amazoncognito.com',
+    CLIENT_ID      : '76vlepp1f5tjrd9gvkqsg4c61d',
+    REDIRECT_URI   : 'https://d2eua2mikeo2kj.cloudfront.net/index.html',
+    API_URL        : 'https://v1k511r5uf.execute-api.ap-south-1.amazonaws.com/prod/ec2',
+  };
+  // ══════════════════════════════════════════════════
+  // NOTE: INSTANCE_ID is no longer needed here.
+  // The user selects the instance from the dropdown.
+  // ══════════════════════════════════════════════════
+
+  // ─────────────────────────────────────────────────
+  //  1. Capture token from URL after Cognito login
+  // ─────────────────────────────────────────────────
+  (function captureToken() {
+    const hash = window.location.hash;
+    if (!hash) return;
+    const params  = new URLSearchParams(hash.replace('#','?'));
+    const token   = params.get('id_token');
+    const expires = parseInt(params.get('expires_in') || '3600', 10);
+    if (token) {
+      sessionStorage.setItem('id_token',     token);
+      sessionStorage.setItem('token_expiry', Date.now() + expires * 1000);
+      try {
+        const p = JSON.parse(atob(token.split('.')[1]));
+        sessionStorage.setItem('user_email', p.email || p['cognito:username'] || 'Finance User');
+      } catch(e) { sessionStorage.setItem('user_email','Finance User'); }
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  })();
+
+  // ─────────────────────────────────────────────────
+  //  2. Session Guard
+  // ─────────────────────────────────────────────────
+  (function sessionGuard() {
+    const token  = sessionStorage.getItem('id_token');
+    const expiry = parseInt(sessionStorage.getItem('token_expiry') || '0', 10);
+    if (!token || Date.now() > expiry) {
+      sessionStorage.clear();
+      window.location.replace(buildLoginURL());
+      return;
+    }
+    document.body.classList.add('ready');
+  })();
+
+  // ─────────────────────────────────────────────────
+  //  3. Init UI
+  // ─────────────────────────────────────────────────
+  const userEmail = sessionStorage.getItem('user_email') || 'Finance User';
+  document.getElementById('user-email').textContent   = userEmail;
+  document.getElementById('triggered-by').textContent = userEmail.split('@')[0];
+  setInterval(() => {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString('en-GB', {hour12:false});
+  }, 1000);
+
+  // ─────────────────────────────────────────────────
+  //  4. Session countdown
+  // ─────────────────────────────────────────────────
+  function buildLoginURL() {
+    return `${CONFIG.COGNITO_DOMAIN}/login?client_id=${CONFIG.CLIENT_ID}&response_type=token&scope=email+openid&redirect_uri=${encodeURIComponent(CONFIG.REDIRECT_URI)}`;
+  }
+
+  function updateCountdown() {
+    const expiry    = parseInt(sessionStorage.getItem('token_expiry') || '0', 10);
+    const remaining = expiry - Date.now();
+    const el        = document.getElementById('session-timer');
+    if (remaining <= 0) { sessionStorage.clear(); window.location.replace(buildLoginURL()); return; }
+    const m = Math.floor(remaining / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    el.className   = `session-timer${m < 5 ? ' warning' : ''}`;
+  }
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
+
+  // ─────────────────────────────────────────────────
+  //  5. Logout
+  // ─────────────────────────────────────────────────
+  function logout() {
+    sessionStorage.clear();
+    window.location.replace(
+      `${CONFIG.COGNITO_DOMAIN}/logout?client_id=${CONFIG.CLIENT_ID}&logout_uri=${encodeURIComponent(CONFIG.REDIRECT_URI)}`
+    );
+  }
+
+  // ─────────────────────────────────────────────────
+  //  6. API helper
+  // ─────────────────────────────────────────────────
+  async function callAPI(body) {
+    const token  = sessionStorage.getItem('id_token');
+    const expiry = parseInt(sessionStorage.getItem('token_expiry') || '0', 10);
+    if (!token || Date.now() > expiry) {
+      sessionStorage.clear(); window.location.replace(buildLoginURL());
+      throw new Error('Session expired');
+    }
+    const res = await fetch(CONFIG.API_URL, {
+      method:  'POST',
+      headers: {'Content-Type':'application/json','Authorization':token},
+      body:    JSON.stringify(body),
+    });
+    if (res.status === 401) {
+      sessionStorage.clear();
+      showToast('Session expired. Redirecting...','err');
+      setTimeout(() => window.location.replace(buildLoginURL()), 1500);
+      throw new Error('Unauthorized');
+    }
+    return res;
+  }
+
+  // ─────────────────────────────────────────────────
+  //  7. Load ALL EC2 instances into dropdown
+  // ─────────────────────────────────────────────────
+  let allInstances       = [];
+  let selectedInstanceId = null;
+  let selectedRegion     = 'ap-south-1';
+  let pollTimer          = null;
+
+  async function loadInstances() {
+    const btn    = document.getElementById('btn-refresh');
+    const select = document.getElementById('instance-select');
+    const hint   = document.getElementById('selector-hint');
+
+    btn.disabled = true;
+    btn.classList.add('spinning');
+    select.disabled = true;
+    hint.textContent = 'Fetching instances from AWS...';
+
+    try {
+      const res  = await callAPI({ action: 'list' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to list instances');
+
+      allInstances = data.instances || [];
+
+      select.innerHTML = '<option value="">— Select an instance —</option>';
+      allInstances.forEach(inst => {
+        const name  = inst.name || inst.instanceId;
+        const emoji = inst.state === 'running' ? '🟢' : inst.state === 'stopped' ? '🔴' : '🟡';
+        const opt   = document.createElement('option');
+        opt.value       = inst.instanceId;
+        opt.textContent = `${emoji}  ${name}  (${inst.instanceId})  —  ${inst.state}`;
+        select.appendChild(opt);
+      });
+
+      // Restore selection if still valid
+      if (selectedInstanceId && allInstances.find(i => i.instanceId === selectedInstanceId)) {
+        select.value = selectedInstanceId;
+        onInstanceSelected(true);
+      } else {
+        selectedInstanceId = null;
+      }
+
+      hint.textContent = `✓ ${allInstances.length} instance${allInstances.length !== 1 ? 's' : ''} found. Select one to control it.`;
+      addLog(`Loaded ${allInstances.length} EC2 instance(s).`, 'ok');
+
+    } catch (err) {
+      if (err.message === 'Session expired' || err.message === 'Unauthorized') return;
+      hint.textContent = `✗ Failed: ${err.message}`;
+      select.innerHTML = '<option value="">Failed to load — click Refresh</option>';
+      addLog(`List failed: ${err.message}`, 'err');
+      showToast('Failed to load instances', 'err');
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('spinning');
+      select.disabled = false;
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  //  8. Handle dropdown selection
+  // ─────────────────────────────────────────────────
+  function onInstanceSelected(skipFetch = false) {
+    const id = document.getElementById('instance-select').value;
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+
+    if (!id) {
+      selectedInstanceId = null;
+      showNoSelection();
+      return;
+    }
+
+    selectedInstanceId = id;
+    const inst = allInstances.find(i => i.instanceId === id);
+    selectedRegion = inst ? inst.region : 'ap-south-1';
+
+    // Update card info
+    document.getElementById('server-name').textContent     = inst ? (inst.name || inst.instanceId) : id;
+    document.getElementById('instance-display').textContent = id + '  ·  ' + (inst ? inst.region : 'ap-south-1');
+    document.getElementById('metric-region').textContent   = inst ? inst.region : 'ap-south-1';
+    document.getElementById('metric-type').textContent     = inst ? (inst.instanceType || '—') : '—';
+    document.getElementById('metric-ip').textContent       = inst ? (inst.publicIp || 'N/A') : '—';
+
+    // Show controls
+    document.getElementById('server-card').classList.remove('dimmed');
+    document.getElementById('no-selection').style.display     = 'none';
+    document.getElementById('controls-section').style.display = 'block';
+
+    if (skipFetch && inst) {
+      setStatus(inst.state);
+    } else {
+      addLog(`Selected: ${inst ? (inst.name || id) : id}`, 'info');
+      fetchStatus();
+    }
+  }
+
+  function showNoSelection() {
+    document.getElementById('server-card').classList.add('dimmed');
+    document.getElementById('no-selection').style.display     = 'block';
+    document.getElementById('controls-section').style.display = 'none';
+    document.getElementById('server-name').textContent        = '—';
+    document.getElementById('instance-display').textContent   = 'Select an instance above';
+    document.getElementById('status-text').textContent        = '—';
+  }
+
+  // ─────────────────────────────────────────────────
+  //  9. Fetch live status for selected instance
+  // ─────────────────────────────────────────────────
+  async function fetchStatus() {
+    if (!selectedInstanceId) return;
+    try {
+      const res  = await callAPI({ action: 'status', instanceId: selectedInstanceId, region: selectedRegion });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Status failed');
+
+      setStatus(data.state);
+      if (data.instanceType) document.getElementById('metric-type').textContent = data.instanceType;
+      if (data.publicIp)     document.getElementById('metric-ip').textContent   = data.publicIp;
+
+      document.getElementById('selector-hint').textContent =
+        `✓ ${data.state.toUpperCase()}  ·  ${data.instanceType || '—'}  ·  IP: ${data.publicIp || 'N/A'}`;
+
+      const stable = ['running','stopped'].includes(data.state);
+      pollTimer = setTimeout(fetchStatus, stable ? 10000 : 3000);
+
+    } catch (err) {
+      if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
+        addLog(`Status fetch failed: ${err.message}`, 'err');
+        showToast('Status fetch failed — check API Gateway URL', 'err');
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  //  10. UI helpers
+  // ─────────────────────────────────────────────────
+  let currentState = 'stopped';
+
+  function setStatus(state) {
+    currentState = state;
+    const cls = ['running','stopped','pending'].includes(state) ? state : 'pending';
+    document.getElementById('status-badge').className  = `status-badge ${cls}`;
+    document.getElementById('status-text').textContent = state.toUpperCase();
+    document.getElementById('btn-start').disabled = state !== 'stopped';
+    document.getElementById('btn-stop').disabled  = state !== 'running';
+  }
+
+  function setLoading(action, on) {
+    document.getElementById(`spin-${action}`).style.display = on ? 'block' : 'none';
+    document.getElementById(`icon-${action}`).style.display = on ? 'none'  : 'flex';
+    document.getElementById(`label-${action}`).textContent  =
+      on ? (action==='start'?'Starting...':'Stopping...') : (action==='start'?'Start Server':'Stop Server');
+    document.getElementById('btn-start').disabled = on;
+    document.getElementById('btn-stop').disabled  = on;
+  }
+
+  function addLog(msg, type='info') {
+    const list = document.getElementById('log-list');
+    const time = new Date().toLocaleTimeString('en-GB',{hour12:false});
+    const tags = {ok:'<span class="log-tag tag-ok">OK</span>',err:'<span class="log-tag tag-err">ERR</span>',info:'<span class="log-tag tag-info">INFO</span>',sys:'<span class="log-tag tag-sys">SYS</span>'};
+    const li = document.createElement('li');
+    li.className = 'log-entry';
+    li.innerHTML = `<span class="log-time">${time}</span><span class="log-msg" title="${msg}">${msg}</span>${tags[type]||tags.info}`;
+    list.prepend(li);
+    while (list.children.length > 30) list.removeChild(list.lastChild);
+  }
+
+  function clearLog() { document.getElementById('log-list').innerHTML=''; addLog('Log cleared.','sys'); }
+
+  let toastTimer;
+  function showToast(msg, type='info') {
+    const el = document.getElementById('toast');
+    el.textContent = msg; el.className = `show ${type}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className=''; }, 3500);
+  }
+
+  // ─────────────────────────────────────────────────
+  //  11. Start / Stop selected instance
+  // ─────────────────────────────────────────────────
+  async function controlServer(action) {
+    if (!selectedInstanceId) { showToast('Select an instance first.','info'); return; }
+    if (action==='start' && currentState==='running') { showToast('Already running.','info'); return; }
+    if (action==='stop'  && currentState==='stopped') { showToast('Already stopped.','info'); return; }
+
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer=null; }
+
+    setLoading(action, true);
+    setStatus('pending');
+    addLog(`Sending ${action.toUpperCase()} → ${selectedInstanceId}...`, 'info');
+
+    try {
+      const res  = await callAPI({ action, instanceId: selectedInstanceId, region: selectedRegion });
+      const data = await res.json();
+
+      if (res.ok) {
+        document.getElementById('triggered-by').textContent = userEmail.split('@')[0];
+        addLog(`${action} accepted — ${selectedInstanceId}`, 'ok');
+        showToast(`✓ Server ${action} accepted`, 'ok');
+        pollTimer = setTimeout(fetchStatus, 3000);
+      } else {
+        throw new Error(data.message || `HTTP ${res.status}`);
+      }
+    } catch (err) {
+      if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
+        addLog(`Error: ${err.message}`, 'err');
+        showToast(`✗ ${err.message}`, 'err');
+        setStatus('stopped');
+      }
+    } finally {
+      setLoading(action, false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  //  12. Boot — load instances on page load
+  // ─────────────────────────────────────────────────
+  loadInstances();
+</script>
+
+</body>
+</html>

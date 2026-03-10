@@ -21,9 +21,9 @@ def get_cors():
 
 
 def get_caller(event):
-    """Extract caller email from HTTP API v2 JWT authorizer claims."""
+    """Extract caller email from REST API Cognito authorizer claims."""
     try:
-        claims = event['requestContext']['authorizer']['jwt']['claims']
+        claims = event['requestContext']['authorizer']['claims']
         return claims.get('email', claims.get('cognito:username', 'unknown'))
     except (KeyError, TypeError):
         return 'unknown'

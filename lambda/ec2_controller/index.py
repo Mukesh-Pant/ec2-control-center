@@ -22,9 +22,8 @@ logger.setLevel(logging.INFO)
 def lambda_handler(event, context):
     logger.info("Event: %s", json.dumps(event))
 
-    http = event.get('requestContext', {}).get('http', {})
-    method = http.get('method', 'POST')
-    path = http.get('path', '/ec2')
+    method = event.get('httpMethod', 'POST')
+    path   = event.get('path', '/ec2')
 
     if path == '/ec2' and method == 'POST':
         return handle_ec2(event)

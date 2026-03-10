@@ -62,9 +62,10 @@ echo "    Zipping frontend..."
 # ─── Step 4: Upload to S3 ───
 echo ""
 echo "==> Uploading artifacts to S3..."
+LAMBDA_VERSION=$(date +%s)
 
 aws s3 cp "$TEMP_DIR/ec2-controller.zip" \
-  "s3://${CODE_BUCKET}/lambda/ec2-controller-${ENVIRONMENT}.zip" \
+  "s3://${CODE_BUCKET}/lambda/ec2-controller-${ENVIRONMENT}-${LAMBDA_VERSION}.zip" \
   --region "$AWS_REGION" --quiet
 
 aws s3 cp "$TEMP_DIR/config-injector.zip" \
@@ -82,8 +83,6 @@ echo ""
 echo "==> Deploying CloudFormation stack: $STACK_NAME"
 echo "    This may take 8-12 minutes on first deploy..."
 echo ""
-
-LAMBDA_VERSION=$(date +%s)
 
 aws cloudformation deploy \
   --template-file "$SCRIPT_DIR/cloudformation/central-stack.yaml" \
