@@ -605,6 +605,131 @@ body.ready { display: flex; }
   font-family: var(--mono); font-size: 10px; color: var(--yellow); line-height: 1.6;
 }
 
+/* ═══════════════════════════════════════════
+   ACCOUNTS PANEL (M5)
+   ═══════════════════════════════════════════ */
+
+/* Toolbar */
+.acct-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; gap: 12px;
+}
+.acct-toolbar-left { display: flex; align-items: center; gap: 10px; }
+.acct-toolbar-title { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text2); }
+.btn-acct-reload {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text2); font-size: 11px; padding: 5px 10px; cursor: pointer; transition: all .15s;
+}
+.btn-acct-reload:hover { border-color: var(--blue); color: var(--blue); }
+.btn-acct-add {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--blue-dim); border: 1px solid var(--blue); border-radius: var(--radius-sm);
+  color: var(--blue); font-size: 12px; font-weight: 600; padding: 7px 14px; cursor: pointer; transition: all .15s;
+}
+.btn-acct-add:hover { background: var(--blue); color: #fff; }
+
+/* Add Account Form */
+.add-account-form {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 18px;
+}
+.add-acct-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--blue); margin-bottom: 16px;
+}
+.add-acct-fields {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;
+}
+.add-acct-field-wide { grid-column: 1 / -1; }
+.add-acct-label {
+  display: block; font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text3); margin-bottom: 5px;
+}
+.add-acct-input {
+  width: 100%; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text); font-family: var(--mono);
+  font-size: 12px; padding: 8px 10px; outline: none; transition: border-color .15s;
+}
+.add-acct-input:focus { border-color: var(--blue); }
+.add-acct-input::placeholder { color: var(--text3); }
+.add-acct-error {
+  color: var(--red); font-size: 11px; min-height: 16px; margin-bottom: 10px;
+}
+.add-acct-actions { margin-bottom: 16px; }
+.btn-acct-submit {
+  background: var(--blue); border: none; border-radius: var(--radius-sm);
+  color: #fff; font-size: 13px; font-weight: 600; padding: 9px 20px;
+  cursor: pointer; transition: opacity .15s;
+}
+.btn-acct-submit:hover { opacity: .85; }
+.btn-acct-submit:disabled { opacity: .5; cursor: not-allowed; }
+.add-acct-hint {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px 14px; font-size: 11px; color: var(--text2); line-height: 1.8;
+}
+.add-acct-hint code {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 5px;
+  font-family: var(--mono); font-size: 10px; color: var(--cyan);
+  word-break: break-all;
+}
+.add-acct-hint strong { color: var(--text); }
+
+/* Accounts Table */
+.acct-table-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.acct-table { width: 100%; border-collapse: collapse; }
+.acct-table thead { background: var(--surface2); border-bottom: 1px solid var(--border2); }
+.acct-table th {
+  text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--text3); padding: 10px 14px;
+}
+.acct-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.acct-table tr:last-child td { border-bottom: none; }
+.acct-table tr:hover td { background: var(--surface2); }
+.acct-cell-mono { font-family: var(--mono); font-size: 12px; }
+.acct-cell-role { max-width: 280px; overflow: hidden; }
+.acct-role-local { font-family: var(--mono); font-size: 11px; color: var(--text3); font-style: italic; }
+.acct-role-arn {
+  font-family: var(--mono); font-size: 11px; color: var(--cyan);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 260px;
+}
+
+/* Account status badges */
+.acct-badge {
+  display: inline-flex; align-items: center;
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  padding: 2px 7px; border-radius: 20px; margin-left: 6px;
+}
+.badge-enabled  { background: var(--green-dim); color: var(--green); border: 1px solid rgba(16,185,129,.2); }
+.badge-disabled { background: var(--red-dim);   color: var(--red);   border: 1px solid rgba(244,63,94,.2); }
+.badge-central  { background: var(--blue-dim);  color: var(--blue);  border: 1px solid rgba(59,130,246,.25); }
+
+/* Account action buttons */
+.acct-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.acct-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; padding: 4px 10px;
+  border-radius: var(--radius-sm); cursor: pointer; transition: all .15s;
+  border: 1px solid transparent;
+}
+.btn-enable  { background: var(--green-dim); color: var(--green); border-color: rgba(16,185,129,.3); }
+.btn-enable:hover  { background: var(--green); color: #fff; }
+.btn-disable { background: var(--yellow-dim); color: var(--yellow); border-color: rgba(245,158,11,.3); }
+.btn-disable:hover { background: var(--yellow); color: #000; }
+.btn-test    { background: var(--blue-dim); color: var(--blue); border-color: rgba(59,130,246,.3); }
+.btn-test:hover    { background: var(--blue); color: #fff; }
+.btn-remove  { background: var(--red-dim);  color: var(--red);  border-color: rgba(244,63,94,.3); }
+.btn-remove:hover  { background: var(--red); color: #fff; }
+.acct-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Empty / loading states */
+.acct-loading { text-align: center; color: var(--text3); font-size: 12px; padding: 24px !important; }
+.acct-empty   { text-align: center; color: var(--text3); font-size: 12px; padding: 24px !important; font-style: italic; }
+
 /* ─── Animations ─── */
 @keyframes pageIn { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes spin { to { transform: rotate(360deg); } }

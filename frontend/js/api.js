@@ -89,10 +89,18 @@ const API = (function () {
     );
   }
 
+  /**
+   * POST /accounts — account mutations (add, update, enable, disable, remove, test)
+   */
+  async function postAccounts(body) {
+    return call('/accounts', 'POST', body);
+  }
+
   return {
     call,
     ec2Action,
     getAccounts,
+    postAccounts,
     getAuditLog,
     getAuditDaily,
   };

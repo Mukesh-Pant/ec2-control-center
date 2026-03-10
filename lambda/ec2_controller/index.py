@@ -28,7 +28,9 @@ def lambda_handler(event, context):
     if path == '/ec2' and method == 'POST':
         return handle_ec2(event)
     elif path == '/accounts' and method == 'GET':
-        return handle_accounts(event)
+        return handle_accounts_list(event)
+    elif path == '/accounts' and method == 'POST':
+        return handle_accounts_mutation(event)
     elif path == '/audit' and method == 'GET':
         return handle_audit_log(event)
     elif path == '/audit/daily' and method == 'GET':
@@ -206,16 +208,150 @@ def handle_stop(client, instance_id, region, account_id,
     })
 
 
-# ─── Accounts ────────────────────────────────────────────────────────────────
+# ─── Accounts: List ──────────────────────────────────────────────────────────
 
-def handle_accounts(event):
+def handle_accounts_list(event):
     accounts = get_accounts()
     safe = [{
         'accountId':   a['accountId'],
         'accountName': a.get('accountName', a['accountId']),
+        'roleArn':     a.get('roleArn', ''),
         'enabled':     a.get('enabled', False),
+        'isCentral':   a.get('roleArn', '') == 'LOCAL',
     } for a in accounts]
     return response(200, {'accounts': safe})
+
+
+# ─── Accounts: Mutations (M5) ────────────────────────────────────────────────
+
+def handle_accounts_mutation(event):
+    try:
+        body = json.loads(event.get('body') or '{}')
+    except json.JSONDecodeError:
+        return error_response(400, 'Invalid JSON body')
+
+    action     = body.get('action', '').strip().lower()
+    account_id = body.get('accountId', '').strip()
+
+    if not account_id:
+        return error_response(400, 'accountId is required.')
+
+    caller = get_caller(event)
+    logger.info("accounts mutation: action=%s accountId=%s caller=%s",
+                action, account_id, caller)
+
+    import boto3
+    import os
+    ddb   = boto3.resource('dynamodb')
+    table = ddb.Table(os.environ.get('ACCOUNTS_TABLE', 'ec2-control-accounts-production'))
+
+    # Prevent mutations on the central account's roleArn/removal
+    def _is_central(acct_id):
+        try:
+            item = table.get_item(Key={'accountId': acct_id}).get('Item', {})
+            return item.get('roleArn', '') == 'LOCAL'
+        except Exception:
+            return False
+
+    if action == 'add':
+        account_name = body.get('accountName', '').strip()
+        role_arn     = body.get('roleArn', '').strip()
+        if not account_name:
+            return error_response(400, 'accountName is required.')
+        if not role_arn or not role_arn.startswith('arn:aws:iam::'):
+            return error_response(400, 'roleArn must be a valid IAM role ARN.')
+        if not account_id.isdigit() or len(account_id) != 12:
+            return error_response(400, 'accountId must be a 12-digit AWS account ID.')
+        try:
+            table.put_item(Item={
+                'accountId':   account_id,
+                'accountName': account_name,
+                'roleArn':     role_arn,
+                'enabled':     True,
+            })
+            logger.info("Account added: %s (%s) by %s", account_id, account_name, caller)
+            return response(200, {'message': f'Account {account_id} added successfully.',
+                                  'accountId': account_id})
+        except Exception as e:
+            logger.error("Failed to add account %s: %s", account_id, e)
+            return error_response(500, 'Failed to add account.')
+
+    elif action == 'update':
+        account_name = body.get('accountName', '').strip()
+        if not account_name:
+            return error_response(400, 'accountName is required.')
+        try:
+            table.update_item(
+                Key={'accountId': account_id},
+                UpdateExpression='SET accountName = :n',
+                ExpressionAttributeValues={':n': account_name},
+            )
+            return response(200, {'message': 'Account name updated.', 'accountId': account_id})
+        except Exception as e:
+            logger.error("Failed to update account %s: %s", account_id, e)
+            return error_response(500, 'Failed to update account.')
+
+    elif action in ('enable', 'disable'):
+        enabled = (action == 'enable')
+        try:
+            table.update_item(
+                Key={'accountId': account_id},
+                UpdateExpression='SET enabled = :e',
+                ExpressionAttributeValues={':e': enabled},
+            )
+            return response(200, {'message': f'Account {action}d.', 'accountId': account_id,
+                                  'enabled': enabled})
+        except Exception as e:
+            logger.error("Failed to %s account %s: %s", action, account_id, e)
+            return error_response(500, f'Failed to {action} account.')
+
+    elif action == 'remove':
+        if _is_central(account_id):
+            return error_response(400, 'Cannot remove the central account.')
+        try:
+            table.delete_item(Key={'accountId': account_id})
+            logger.info("Account removed: %s by %s", account_id, caller)
+            return response(200, {'message': f'Account {account_id} removed.', 'accountId': account_id})
+        except Exception as e:
+            logger.error("Failed to remove account %s: %s", account_id, e)
+            return error_response(500, 'Failed to remove account.')
+
+    elif action == 'test':
+        return _test_account_connection(account_id)
+
+    else:
+        return error_response(400, 'Invalid action. Must be add, update, enable, disable, remove, or test.')
+
+
+def _test_account_connection(account_id):
+    """Test cross-account connectivity by attempting to list instances in one region."""
+    import os
+    region = os.environ.get('AWS_REGION', 'ap-south-1')
+    try:
+        client = get_ec2_client(account_id, region)
+        resp   = client.describe_instances(MaxResults=5)
+        count  = sum(len(r['Instances']) for r in resp.get('Reservations', []))
+        return response(200, {
+            'success':    True,
+            'accountId':  account_id,
+            'region':     region,
+            'message':    f'Connection successful. Found {count} instance(s) in {region}.',
+        })
+    except Exception as e:
+        error_msg = str(e)
+        logger.warning("Connection test failed for %s: %s", account_id, error_msg)
+        # Friendly message for common errors
+        if 'AccessDenied' in error_msg or 'is not authorized' in error_msg:
+            friendly = 'Access denied. Verify the cross-account role exists and trusts the central account.'
+        elif 'NoCredentialProviders' in error_msg or 'could not be assumed' in error_msg.lower():
+            friendly = 'Could not assume role. Check the role ARN and ExternalId in the trust policy.'
+        else:
+            friendly = f'Connection failed: {error_msg}'
+        return response(200, {
+            'success':   False,
+            'accountId': account_id,
+            'message':   friendly,
+        })
 
 
 # ─── Audit: Event Log ────────────────────────────────────────────────────────

@@ -104,12 +104,14 @@ var App = (function () {
       tab.addEventListener('click', function () {
         var name = this.getAttribute('data-tab');
         switchTab(name);
-        if (name === 'audit') Audit.onTabActivated();
+        if (name === 'audit')    Audit.onTabActivated();
+        if (name === 'accounts') Accounts.onTabActivated();
       });
     });
 
-    // Init audit module
+    // Init modules
     Audit.init();
+    Accounts.init();
 
     // Start timers
     updateCountdown();

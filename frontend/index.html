@@ -57,9 +57,9 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Audit Log
       </button>
-      <button class="tab" data-tab="schedules" id="tab-schedules">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        Schedules
+      <button class="tab" data-tab="accounts" id="tab-accounts">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
+        Accounts
       </button>
     </div>
 
@@ -225,22 +225,74 @@
 
     </div>
 
-    <!-- ═══ SCHEDULES PANEL (M3) ═══ -->
-    <div class="panel" id="panel-schedules" style="display:none">
-      <div class="coming-soon">
-        <div class="coming-soon-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <!-- ═══ ACCOUNTS PANEL (M5) ═══ -->
+    <div class="panel" id="panel-accounts" style="display:none">
+
+      <!-- Toolbar -->
+      <div class="acct-toolbar">
+        <div class="acct-toolbar-left">
+          <span class="acct-toolbar-title">Registered AWS Accounts</span>
+          <button class="btn-acct-reload" id="btn-reload-accounts">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
         </div>
-        <div class="coming-soon-title">Schedules</div>
-        <div class="coming-soon-desc">Business hours auto start/stop coming in Milestone 3</div>
+        <button class="btn-acct-add" id="btn-show-add-account">+ Add Account</button>
       </div>
+
+      <!-- Add Account Form (hidden by default) -->
+      <div class="add-account-form" id="add-account-form" style="display:none">
+        <div class="add-acct-title">Register Member Account</div>
+        <div class="add-acct-fields">
+          <div class="add-acct-field">
+            <label class="add-acct-label">AWS Account ID</label>
+            <input class="add-acct-input" type="text" id="add-acct-id" placeholder="123456789012" maxlength="12"/>
+          </div>
+          <div class="add-acct-field">
+            <label class="add-acct-label">Account Name</label>
+            <input class="add-acct-input" type="text" id="add-acct-name" placeholder="e.g. Production, Dev, Staging"/>
+          </div>
+          <div class="add-acct-field add-acct-field-wide">
+            <label class="add-acct-label">Cross-Account Role ARN</label>
+            <input class="add-acct-input" type="text" id="add-acct-role" placeholder="arn:aws:iam::123456789012:role/EC2ControlCrossAccountRole-production"/>
+          </div>
+        </div>
+        <div class="add-acct-error" id="add-acct-error"></div>
+        <div class="add-acct-actions">
+          <button class="btn-acct-submit" id="btn-add-account-submit">Add Account</button>
+        </div>
+        <div class="add-acct-hint">
+          <strong>Step 1:</strong> Deploy <code>cloudformation/member-role-stack.yaml</code> in the target AWS account:<br>
+          <code>aws cloudformation deploy --template-file cloudformation/member-role-stack.yaml --stack-name ec2-control-member-role --capabilities CAPABILITY_NAMED_IAM --parameter-overrides CentralAccountId=196750375951 Environment=production --region ap-south-1 --profile &lt;member-account-profile&gt;</code><br><br>
+          <strong>Step 2:</strong> Copy the <code>RoleArn</code> from the stack outputs and paste it above.
+        </div>
+      </div>
+
+      <!-- Accounts Table -->
+      <div class="acct-table-wrap">
+        <table class="acct-table">
+          <thead>
+            <tr>
+              <th>Account ID</th>
+              <th>Name</th>
+              <th>Cross-Account Role</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="accounts-tbody">
+            <tr><td colspan="5" class="acct-loading">Loading accounts...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
     </div>
 
     <!-- Footer -->
     <div class="footer">
       <div class="footer-left">
         <div class="footer-item"><div class="footer-dot"></div>Lambda</div>
-        <div class="footer-item"><div class="footer-dot"></div>HTTP API</div>
+        <div class="footer-item"><div class="footer-dot"></div>REST API</div>
         <div class="footer-item"><div class="footer-dot"></div>Cognito PKCE</div>
       </div>
       <div class="footer-clock" id="clock">--:--:--</div>
@@ -259,6 +311,7 @@
   <script src="js/api.js"></script>
   <script src="js/instances.js"></script>
   <script src="js/audit.js"></script>
+  <script src="js/accounts.js"></script>
   <script src="js/app.js"></script>
 
 </body>
