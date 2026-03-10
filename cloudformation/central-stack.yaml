@@ -969,6 +969,10 @@ Outputs:
     Description: 'REST API endpoint URL (stage: prod).'
     Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
 
+  RestApiId:
+    Description: REST API Gateway ID (used by deploy.sh to flush deployment snapshot).
+    Value: !Ref RestApi
+
   CognitoUserPoolId:
     Description: Use this to add more users via CLI.
     Value: !Ref CognitoUserPool

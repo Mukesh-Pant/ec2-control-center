@@ -194,7 +194,7 @@ const Auth = (function () {
   }
 
   function isNearExpiry() {
-    return (getExpiry() - Date.now()) < 300000; // 5 minutes
+    return (getExpiry() - Date.now()) < 600000; // 10 minutes
   }
 
   // ─── Logout ───

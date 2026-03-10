@@ -12,7 +12,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils import response, error_response, get_caller, map_aws_error
-from accounts import get_accounts, get_ec2_client, get_all_regions
+from accounts import get_accounts, get_all_accounts, get_ec2_client, get_all_regions
 import audit
 
 logger = logging.getLogger()
@@ -211,7 +211,7 @@ def handle_stop(client, instance_id, region, account_id,
 # ─── Accounts: List ──────────────────────────────────────────────────────────
 
 def handle_accounts_list(event):
-    accounts = get_accounts()
+    accounts = get_all_accounts()
     safe = [{
         'accountId':   a['accountId'],
         'accountName': a.get('accountName', a['accountId']),

@@ -39,6 +39,13 @@ def get_accounts():
     return result.get('Items', [])
 
 
+def get_all_accounts():
+    """Fetch all accounts from DynamoDB AccountRegistry (including disabled)."""
+    table = _get_ddb().Table(ACCOUNTS_TABLE)
+    result = table.scan()
+    return result.get('Items', [])
+
+
 def get_ec2_client(account_id, region):
     """
     Return a boto3 EC2 client.

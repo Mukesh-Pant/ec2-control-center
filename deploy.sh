@@ -118,7 +118,29 @@ aws cloudformation deploy \
   --region "$AWS_REGION" \
   --no-fail-on-empty-changeset
 
-# ─── Step 6: Show outputs ───
+# ─── Step 6: Flush REST API deployment snapshot ───
+# Forces a fresh deployment snapshot so all new methods (with Cognito auth) are properly captured.
+# Without this, newly added methods can fail with "Invalid key=value pair" on first request.
+echo ""
+echo "==> Flushing REST API deployment snapshot..."
+REST_API_ID=$(aws cloudformation describe-stacks \
+  --stack-name "$STACK_NAME" \
+  --query 'Stacks[0].Outputs[?OutputKey==`RestApiId`].OutputValue' \
+  --output text \
+  --region "$AWS_REGION" 2>/dev/null || echo "")
+
+if [ -n "$REST_API_ID" ] && [ "$REST_API_ID" != "None" ]; then
+  aws apigateway create-deployment \
+    --rest-api-id "$REST_API_ID" \
+    --stage-name prod \
+    --description "Post-deploy flush ${LAMBDA_VERSION}" \
+    --region "$AWS_REGION" --output none
+  echo "    REST API deployment flushed (ID: $REST_API_ID)"
+else
+  echo "    Skipped (RestApiId output not found in stack)"
+fi
+
+# ─── Step 7: Show outputs ───
 echo ""
 echo "═══════════════════════════════════════════════"
 echo "  DEPLOYMENT COMPLETE"
