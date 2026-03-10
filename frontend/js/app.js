@@ -102,9 +102,14 @@ var App = (function () {
     // Tab buttons
     document.querySelectorAll('.tab').forEach(function (tab) {
       tab.addEventListener('click', function () {
-        switchTab(this.getAttribute('data-tab'));
+        var name = this.getAttribute('data-tab');
+        switchTab(name);
+        if (name === 'audit') Audit.onTabActivated();
       });
     });
+
+    // Init audit module
+    Audit.init();
 
     // Start timers
     updateCountdown();

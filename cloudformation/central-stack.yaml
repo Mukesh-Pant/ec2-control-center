@@ -265,6 +265,47 @@ Resources:
           Value: !Ref Environment
 
   # =============================================
+  # DYNAMODB - Audit Log  (M2)
+  # PK: INSTANCE#{instanceId}   SK: {timestamp}#{action}
+  # GSI user-index: PK: userEmail  SK: {timestamp}#{action}
+  # TTL: 90 days (ttl attribute, epoch seconds)
+  # =============================================
+  AuditLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ec2-control-audit-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+        - AttributeName: userEmail
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: user-index
+          KeySchema:
+            - AttributeName: userEmail
+              KeyType: HASH
+            - AttributeName: sk
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
   # LAMBDA EXECUTION ROLE
   # =============================================
   LambdaExecutionRole:
@@ -335,6 +376,7 @@ Resources:
       Environment:
         Variables:
           ACCOUNTS_TABLE: !Ref AccountRegistryTable
+          AUDIT_TABLE: !Ref AuditLogTable
           ENVIRONMENT: !Ref Environment
           ALLOWED_ORIGIN: '*'
           CENTRAL_ACCOUNT_ID: !Ref 'AWS::AccountId'
@@ -505,6 +547,25 @@ Resources:
       AuthorizerId: !Ref HttpApiAuthorizer
       Target: !Sub 'integrations/${HttpApiIntegration}'
 
+  # M2 — Audit routes
+  RouteGetAudit:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /audit'
+      AuthorizationType: JWT
+      AuthorizerId: !Ref HttpApiAuthorizer
+      Target: !Sub 'integrations/${HttpApiIntegration}'
+
+  RouteGetAuditDaily:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /audit/daily'
+      AuthorizationType: JWT
+      AuthorizerId: !Ref HttpApiAuthorizer
+      Target: !Sub 'integrations/${HttpApiIntegration}'
+
   # =============================================
   # HTTP API - Stage (auto-deploy)
   # =============================================
@@ -623,3 +684,7 @@ Outputs:
   AccountRegistryTable:
     Description: DynamoDB table for registered AWS accounts.
     Value: !Ref AccountRegistryTable
+
+  AuditLogTable:
+    Description: DynamoDB audit log table (90-day TTL). M2.
+    Value: !Ref AuditLogTable

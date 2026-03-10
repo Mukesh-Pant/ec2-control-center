@@ -63,10 +63,38 @@ const API = (function () {
     return call('/accounts', 'GET', null);
   }
 
+  /**
+   * GET /audit  — event log
+   * @param {object} params - { instanceId?, userEmail?, limit?, lastKey? }
+   */
+  async function getAuditLog(params) {
+    var qs = [];
+    if (params.instanceId) qs.push('instanceId=' + encodeURIComponent(params.instanceId));
+    if (params.userEmail)  qs.push('userEmail='  + encodeURIComponent(params.userEmail));
+    if (params.limit)      qs.push('limit='      + encodeURIComponent(params.limit));
+    if (params.lastKey)    qs.push('lastKey='    + encodeURIComponent(JSON.stringify(params.lastKey)));
+    return call('/audit' + (qs.length ? '?' + qs.join('&') : ''), 'GET', null);
+  }
+
+  /**
+   * GET /audit/daily — per-day running hours + estimated cost
+   * @param {string} instanceId
+   * @param {number} days
+   */
+  async function getAuditDaily(instanceId, days) {
+    return call(
+      '/audit/daily?instanceId=' + encodeURIComponent(instanceId) +
+      '&days=' + (days || 30),
+      'GET', null
+    );
+  }
+
   return {
     call,
     ec2Action,
     getAccounts,
+    getAuditLog,
+    getAuditDaily,
   };
 
 })();

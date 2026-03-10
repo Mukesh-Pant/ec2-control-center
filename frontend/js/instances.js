@@ -207,6 +207,8 @@ const Instances = (function () {
         instanceId: selectedInstance.instanceId,
         region: selectedInstance.region,
         accountId: selectedInstance.accountId,
+        instanceName: selectedInstance.name || selectedInstance.instanceId,
+        instanceType: selectedInstance.instanceType || '',
       });
       var data = await res.json();
 
