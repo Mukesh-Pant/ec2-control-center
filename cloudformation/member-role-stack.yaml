@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  EC2 Control Portal — Cross-Account IAM Role
+  Deploy this in each member AWS account to allow the central portal to manage EC2 instances.
+
+Parameters:
+
+  CentralAccountId:
+    Type: String
+    Description: AWS Account ID of the central account running the EC2 Control Portal.
+
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: Must match the Environment used in the central stack.
+
+Resources:
+
+  CrossAccountRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'EC2ControlCrossAccountRole-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${CentralAccountId}:role/ec2-control-lambda-role-${Environment}-${AWS::Region}'
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Sub 'ec2-control-${CentralAccountId}'
+      Policies:
+        - PolicyName: EC2ReadAndControl
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EC2Control
+                Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeRegions
+                  - ec2:StartInstances
+                  - ec2:StopInstances
+                Resource: '*'
+              - Sid: CloudWatchMetrics
+                Effect: Allow
+                Action:
+                  - cloudwatch:GetMetricStatistics
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: ManagedBy
+          Value: CentralPortal
+
+Outputs:
+
+  RoleArn:
+    Description: >
+      ARN of the cross-account role. Register this account in the central portal
+      by adding it to the DynamoDB AccountRegistry table.
+    Value: !GetAtt CrossAccountRole.Arn
+
+  RegisterCommand:
+    Description: Run this command to register this account in the central portal.
+    Value: !Sub >
+      aws dynamodb put-item
+      --table-name ec2-control-accounts-${Environment}
+      --item '{"accountId":{"S":"${AWS::AccountId}"},"accountName":{"S":"Member-${AWS::AccountId}"},"roleArn":{"S":"${CrossAccountRole.Arn}"},"enabled":{"BOOL":true}}'
+      --region YOUR_CENTRAL_REGION

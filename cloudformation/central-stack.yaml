@@ -1,0 +1,625 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  EC2 Control Portal v2 - Central Stack
+  Deploys S3, CloudFront, Cognito (PKCE), HTTP API, Lambda, DynamoDB, SNS, EventBridge.
+  Zero manual steps after deployment. Config auto-injected into frontend.
+
+Parameters:
+
+  AdminEmail:
+    Type: String
+    Description: Email of first admin user. They receive a temporary password by email.
+    AllowedPattern: '[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}'
+    ConstraintDescription: Must be a valid email address.
+
+  CognitoDomainPrefix:
+    Type: String
+    Description: >
+      Unique prefix for Cognito hosted login page URL.
+      Must be globally unique. Use your company name.
+    AllowedPattern: '[a-z0-9\-]+'
+    ConstraintDescription: Only lowercase letters, numbers, and hyphens.
+
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: Deployment environment label used in resource naming.
+
+  LambdaCodeS3Bucket:
+    Type: String
+    Description: S3 bucket where Lambda zip files and frontend zip are uploaded by deploy.sh.
+
+  LambdaCodeVersion:
+    Type: String
+    Default: '1'
+    Description: Change this to force Lambda code update on stack update.
+
+Resources:
+
+  # =============================================
+  # S3 BUCKET - Private, stores frontend files
+  # =============================================
+  PortalBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'ec2-control-portal-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
+  # CLOUDFRONT OAC - Secure S3 origin access
+  # =============================================
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub 'ec2-control-oac-${AWS::AccountId}'
+        Description: OAC for EC2 Control Portal bucket
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # =============================================
+  # CLOUDFRONT DISTRIBUTION - HTTPS portal
+  # =============================================
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        Comment: !Sub 'EC2 Control Portal ${Environment}'
+        Origins:
+          - Id: S3Origin
+            DomainName: !Sub 'ec2-control-portal-${AWS::AccountId}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com'
+            OriginAccessControlId: !GetAtt CloudFrontOAC.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
+  # S3 BUCKET POLICY - CloudFront only
+  # =============================================
+  PortalBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: CloudFrontDistribution
+    Properties:
+      Bucket: !Ref PortalBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontOACOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub 'arn:aws:s3:::ec2-control-portal-${AWS::AccountId}-${AWS::Region}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+
+  # =============================================
+  # COGNITO USER POOL - Email login, admin-only
+  # =============================================
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub 'ec2-control-users-${Environment}'
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 7
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+        InviteMessageTemplate:
+          EmailMessage: !Sub |
+            Hello,
+            You have been invited to access the EC2 Control Portal.
+            Your username: {username}
+            Your temporary password: {####}
+            Please log in and change your password on first login.
+          EmailSubject: Your EC2 Control Portal Invitation
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      MfaConfiguration: 'OFF'
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+      UserPoolTags:
+        Project: EC2Control
+        Environment: !Ref Environment
+
+  # =============================================
+  # COGNITO DOMAIN - Hosted login page
+  # =============================================
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref CognitoUserPool
+
+  # =============================================
+  # COGNITO APP CLIENT - PKCE (Authorization Code)
+  # =============================================
+  CognitoAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: CognitoUserPoolDomain
+    Properties:
+      ClientName: ec2-control-spa-client
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 7
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+      AllowedOAuthFlowsUserPoolClient: true
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        - 'https://localhost'
+      LogoutURLs:
+        - 'https://localhost'
+      PreventUserExistenceErrors: ENABLED
+
+  # =============================================
+  # COGNITO FIRST USER - Admin invite
+  # =============================================
+  CognitoFirstUser:
+    Type: AWS::Cognito::UserPoolUser
+    DependsOn: CognitoUserPool
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      Username: !Ref AdminEmail
+      DesiredDeliveryMediums:
+        - EMAIL
+      UserAttributes:
+        - Name: email
+          Value: !Ref AdminEmail
+        - Name: email_verified
+          Value: 'true'
+
+  # =============================================
+  # DYNAMODB - Account Registry
+  # =============================================
+  AccountRegistryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ec2-control-accounts-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: accountId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: accountId
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
+  # LAMBDA EXECUTION ROLE
+  # =============================================
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ec2-control-lambda-role-${Environment}-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EC2ControlPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EC2Control
+                Effect: Allow
+                Action:
+                  - ec2:StartInstances
+                  - ec2:StopInstances
+                  - ec2:DescribeInstances
+                  - ec2:DescribeRegions
+                Resource: '*'
+              - Sid: STSCrossAccount
+                Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Sub 'arn:aws:iam::*:role/EC2ControlCrossAccountRole-${Environment}'
+              - Sid: DynamoDB
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: '*'
+              - Sid: CloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: EC2Control
+
+  # =============================================
+  # MAIN LAMBDA - EC2 Controller
+  # =============================================
+  MainLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaExecutionRole
+    Properties:
+      FunctionName: !Sub 'ec2-controller-${Environment}'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 120
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Sub 'lambda/ec2-controller-${Environment}.zip'
+      Environment:
+        Variables:
+          ACCOUNTS_TABLE: !Ref AccountRegistryTable
+          ENVIRONMENT: !Ref Environment
+          ALLOWED_ORIGIN: '*'
+          CENTRAL_ACCOUNT_ID: !Ref 'AWS::AccountId'
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
+  # CONFIG INJECTOR - IAM Role
+  # =============================================
+  ConfigInjectorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ec2-control-config-injector-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ConfigInjectorPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: S3ReadCode
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${LambdaCodeS3Bucket}/*'
+              - Sid: S3WritePortal
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub 'arn:aws:s3:::ec2-control-portal-${AWS::AccountId}-${AWS::Region}/*'
+              - Sid: CloudFrontInvalidate
+                Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                Resource: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/*'
+              - Sid: CognitoUpdate
+                Effect: Allow
+                Action:
+                  - cognito-idp:UpdateUserPoolClient
+                  - cognito-idp:DescribeUserPoolClient
+                Resource: '*'
+              - Sid: Logs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  # =============================================
+  # CONFIG INJECTOR - Lambda
+  # =============================================
+  ConfigInjectorLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: ConfigInjectorRole
+    Properties:
+      FunctionName: !Sub 'ec2-config-injector-${Environment}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt ConfigInjectorRole.Arn
+      Timeout: 120
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Sub 'lambda/config-injector-${Environment}.zip'
+      Tags:
+        - Key: Project
+          Value: EC2Control
+
+  # =============================================
+  # CONFIG INJECTOR - Custom Resource
+  # Runs on every create/update to deploy frontend
+  # =============================================
+  DeployFrontend:
+    Type: Custom::DeployFrontend
+    DependsOn:
+      - CloudFrontDistribution
+      - CognitoAppClient
+      - HttpApi
+      - PortalBucketPolicy
+    Properties:
+      ServiceToken: !GetAtt ConfigInjectorLambda.Arn
+      PortalBucket: !Ref PortalBucket
+      DistributionId: !Ref CloudFrontDistribution
+      CodeBucket: !Ref LambdaCodeS3Bucket
+      FrontendS3Key: !Sub 'frontend/frontend-${Environment}.zip'
+      CognitoDomain: !Sub 'https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
+      ClientId: !Ref CognitoAppClient
+      RedirectUri: !Sub 'https://${CloudFrontDistribution.DomainName}/index.html'
+      ApiUrl: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+      UserPoolId: !Ref CognitoUserPool
+      Version: !Ref LambdaCodeVersion
+
+  # =============================================
+  # HTTP API (API Gateway v2)
+  # =============================================
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub 'ec2-control-api-${Environment}'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+          - GET
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        MaxAge: 3600
+
+  # =============================================
+  # HTTP API - JWT Authorizer (Cognito)
+  # =============================================
+  HttpApiAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: JWT
+      IdentitySource:
+        - '$request.header.Authorization'
+      Name: CognitoJWT
+      JwtConfiguration:
+        Audience:
+          - !Ref CognitoAppClient
+        Issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
+
+  # =============================================
+  # HTTP API - Lambda Integration
+  # =============================================
+  HttpApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt MainLambda.Arn
+      PayloadFormatVersion: '2.0'
+
+  # =============================================
+  # HTTP API - Routes
+  # =============================================
+  RoutePostEc2:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /ec2'
+      AuthorizationType: JWT
+      AuthorizerId: !Ref HttpApiAuthorizer
+      Target: !Sub 'integrations/${HttpApiIntegration}'
+
+  RouteGetAccounts:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /accounts'
+      AuthorizationType: JWT
+      AuthorizerId: !Ref HttpApiAuthorizer
+      Target: !Sub 'integrations/${HttpApiIntegration}'
+
+  # =============================================
+  # HTTP API - Stage (auto-deploy)
+  # =============================================
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  # =============================================
+  # LAMBDA PERMISSION - HTTP API
+  # Single wildcard covers all routes
+  # =============================================
+  MainLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt MainLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*'
+
+  # =============================================
+  # SEED ACCOUNT - Registers central account
+  # =============================================
+  SeedAccountLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ec2-seed-account-${Environment}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import urllib.request
+
+          def send_response(event, status, reason='OK', data={}):
+              body = json.dumps({
+                  'Status': status,
+                  'Reason': reason,
+                  'PhysicalResourceId': event.get('PhysicalResourceId', 'seed-account'),
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data
+              }).encode('utf-8')
+              req = urllib.request.Request(
+                  url=event['ResponseURL'],
+                  data=body,
+                  method='PUT'
+              )
+              req.add_header('Content-Type', '')
+              req.add_header('Content-Length', len(body))
+              urllib.request.urlopen(req)
+
+          def handler(event, context):
+              print("Event:", json.dumps(event))
+              try:
+                  if event['RequestType'] in ('Create', 'Update'):
+                      props = event['ResourceProperties']
+                      ddb = boto3.resource('dynamodb')
+                      table = ddb.Table(props['TableName'])
+                      table.put_item(Item={
+                          'accountId': props['AccountId'],
+                          'accountName': 'Central Account',
+                          'roleArn': 'LOCAL',
+                          'enabled': True
+                      })
+                      print("Seeded central account:", props['AccountId'])
+                  send_response(event, 'SUCCESS')
+              except Exception as e:
+                  print("FAILED:", str(e))
+                  send_response(event, 'FAILED', str(e))
+
+  SeedAccountResource:
+    Type: Custom::SeedAccount
+    DependsOn: AccountRegistryTable
+    Properties:
+      ServiceToken: !GetAtt SeedAccountLambda.Arn
+      TableName: !Ref AccountRegistryTable
+      AccountId: !Ref 'AWS::AccountId'
+
+# =============================================
+# OUTPUTS
+# =============================================
+Outputs:
+
+  PortalURL:
+    Description: Portal URL - open in browser after deployment completes.
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+
+  S3BucketName:
+    Description: S3 bucket storing frontend files (managed by Config Injector).
+    Value: !Ref PortalBucket
+
+  ApiURL:
+    Description: HTTP API endpoint URL.
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+
+  CognitoUserPoolId:
+    Description: Use this to add more users via CLI.
+    Value: !Ref CognitoUserPool
+
+  CognitoClientId:
+    Description: Cognito App Client ID (auto-injected into frontend).
+    Value: !Ref CognitoAppClient
+
+  CloudFrontDistributionId:
+    Description: CloudFront distribution ID for manual cache invalidation if needed.
+    Value: !Ref CloudFrontDistribution
+
+  AccountRegistryTable:
+    Description: DynamoDB table for registered AWS accounts.
+    Value: !Ref AccountRegistryTable
