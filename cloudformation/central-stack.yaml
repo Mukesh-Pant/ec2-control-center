@@ -380,6 +380,9 @@ Resources:
           ENVIRONMENT: !Ref Environment
           ALLOWED_ORIGIN: '*'
           CENTRAL_ACCOUNT_ID: !Ref 'AWS::AccountId'
+          # Changing this on every deploy forces CloudFormation to re-fetch
+          # the Lambda zip from S3, even when the S3 key filename is unchanged.
+          DEPLOY_VERSION: !Ref LambdaCodeVersion
       Tags:
         - Key: Project
           Value: EC2Control
