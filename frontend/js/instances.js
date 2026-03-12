@@ -1,69 +1,22 @@
 /* ═══════════════════════════════════════════════
-   Instances Module — List, select, start/stop
+   Instances Module — List, account groups, detail panel, start/stop
    ═══════════════════════════════════════════════ */
 
 const Instances = (function () {
 
-  let allInstances = [];
-  let selectedInstance = null;
-  let pollTimer = null;
-  let currentState = 'stopped';
-  let activeFilter = 'all';
+  // ─── State ───
+  var allInstances = [];
+  var selInst      = null;
+  var pollTimer    = null;
 
-  // ─── Drawer ───
+  // ─── Refresh (called from Dashboard + Instances page) ─────────────────────
 
-  function openDrawer() {
-    document.body.classList.add('drawer-open');
-  }
+  async function refresh() {
+    var agWrap  = document.getElementById('ag-wrap');
+    var dashLst = document.getElementById('dash-list');
 
-  function closeDrawer() {
-    document.body.classList.remove('drawer-open');
-    selectedInstance = null;
-    // Re-render to remove selection highlight
-    renderInstances();
-    // Reset card to no-selection state
-    document.getElementById('server-card').classList.add('dimmed');
-    document.getElementById('no-selection').style.display = '';
-    document.getElementById('controls-section').style.display = 'none';
-    document.getElementById('recent-actions').innerHTML = '<div class="recent-actions-empty">Select an instance to load history</div>';
-  }
-
-  function initDrawerControls() {
-    document.getElementById('drawer-close').addEventListener('click', closeDrawer);
-    document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
-  }
-
-  // ─── Stat Cards ───
-
-  function updateStatCards(instances) {
-    var running  = instances.filter(function (i) { return i.state === 'running'; }).length;
-    var stopped  = instances.filter(function (i) { return i.state === 'stopped'; }).length;
-    var accounts = new Set(instances.map(function (i) { return i.accountId; })).size;
-
-    var total   = document.getElementById('stat-total');
-    var statRun = document.getElementById('stat-running');
-    var statStp = document.getElementById('stat-stopped');
-    var statAcc = document.getElementById('stat-accounts');
-
-    if (total)   total.textContent   = instances.length;
-    if (statRun) statRun.textContent = running;
-    if (statStp) statStp.textContent = stopped;
-    if (statAcc) statAcc.textContent = accounts;
-  }
-
-  // ─── Load all instances ───
-
-  async function loadInstances() {
-    var btn  = document.getElementById('btn-refresh');
-    var list = document.getElementById('instance-list');
-
-    btn.disabled = true;
-    btn.classList.add('spinning');
-    list.innerHTML =
-      '<div class="loading-msg">' +
-        '<svg class="spin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>' +
-        'Fetching instances from AWS...' +
-      '</div>';
+    if (agWrap) agWrap.innerHTML = '<div class="empty"><div class="empty-ico">🔄</div><p class="empty-t">Fetching instances from AWS…</p></div>';
+    if (dashLst) dashLst.innerHTML = '<div class="empty"><div class="empty-ico">⚡</div><p class="empty-t">Loading instances…</p></div>';
 
     try {
       var res  = await API.ec2Action({ action: 'list' });
@@ -71,297 +24,343 @@ const Instances = (function () {
       if (!res.ok) throw new Error(data.message || 'Failed to list instances');
 
       allInstances = data.instances || [];
-      renderInstances();
-      updateStatCards(allInstances);
+      _renderAGroups();
+      _renderDashList();
+      App.updateDashStats(allInstances);
+      App.log('Loaded ' + allInstances.length + ' instance(s)', 'ok');
 
-      App.addLog('Loaded ' + allInstances.length + ' instance(s).', 'ok');
     } catch (err) {
       if (err.message === 'Session expired' || err.message === 'Unauthorized') return;
-      list.innerHTML = '<div class="empty-msg">Failed to load: ' + err.message + '</div>';
-      App.addLog('List failed: ' + err.message, 'err');
+      if (agWrap)  agWrap.innerHTML  = '<div class="empty"><p class="empty-t">Error: ' + App.esc(err.message) + '</p></div>';
+      if (dashLst) dashLst.innerHTML = '<div class="empty"><p class="empty-t">Error: ' + App.esc(err.message) + '</p></div>';
+      App.log('List failed: ' + err.message, 'err');
       App.showToast('Failed to load instances', 'err');
-    } finally {
-      btn.disabled = false;
-      btn.classList.remove('spinning');
     }
   }
 
-  // ─── Render grouped instance list ───
+  // ─── Account-grouped tables (Instances page) ──────────────────────────────
 
-  function renderInstances() {
-    var list = document.getElementById('instance-list');
-    var filtered = activeFilter === 'all'
-      ? allInstances
-      : allInstances.filter(function (i) { return i.accountId === activeFilter; });
+  function _renderAGroups() {
+    var wrap = document.getElementById('ag-wrap');
+    if (!wrap) return;
 
-    if (filtered.length === 0) {
-      list.innerHTML = '<div class="empty-msg">No instances found.</div>';
-      updateAccountChips();
+    if (allInstances.length === 0) {
+      wrap.innerHTML = '<div class="empty"><div class="empty-ico">🖥️</div><p class="empty-t">No instances found across linked accounts</p></div>';
       return;
     }
 
-    // Group by account, then region
+    // Group by accountId
     var groups = {};
-    filtered.forEach(function (inst) {
-      var accountKey = inst.accountName + ' (' + inst.accountId + ')';
-      if (!groups[accountKey]) groups[accountKey] = {};
-      if (!groups[accountKey][inst.region]) groups[accountKey][inst.region] = [];
-      groups[accountKey][inst.region].push(inst);
+    var order  = [];
+    allInstances.forEach(function (i) {
+      if (!groups[i.accountId]) {
+        groups[i.accountId] = { name: i.accountName || i.accountId, instances: [] };
+        order.push(i.accountId);
+      }
+      groups[i.accountId].instances.push(i);
     });
 
     var html = '';
-    Object.keys(groups).forEach(function (accountLabel) {
-      html += '<div class="account-group-header">' + escapeHtml(accountLabel) + '</div>';
-      var regions = groups[accountLabel];
-      Object.keys(regions).sort().forEach(function (region) {
-        var count = regions[region].length;
-        html += '<div class="region-label">' + escapeHtml(region) + ' (' + count + ')</div>';
-        regions[region].forEach(function (inst) {
-          var isSelected = selectedInstance && selectedInstance.instanceId === inst.instanceId;
-          var ipDisplay  = inst.publicIp || '—';
-          html +=
-            '<div class="instance-row' + (isSelected ? ' selected' : '') + '" data-id="' + inst.instanceId + '">' +
-              '<div class="inst-name-wrap">' +
-                '<div class="inst-status-dot ' + inst.state + '"></div>' +
-                '<div class="inst-name">' + escapeHtml(inst.name || inst.instanceId) + '</div>' +
-              '</div>' +
-              '<div class="inst-id">' + escapeHtml(inst.instanceId) + '</div>' +
-              '<div class="inst-type">' + escapeHtml(inst.instanceType) + '</div>' +
-              '<div><span class="inst-state ' + inst.state + '">' + inst.state + '</span></div>' +
-              '<div class="inst-ip">' + escapeHtml(ipDisplay) + '</div>' +
-            '</div>';
-        });
-      });
+    order.forEach(function (acctId) {
+      var g   = groups[acctId];
+      var gid = 'ag-' + acctId;
+      html +=
+        '<div class="ag" id="' + gid + '">' +
+          '<div class="ag-hd" onclick="Instances._toggleAg(\'' + gid + '\')">' +
+            '<svg class="ag-arrow open" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>' +
+            '<span class="ag-name">' + App.esc(g.name) + '</span>' +
+            '<span class="ag-id">' + App.esc(acctId) + '</span>' +
+            '<span class="ag-count">' + g.instances.length + '</span>' +
+          '</div>' +
+          '<div class="ag-body" id="' + gid + '-body">' +
+            '<table class="itbl">' +
+              '<thead><tr>' +
+                '<th>Name</th><th>Instance ID</th><th>Type</th><th>State</th><th>Region</th><th>Public IP</th>' +
+              '</tr></thead>' +
+              '<tbody>' +
+              g.instances.map(function (i) {
+                return '<tr id="irow-' + App.esc(i.instanceId) + '" class="inst-row" onclick="Instances.openDP(\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\')">' +
+                  '<td class="inst-name">' + App.esc(i.name || i.instanceId) + '</td>' +
+                  '<td class="mono">' + App.esc(i.instanceId) + '</td>' +
+                  '<td class="mono">' + App.esc(i.instanceType || '—') + '</td>' +
+                  '<td>' + _stateBadge(i.state) + '</td>' +
+                  '<td class="mono">' + App.esc(i.region) + '</td>' +
+                  '<td class="mono">' + App.esc(i.publicIp || '—') + '</td>' +
+                '</tr>';
+              }).join('') +
+              '</tbody>' +
+            '</table>' +
+          '</div>' +
+        '</div>';
     });
 
-    list.innerHTML = html;
-
-    // Attach click handlers
-    list.querySelectorAll('.instance-row').forEach(function (row) {
-      row.addEventListener('click', function () {
-        var id   = this.getAttribute('data-id');
-        var inst = allInstances.find(function (i) { return i.instanceId === id; });
-        if (inst) selectInstance(inst);
-      });
-    });
-
-    updateAccountChips();
+    wrap.innerHTML = html;
   }
 
-  // ─── Account filter chips ───
-
-  function updateAccountChips() {
-    var chips    = document.getElementById('account-chips');
-    var accounts = {};
-    allInstances.forEach(function (inst) {
-      if (!accounts[inst.accountId]) {
-        accounts[inst.accountId] = inst.accountName || inst.accountId;
-      }
-    });
-
-    var html = '<button class="filter-chip' + (activeFilter === 'all' ? ' active' : '') + '" data-account="all">All</button>';
-    Object.keys(accounts).forEach(function (id) {
-      html += '<button class="filter-chip' + (activeFilter === id ? ' active' : '') + '" data-account="' + id + '">' +
-        escapeHtml(accounts[id]) + '</button>';
-    });
-    chips.innerHTML = html;
-
-    chips.querySelectorAll('.filter-chip').forEach(function (chip) {
-      chip.addEventListener('click', function () {
-        activeFilter = this.getAttribute('data-account');
-        renderInstances();
-      });
-    });
+  function _toggleAg(gid) {
+    var body  = document.getElementById(gid + '-body');
+    var arrow = document.querySelector('#' + gid + ' .ag-arrow');
+    if (!body) return;
+    body.classList.toggle('collapsed');
+    if (arrow) arrow.classList.toggle('open', !body.classList.contains('collapsed'));
   }
 
-  // ─── Select instance ───
+  // ─── Dashboard quick-control list ─────────────────────────────────────────
 
-  function selectInstance(inst) {
-    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-    selectedInstance = inst;
+  function _renderDashList() {
+    var wrap = document.getElementById('dash-list');
+    if (!wrap) return;
 
-    // Update drawer content
-    document.getElementById('server-name').textContent      = inst.name || inst.instanceId;
-    document.getElementById('instance-display').textContent = inst.instanceId + '  ·  ' + inst.region;
-    document.getElementById('metric-account').textContent   = inst.accountName || inst.accountId;
-    document.getElementById('metric-region').textContent    = inst.region;
-    document.getElementById('metric-type').textContent      = inst.instanceType || '--';
-    document.getElementById('metric-ip').textContent        = inst.publicIp || 'N/A';
-
-    document.getElementById('server-card').classList.remove('dimmed');
-    document.getElementById('no-selection').style.display   = 'none';
-    document.getElementById('controls-section').style.display = 'block';
-
-    setStatus(inst.state);
-    openDrawer();
-    renderInstances(); // re-render to highlight selection
-    App.addLog('Selected: ' + (inst.name || inst.instanceId), 'info');
-
-    loadRecentActions(inst.instanceId);
-    fetchStatus();
-  }
-
-  // ─── Recent Actions ───
-
-  async function loadRecentActions(instanceId) {
-    var container = document.getElementById('recent-actions');
-    container.innerHTML = '<div class="recent-actions-loading">Loading history...</div>';
-
-    try {
-      var res  = await API.getAuditLog({ instanceId: instanceId, limit: 3 });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed');
-
-      var items = (data.items || []).slice(0, 3);
-
-      if (items.length === 0) {
-        container.innerHTML = '<div class="recent-actions-empty">No actions recorded yet.</div>';
-        return;
-      }
-
-      var html = '<div class="recent-actions-list">';
-      items.forEach(function (item) {
-        var action = (item.action || '').toLowerCase();
-        var badgeClass = 'other';
-        if (action === 'start' || action === 'scheduled-start' || action === 'auto-start') badgeClass = 'start';
-        else if (action === 'stop' || action === 'scheduled-stop') badgeClass = 'stop';
-        else if (action === 'auto-stop-idle' || action === 'auto-stop') badgeClass = 'auto';
-
-        var timeStr = fmtRecentTime(item.timestamp);
-        var user    = item.userEmail || 'system';
-
-        html +=
-          '<div class="recent-action-item">' +
-            '<span class="recent-action-badge ' + badgeClass + '">' + escapeHtml(item.action || '—') + '</span>' +
-            '<div class="recent-action-meta">' +
-              '<div class="recent-action-user">' + escapeHtml(user) + '</div>' +
-              '<div class="recent-action-time">' + escapeHtml(timeStr) + '</div>' +
-            '</div>' +
-          '</div>';
-      });
-      html += '</div>';
-      container.innerHTML = html;
-
-    } catch (err) {
-      if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
-        container.innerHTML = '<div class="recent-actions-empty">Could not load history.</div>';
-      }
+    if (allInstances.length === 0) {
+      wrap.innerHTML = '<div class="empty"><div class="empty-ico">🖥️</div><p class="empty-t">No instances found</p></div>';
+      return;
     }
+
+    var html = allInstances.map(function (i) {
+      var isRunning = i.state === 'running';
+      var isStopped = i.state === 'stopped';
+      var dotCls = isRunning ? 'running' : (isStopped ? 'stopped' : 'pending');
+      var meta = App.esc(i.accountName || i.accountId) + ' · ' + App.esc(i.region) + ' · ' + App.esc(i.instanceType || '—');
+      return (
+        '<div class="dl-row" onclick="App.go(\'instances\'); Instances.openDP(\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\')">' +
+          '<span class="dl-dot ' + dotCls + '"></span>' +
+          '<div class="dl-info">' +
+            '<div class="dl-name">' + App.esc(i.name || i.instanceId) + '</div>' +
+            '<div class="dl-meta">' + meta + '</div>' +
+          '</div>' +
+          '<span class="dl-sep">—</span>' +
+          _stateBadge(i.state) +
+          '<div class="dl-btns">' +
+            '<button class="btn btn-green btn-xs dl-start-btn" onclick="event.stopPropagation();Instances._qCtrl(event,\'start\',\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\',\'' + App.esc(i.region) + '\',\'' + App.esc(i.name||i.instanceId) + '\',\'' + App.esc(i.instanceType||'') + '\')"' + (isStopped ? '' : ' disabled') + '>' +
+              '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Start' +
+            '</button>' +
+            '<button class="btn btn-red btn-xs" onclick="event.stopPropagation();Instances._qCtrl(event,\'stop\',\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\',\'' + App.esc(i.region) + '\',\'' + App.esc(i.name||i.instanceId) + '\',\'' + App.esc(i.instanceType||'') + '\')"' + (isRunning ? '' : ' disabled') + '>' +
+              '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Stop' +
+            '</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    wrap.innerHTML = html;
   }
 
-  function fmtRecentTime(ts) {
-    if (!ts) return '--';
+  // ─── Quick control (dashboard buttons) ────────────────────────────────────
+
+  async function _qCtrl(e, action, instanceId, accountId, region, name, type) {
+    e.stopPropagation();
+    App.log('Quick ' + action + ': ' + instanceId, 'sys');
     try {
-      return new Date(ts).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
-    } catch (e) { return ts; }
-  }
-
-  // ─── Poll status ───
-
-  async function fetchStatus() {
-    if (!selectedInstance) return;
-
-    try {
-      var res = await API.ec2Action({
-        action:     'status',
-        instanceId: selectedInstance.instanceId,
-        region:     selectedInstance.region,
-        accountId:  selectedInstance.accountId,
-      });
+      var res  = await API.ec2Action({ action: action, instanceId: instanceId, accountId: accountId, region: region, instanceName: name, instanceType: type });
       var data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Status failed');
-
-      setStatus(data.state);
-      if (data.instanceType) document.getElementById('metric-type').textContent = data.instanceType;
-      document.getElementById('metric-ip').textContent = data.publicIp || 'N/A';
-
-      var stable = ['running', 'stopped', 'terminated'].indexOf(data.state) !== -1;
-      pollTimer = setTimeout(fetchStatus, stable ? 15000 : 3000);
-
+      if (!res.ok) throw new Error(data.message || 'HTTP ' + res.status);
+      App.log(action + ' sent to ' + instanceId, 'ok');
+      App.showToast(name + ' ' + action + ' accepted', 'ok');
+      setTimeout(refresh, 3000);
     } catch (err) {
       if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
-        App.addLog('Status fetch failed: ' + err.message, 'err');
-        pollTimer = setTimeout(fetchStatus, 15000);
-      }
-    }
-  }
-
-  // ─── Set status UI ───
-
-  function setStatus(state) {
-    currentState = state;
-    var cls = ['running', 'stopped', 'pending'].indexOf(state) !== -1 ? state : 'pending';
-    document.getElementById('status-badge').className = 'status-badge ' + cls;
-    document.getElementById('status-text').textContent = state.toUpperCase();
-    document.getElementById('btn-start').disabled = state !== 'stopped';
-    document.getElementById('btn-stop').disabled  = state !== 'running';
-  }
-
-  // ─── Start / Stop ───
-
-  async function controlServer(action) {
-    if (!selectedInstance)                               { App.showToast('Select an instance first.', 'info'); return; }
-    if (action === 'start' && currentState === 'running') { App.showToast('Already running.', 'info'); return; }
-    if (action === 'stop'  && currentState === 'stopped') { App.showToast('Already stopped.', 'info'); return; }
-
-    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-
-    setLoading(action, true);
-    setStatus('pending');
-    App.addLog('Sending ' + action.toUpperCase() + ' → ' + selectedInstance.instanceId + '...', 'info');
-
-    try {
-      var res = await API.ec2Action({
-        action:       action,
-        instanceId:   selectedInstance.instanceId,
-        region:       selectedInstance.region,
-        accountId:    selectedInstance.accountId,
-        instanceName: selectedInstance.name || selectedInstance.instanceId,
-        instanceType: selectedInstance.instanceType || '',
-      });
-      var data = await res.json();
-
-      if (res.ok) {
-        App.addLog(action + ' accepted — ' + selectedInstance.instanceId, 'ok');
-        App.showToast('Server ' + action + ' accepted', 'ok');
-        pollTimer = setTimeout(fetchStatus, 3000);
-      } else {
-        throw new Error(data.message || 'HTTP ' + res.status);
-      }
-    } catch (err) {
-      if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
-        App.addLog('Error: ' + err.message, 'err');
+        App.log('Error: ' + err.message, 'err');
         App.showToast(err.message, 'err');
-        setStatus('stopped');
+      }
+    }
+  }
+
+  // ─── Inline Detail Panel ──────────────────────────────────────────────────
+
+  function openDP(instanceId, accountId) {
+    var inst = allInstances.find(function (i) { return i.instanceId === instanceId && i.accountId === accountId; });
+    if (!inst) return;
+
+    // Toggle: clicking same open instance closes it
+    if (selInst && selInst.instanceId === instanceId) {
+      closeDP();
+      return;
+    }
+
+    // Close any previously open panel
+    closeDP();
+
+    selInst = inst;
+
+    var sourceRow = document.getElementById('irow-' + instanceId);
+    if (!sourceRow) return;
+
+    // Build inline detail row
+    var detailRow = document.createElement('tr');
+    detailRow.className = 'dp-inline-row';
+    detailRow.id = 'dp-inline';
+    detailRow.innerHTML =
+      '<td colspan="6" style="padding:0">' +
+        '<div class="dp">' +
+          '<div class="dp-stripe"></div>' +
+          '<div class="dp-banner">' +
+            '<div class="dp-left">' +
+              '<div class="dp-name" id="dp-name">—</div>' +
+              '<div class="dp-id" id="dp-id">—</div>' +
+            '</div>' +
+            '<div class="dp-badge stopped" id="dp-bdg"><span class="dp-sdot"></span><span id="dp-st">STOPPED</span></div>' +
+          '</div>' +
+          '<div class="dp-metrics">' +
+            '<div class="dp-m"><div class="dp-ml">Account</div><div class="dp-mv blue" id="dp-acct">—</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Region</div><div class="dp-mv blue" id="dp-reg">—</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Instance Type</div><div class="dp-mv" id="dp-type">—</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Platform</div><div class="dp-mv violet" id="dp-plat">—</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Public IP</div><div class="dp-mv mono-sm" id="dp-pub">—</div></div>' +
+          '</div>' +
+          '<div class="dp-ctrl">' +
+            '<span class="dp-ctrl-lbl">Controls</span>' +
+            '<button class="btn btn-green btn-sm" id="dp-start" onclick="Instances.ctrlInst(\'start\')" disabled>' +
+              '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg><span id="dp-sl">Start</span>' +
+            '</button>' +
+            '<button class="btn btn-red btn-sm" id="dp-stop" onclick="Instances.ctrlInst(\'stop\')" disabled>' +
+              '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span id="dp-stl">Stop</span>' +
+            '</button>' +
+            '<button class="btn btn-out btn-sm" onclick="Instances.refreshDP()">' +
+              '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Refresh' +
+            '</button>' +
+            '<button class="btn btn-ghost btn-sm ml-auto" onclick="Instances.closeDP()">' +
+              '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Close' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+      '</td>';
+
+    sourceRow.parentNode.insertBefore(detailRow, sourceRow.nextSibling);
+
+    // Highlight selected row
+    sourceRow.classList.add('inst-row-selected');
+
+    _fillDP(inst);
+    _setDPStatus(inst.state);
+    App.log('Opened: ' + (inst.name || inst.instanceId), 'sys');
+    _pollDP();
+
+    detailRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function closeDP() {
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+
+    var existing = document.getElementById('dp-inline');
+    if (existing) existing.remove();
+
+    // Remove highlight from previously selected row
+    document.querySelectorAll('.inst-row-selected').forEach(function (r) {
+      r.classList.remove('inst-row-selected');
+    });
+
+    selInst = null;
+  }
+
+  function _fillDP(inst) {
+    App.setText('dp-name', inst.name || inst.instanceId);
+    App.setText('dp-id',   inst.instanceId + ' · ' + inst.region);
+    App.setText('dp-acct', inst.accountName || inst.accountId);
+    App.setText('dp-reg',  inst.region);
+    App.setText('dp-type', inst.instanceType || '—');
+    App.setText('dp-plat', inst.platform || 'Linux');
+    App.setText('dp-pub',  inst.publicIp || '—');
+  }
+
+  function _setDPStatus(state) {
+    var st   = state || 'stopped';
+    var norm = ['running','stopped','pending','stopping','starting'].indexOf(st) !== -1 ? st : 'pending';
+    var bdg  = document.getElementById('dp-bdg');
+    var txt  = document.getElementById('dp-st');
+    if (bdg) { bdg.className = 'dp-badge ' + norm; }
+    if (txt) txt.textContent = st.toUpperCase();
+
+    var startBtn = document.getElementById('dp-start');
+    var stopBtn  = document.getElementById('dp-stop');
+    if (startBtn) startBtn.disabled = st !== 'stopped';
+    if (stopBtn)  stopBtn.disabled  = st !== 'running';
+  }
+
+  async function _pollDP() {
+    if (!selInst) return;
+    try {
+      var res  = await API.ec2Action({ action: 'status', instanceId: selInst.instanceId, region: selInst.region, accountId: selInst.accountId });
+      var data = await res.json();
+      if (res.ok) {
+        _setDPStatus(data.state);
+        if (data.instanceType) App.setText('dp-type', data.instanceType);
+        App.setText('dp-pub', data.publicIp || '—');
+        var stable = ['running','stopped','terminated'].indexOf(data.state) !== -1;
+        pollTimer = setTimeout(_pollDP, stable ? 15000 : 3000);
+      }
+    } catch (err) {
+      if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
+        pollTimer = setTimeout(_pollDP, 20000);
+      }
+    }
+  }
+
+  function refreshDP() {
+    if (selInst) _pollDP();
+  }
+
+  // ─── Start / Stop from detail panel ───────────────────────────────────────
+
+  async function ctrlInst(action) {
+    if (!selInst) return;
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+
+    var startBtn = document.getElementById('dp-start');
+    var stopBtn  = document.getElementById('dp-stop');
+    var lblEl    = document.getElementById(action === 'start' ? 'dp-sl' : 'dp-stl');
+    if (startBtn) startBtn.disabled = true;
+    if (stopBtn)  stopBtn.disabled  = true;
+    if (lblEl)    lblEl.textContent  = action === 'start' ? 'Starting…' : 'Stopping…';
+
+    App.log('Sending ' + action.toUpperCase() + ' → ' + selInst.instanceId, 'sys');
+
+    try {
+      var res  = await API.ec2Action({
+        action:       action,
+        instanceId:   selInst.instanceId,
+        region:       selInst.region,
+        accountId:    selInst.accountId,
+        instanceName: selInst.name || selInst.instanceId,
+        instanceType: selInst.instanceType || '',
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'HTTP ' + res.status);
+
+      App.log(action + ' accepted — ' + selInst.instanceId, 'ok');
+      App.showToast((selInst.name || selInst.instanceId) + ' ' + action + ' accepted', 'ok');
+      _setDPStatus(action === 'start' ? 'pending' : 'stopping');
+      pollTimer = setTimeout(_pollDP, 3000);
+      setTimeout(refresh, 6000);
+
+    } catch (err) {
+      if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
+        App.log('Error: ' + err.message, 'err');
+        App.showToast(err.message, 'err');
+        if (selInst) _setDPStatus(selInst.state || 'stopped');
       }
     } finally {
-      setLoading(action, false);
+      if (lblEl) lblEl.textContent = action === 'start' ? 'Start' : 'Stop';
     }
   }
 
-  function setLoading(action, on) {
-    document.getElementById('spin-' + action).style.display  = on ? 'block' : 'none';
-    document.getElementById('icon-' + action).style.display  = on ? 'none'  : 'flex';
-    document.getElementById('label-' + action).textContent   =
-      on ? (action === 'start' ? 'Starting...' : 'Stopping...') : (action === 'start' ? 'Start' : 'Stop');
-    document.getElementById('btn-start').disabled = on;
-    document.getElementById('btn-stop').disabled  = on;
+  // ─── State badge HTML ──────────────────────────────────────────────────────
+
+  function _stateBadge(state) {
+    var cls = ['running','stopped','pending','stopping','starting'].indexOf(state) !== -1 ? state : 'pending';
+    return '<span class="sbadge ' + cls + '"><span class="sbadge-dot"></span>' + App.esc(state || '—') + '</span>';
   }
 
-  // ─── Utility ───
-
-  function escapeHtml(str) {
-    var div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  // ─── Public API ───
+  // ─── Public ────────────────────────────────────────────────────────────────
 
   return {
-    loadInstances:    loadInstances,
-    controlServer:    controlServer,
-    initDrawerControls: initDrawerControls,
+    refresh:    refresh,
+    openDP:     openDP,
+    closeDP:    closeDP,
+    refreshDP:  refreshDP,
+    ctrlInst:   ctrlInst,
+    _toggleAg:  _toggleAg,
+    _qCtrl:     _qCtrl,
+    getAll:     function () { return allInstances; },
   };
 
 })();

@@ -383,6 +383,11 @@ Resources:
                 Action:
                   - sns:Publish
                 Resource: '*'
+              - Sid: CostExplorer
+                Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                Resource: '*'
               - Sid: CloudWatchLogs
                 Effect: Allow
                 Action:
@@ -571,6 +576,13 @@ Resources:
       RestApiId: !Ref RestApi
       ParentId: !Ref ResourceAudit
       PathPart: daily
+
+  ResourceBilling:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: billing
 
   # =============================================
   # REST API - CORS Gateway Responses
@@ -776,6 +788,48 @@ Resources:
             method.response.header.Access-Control-Allow-Origin: true
 
   # =============================================
+  # REST API - GET /billing
+  # =============================================
+  MethodGetBilling:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceBilling
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsBilling:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceBilling
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
   # REST API - Deployment + Stage
   # =============================================
   RestApiDeployment:
@@ -790,6 +844,8 @@ Resources:
       - MethodOptionsAudit
       - MethodGetAuditDaily
       - MethodOptionsAuditDaily
+      - MethodGetBilling
+      - MethodOptionsBilling
     Properties:
       RestApiId: !Ref RestApi
       Description: !Sub 'Deployment ${LambdaCodeVersion}'

@@ -52,6 +52,13 @@ Resources:
                 Action:
                   - cloudwatch:GetMetricStatistics
                 Resource: '*'
+              # Optional: enables the central portal to query billing data for
+              # this account via STS AssumeRole. Remove if not needed.
+              - Sid: CostExplorerReadOnly
+                Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                Resource: '*'
       Tags:
         - Key: Project
           Value: EC2Control

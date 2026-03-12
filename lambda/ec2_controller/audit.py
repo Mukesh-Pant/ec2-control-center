@@ -13,7 +13,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key, Attr
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -141,12 +141,14 @@ def log_action(instance_id, instance_name, instance_type, action,
 
 # ─── Query: Event Log ───────────────────────────────────────────────────────
 
-def get_audit_log(instance_id=None, user_email=None, limit=50, last_key=None):
+def get_audit_log(instance_id=None, user_email=None, action=None,
+                  account_id=None, limit=50, last_key=None):
     """
     Query audit events (newest first).
       - instance_id → query by PK INSTANCE#{id}  (fast, uses table key)
       - user_email  → query GSI user-index        (fast, uses GSI)
       - neither     → full scan with pagination   (admin use / audit overview)
+      - action / account_id → applied as FilterExpression on top of any of the above
 
     Returns: (items: list, next_last_key: dict | None)
     """
@@ -156,22 +158,74 @@ def get_audit_log(instance_id=None, user_email=None, limit=50, last_key=None):
     if last_key:
         kwargs['ExclusiveStartKey'] = last_key
 
+    # Build optional FilterExpression
+    filter_expr = None
+    if action:
+        filter_expr = Attr('action').eq(action)
+    if account_id:
+        acct_expr = Attr('accountId').eq(account_id)
+        filter_expr = filter_expr & acct_expr if filter_expr else acct_expr
+
     try:
         if instance_id:
+            # When both instance_id and user_email are provided, filter by user too
+            if user_email:
+                user_expr = Attr('userEmail').eq(user_email)
+                filter_expr = filter_expr & user_expr if filter_expr else user_expr
+            if filter_expr is not None:
+                kwargs['FilterExpression'] = filter_expr
             resp = table.query(
                 KeyConditionExpression=Key('pk').eq(f'INSTANCE#{instance_id}'),
                 **kwargs
             )
+            return resp.get('Items', []), resp.get('LastEvaluatedKey')
+
         elif user_email:
+            if filter_expr is not None:
+                kwargs['FilterExpression'] = filter_expr
             resp = table.query(
                 IndexName='user-index',
                 KeyConditionExpression=Key('userEmail').eq(user_email),
                 **kwargs
             )
-        else:
-            resp = table.scan(**kwargs)
+            return resp.get('Items', []), resp.get('LastEvaluatedKey')
 
-        return resp.get('Items', []), resp.get('LastEvaluatedKey')
+        else:
+            # Full scan — paginate internally until we have enough results
+            # DynamoDB Limit on scan limits *scanned* items, not returned items,
+            # so with a FilterExpression we may get far fewer than requested.
+            if filter_expr is not None:
+                scan_kwargs = {'FilterExpression': filter_expr}
+            else:
+                scan_kwargs = {}
+            if last_key:
+                scan_kwargs['ExclusiveStartKey'] = last_key
+
+            items_collected = []
+            scan_cursor = None
+            # Scan in batches up to 5× the requested limit to satisfy filter
+            batch_limit = min(limit * 5, 500)
+
+            while len(items_collected) < limit:
+                call_kwargs = {**scan_kwargs, 'Limit': batch_limit}
+                if scan_cursor:
+                    call_kwargs['ExclusiveStartKey'] = scan_cursor
+                elif last_key and 'ExclusiveStartKey' not in call_kwargs:
+                    call_kwargs['ExclusiveStartKey'] = last_key
+
+                resp = table.scan(**call_kwargs)
+                items_collected.extend(resp.get('Items', []))
+                scan_cursor = resp.get('LastEvaluatedKey')
+                if not scan_cursor:
+                    break
+                # Remove last_key from subsequent iterations (already applied)
+                scan_kwargs.pop('ExclusiveStartKey', None)
+
+            # Sort newest first
+            items_collected.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+            # Return up to limit; pass cursor so frontend can load more
+            next_key = scan_cursor if len(items_collected) >= limit else None
+            return items_collected[:limit], next_key
 
     except Exception as e:
         logger.error("Audit query failed: %s", e)

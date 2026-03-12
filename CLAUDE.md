@@ -18,13 +18,13 @@ and manage member AWS accounts — all serverless, zero infrastructure to manage
 
 All 5 milestones shipped and confirmed working in production.
 
-| Milestone | Feature | Status |
-|---|---|---|
-| M1 | Core platform — EC2 list/start/stop, Cognito PKCE auth, CloudFront CDN | ✅ LIVE |
-| M2 | Audit logging — DynamoDB AuditLog, /audit + /audit/daily endpoints, Audit Log tab | ✅ LIVE |
-| M3 | Scheduling | ⏭ SKIPPED (deferred) |
-| M4 | Idle auto-stop — CloudWatch CPU check every 15 min, SNS email alert | ✅ LIVE |
-| M5 | Multi-account — Add/enable/disable/test/remove member accounts from portal UI | ✅ LIVE |
+| Milestone | Feature                                                                           | Status                |
+| --------- | --------------------------------------------------------------------------------- | --------------------- |
+| M1        | Core platform — EC2 list/start/stop, Cognito PKCE auth, CloudFront CDN            | ✅ LIVE               |
+| M2        | Audit logging — DynamoDB AuditLog, /audit + /audit/daily endpoints, Audit Log tab | ✅ LIVE               |
+| M3        | Scheduling                                                                        | ⏭ SKIPPED (deferred) |
+| M4        | Idle auto-stop — CloudWatch CPU check every 15 min, SNS email alert               | ✅ LIVE               |
+| M5        | Multi-account — Add/enable/disable/test/remove member accounts from portal UI     | ✅ LIVE               |
 
 **REST API migration:** Migrated from HTTP API v2 → REST API v1 (COGNITO_USER_POOLS authorizer).
 
@@ -124,14 +124,14 @@ EventBridge (rate 15 min) → idle_checker Lambda → CloudWatch metrics → aut
 
 ## Key Architecture Decisions
 
-| Decision | Choice | Why |
-|---|---|---|
-| API Gateway | REST API v1 (REGIONAL) | Migrated from HTTP API v2 — COGNITO_USER_POOLS authorizer, explicit CORS methods |
-| Auth | Authorization Code + PKCE | Replaces deprecated implicit grant; enables refresh tokens |
-| Lambda code | S3 zip (versioned S3Key) | Guarantees code update on every CloudFormation deploy |
-| Config injection | Custom Resource Lambda | Zero manual copy-paste of CF outputs |
-| Multi-account | STS AssumeRole + DynamoDB registry | Central account uses local credentials; member accounts use cross-account role |
-| Idle auto-stop | Default ON, opt-out with tag `ec2-control:no-auto-stop=true` | More aggressive cost savings |
+| Decision         | Choice                                                       | Why                                                                              |
+| ---------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| API Gateway      | REST API v1 (REGIONAL)                                       | Migrated from HTTP API v2 — COGNITO_USER_POOLS authorizer, explicit CORS methods |
+| Auth             | Authorization Code + PKCE                                    | Replaces deprecated implicit grant; enables refresh tokens                       |
+| Lambda code      | S3 zip (versioned S3Key)                                     | Guarantees code update on every CloudFormation deploy                            |
+| Config injection | Custom Resource Lambda                                       | Zero manual copy-paste of CF outputs                                             |
+| Multi-account    | STS AssumeRole + DynamoDB registry                           | Central account uses local credentials; member accounts use cross-account role   |
+| Idle auto-stop   | Default ON, opt-out with tag `ec2-control:no-auto-stop=true` | More aggressive cost savings                                                     |
 
 ---
 
@@ -140,36 +140,43 @@ EventBridge (rate 15 min) → idle_checker Lambda → CloudWatch metrics → aut
 ### POST /ec2
 
 **Action: list**
+
 ```json
 Request:  { "action": "list" }
 Response: { "instances": [{ "instanceId", "name", "state", "instanceType", "publicIp", "region", "accountId", "accountName" }] }
 ```
 
 **Action: status / start / stop**
+
 ```json
 Request:  { "action": "start", "instanceId": "i-xxx", "region": "ap-south-1", "accountId": "123..." }
 Response: { "message", "state", "requestedBy" }
 ```
 
 ### GET /accounts
+
 ```json
 Response: { "accounts": [{ "accountId", "accountName", "roleArn", "enabled", "isCentral" }] }
 ```
+
 Returns ALL accounts (enabled + disabled) — uses `get_all_accounts()` not `get_accounts()`.
 
 ### POST /accounts
+
 ```json
 Request:  { "action": "add|update|enable|disable|remove|test", "accountId": "...", ...}
 Response: { "message": "...", "accountId": "..." }
 ```
 
 ### GET /audit
+
 ```json
 Query:    ?instanceId=i-xxx&userEmail=x@y.com&limit=50&lastKey=...
 Response: { "items": [...], "lastKey": {...}, "count": N }
 ```
 
 ### GET /audit/daily
+
 ```json
 Query:    ?instanceId=i-xxx&days=30
 Response: { "instanceId", "instanceType", "hourlyRate", "totalRunningHours", "totalEstimatedCost", "summary": [...] }
@@ -180,6 +187,7 @@ Response: { "instanceId", "instanceType", "hourlyRate", "totalRunningHours", "to
 ## Code Patterns to Remember
 
 ### Lambda (Python) — REST API v1
+
 - Method: `event['httpMethod']`, Path: `event['path']`
 - JWT caller: `event['requestContext']['authorizer']['claims'].get('email')`
 - CORS headers must be returned in EVERY response (REST API doesn't auto-add them)
@@ -188,6 +196,7 @@ Response: { "instanceId", "instanceType", "hourlyRate", "totalRunningHours", "to
 - `get_all_accounts()` → all accounts including disabled (used for admin panel)
 
 ### Frontend (JavaScript)
+
 - All JS modules are IIFE pattern: `const ModuleName = (function() { ... return { publicMethods }; })()`
 - Module load order in index.html: auth.js → api.js → instances.js → audit.js → accounts.js → app.js
 - CONFIG placeholder in index.html: `const CONFIG = { /*__INJECT__*/ };` (replaced at deploy)
@@ -196,6 +205,7 @@ Response: { "instanceId", "instanceType", "hourlyRate", "totalRunningHours", "to
 - API calls use `Bearer {token}` header
 
 ### CloudFormation — REST API v1
+
 - `AuthorizationType: COGNITO_USER_POOLS` + `AuthorizerId: !Ref RestApiAuthorizer`
 - Each resource needs explicit OPTIONS mock method for CORS preflight
 - `GatewayResponseDefault4XX` and `GatewayResponseDefault5XX` for CORS on error responses
@@ -224,17 +234,20 @@ Code S3 bucket: `ec2-control-code-{AWS_ACCOUNT_ID}-ap-south-1`
 ## How to Deploy / Re-deploy
 
 **Prerequisites:**
+
 - AWS CLI installed and configured with admin credentials
 - `zip` utility available in terminal
 - Run from Git Bash on the laptop
 
 **Command:**
+
 ```bash
 cd "c:/Users/MUKESH/Desktop/EC2-control-center"
 ./deploy.sh
 ```
 
 **What deploy.sh does automatically:**
+
 1. Creates S3 code bucket (if not exists)
 2. Zips Lambda functions (ec2_controller, idle_checker, config_injector) and frontend
 3. Uploads versioned zips to S3 code bucket
@@ -265,6 +278,7 @@ aws cognito-idp admin-create-user \
 ## Adding Member Accounts (M5 — via Portal UI)
 
 1. Deploy `cloudformation/member-role-stack.yaml` in the target account:
+
 ```bash
 aws cloudformation deploy \
   --template-file cloudformation/member-role-stack.yaml \
@@ -274,6 +288,7 @@ aws cloudformation deploy \
   --region ap-south-1 \
   --profile <member-account-profile>
 ```
+
 2. Copy the `RoleArn` from the stack outputs
 3. Go to the **Accounts** tab in the portal → **+ Add Account**
 4. Fill in Account ID, Name, and Role ARN → Click **Add Account**
@@ -296,6 +311,7 @@ aws cloudformation deploy \
 ## Lessons Learned (All Milestones)
 
 ### M1 Deployment Gotchas
+
 - `aws cloudformation deploy` uses changesets → `AWS::EarlyValidation::ResourceExistenceCheck` blocks on orphaned buckets. For fresh stacks use `create-stack`; for updates `deploy` is fine.
 - `MfaConfiguration: 'OFF'` — must be quoted in YAML
 - `CallbackURLs` set to `['https://localhost']` placeholder; Config Injector sets real CloudFront URL
@@ -305,6 +321,7 @@ aws cloudformation deploy \
 - `CloudFront ForwardedValues` instead of `CachePolicyId` to avoid EarlyValidation errors
 
 ### M2+ Deployment Gotchas
+
 - **Lambda code not updating**: CloudFormation only calls `UpdateFunctionCode` when `S3Key` changes. Fix: include `LambdaCodeVersion` IN the S3Key: `S3Key: !Sub 'lambda/ec2-controller-${Environment}-${LambdaCodeVersion}.zip'`
 - **REST API CORS**: every resource needs an explicit OPTIONS mock method — `AuthorizationType: NONE`
 - **REST API event format**: `event['httpMethod']` and `event['path']` (not `requestContext.http.*` like HTTP API v2)
@@ -326,11 +343,12 @@ aws cloudformation deploy \
 - **Never commit:** `.zip` files, `deploy-config.env`, `__pycache__/`, `.env` secrets
 
 ### Commit Message Convention
+
 ```
 <type>: <short summary>
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ```
+
 Types: `feat`, `fix`, `chore`, `docs`, `refactor`
 
 ---
@@ -338,6 +356,7 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`
 ## Next Session Checklist
 
 Before starting any development:
+
 1. Read this CLAUDE.md in full
 2. Run `git status` — ensure working tree is clean
 3. Identify the feature or fix to work on

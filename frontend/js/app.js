@@ -1,153 +1,249 @@
 /* ═══════════════════════════════════════════════
-   App Module — Init, tab routing, toast, log
+   App — Navigation, Dashboard, Session, Toast
    ═══════════════════════════════════════════════ */
 
-var App = (function () {
+const App = (function () {
 
-  var toastTimer;
+  // ─── State ───
+  var currentPage = 'dashboard';
+  var sessionEnd  = 0;
+  var clockTick   = null;
+  var isAdmin     = false;
 
-  // ─── Toast ───
-
-  function showToast(msg, type) {
-    var el = document.getElementById('toast');
-    el.textContent = msg;
-    el.className = 'show ' + (type || 'info');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.className = ''; }, 3500);
-  }
-
-  // ─── Activity Log ───
-
-  var TAGS = {
-    ok:   '<span class="log-tag tag-ok">OK</span>',
-    err:  '<span class="log-tag tag-err">ERR</span>',
-    info: '<span class="log-tag tag-info">INFO</span>',
-    sys:  '<span class="log-tag tag-sys">SYS</span>',
+  var PAGE_TITLES = {
+    dashboard: 'Dashboard',
+    instances: 'Instances',
+    billing:   'Billing & Cost',
+    analytics: 'Analytics',
+    audit:     'Audit Log',
+    accounts:  'Accounts',
   };
 
-  function addLog(msg, type) {
-    var list = document.getElementById('log-list');
-    if (!list) return;
-    var time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  // ─── Navigation ────────────────────────────────────────────────────────────
+
+  function go(page) {
+    if (!PAGE_TITLES[page]) return;
+
+    document.querySelectorAll('.nitem').forEach(function (el) {
+      el.classList.toggle('on', el.id === 'nav-' + page);
+    });
+    document.querySelectorAll('.pv').forEach(function (el) {
+      el.classList.toggle('on', el.id === 'pv-' + page);
+    });
+
+    var tb = document.getElementById('tb-page');
+    if (tb) tb.textContent = PAGE_TITLES[page];
+
+    currentPage = page;
+    closeSidebar();
+
+    if (page === 'audit')     Audit.onTabActivated();
+    if (page === 'analytics') Analytics.onTabActivated();
+    if (page === 'billing')   Billing.onTabActivated();
+    if (page === 'accounts')  Accounts.onTabActivated();
+  }
+
+  // ─── Sidebar ───────────────────────────────────────────────────────────────
+
+  function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sb-backdrop').classList.add('open');
+  }
+
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sb-backdrop').classList.remove('open');
+  }
+
+  // ─── Activity Log ──────────────────────────────────────────────────────────
+
+  function log(msg, type) {
+    type = type || 'sys';
+    var ul = document.getElementById('log-ul');
+    if (!ul) return;
+    var ts = new Date().toTimeString().slice(0, 8);
     var li = document.createElement('li');
-    li.className = 'log-entry';
+    li.className = 'log-li';
     li.innerHTML =
-      '<span class="log-time">' + time + '</span>' +
-      '<span class="log-msg" title="' + msg.replace(/"/g, '&quot;') + '">' + msg + '</span>' +
-      (TAGS[type] || TAGS.info);
-    list.prepend(li);
-    while (list.children.length > 30) list.removeChild(list.lastChild);
+      '<span class="log-t">' + ts + '</span>' +
+      '<i class="log-d ' + esc(type) + '"></i>' +
+      '<span class="log-m">' + esc(msg) + '</span>' +
+      '<span class="lchip ' + esc(type) + '">' + type.toUpperCase() + '</span>';
+    ul.insertBefore(li, ul.firstChild);
+    while (ul.children.length > 100) ul.removeChild(ul.lastChild);
   }
 
   function clearLog() {
-    document.getElementById('log-list').innerHTML = '';
-    addLog('Log cleared.', 'sys');
+    var ul = document.getElementById('log-ul');
+    if (ul) ul.innerHTML = '';
+    log('Activity log cleared', 'sys');
   }
 
-  // ─── Theme Toggle ───
+  // ─── Toast ─────────────────────────────────────────────────────────────────
 
-  function initThemeToggle() {
-    var btn = document.getElementById('btn-theme-toggle');
-    if (!btn) return;
-    btn.addEventListener('click', function () {
-      var isLight = document.documentElement.getAttribute('data-theme') === 'light';
-      if (isLight) {
-        document.documentElement.removeAttribute('data-theme');
-        localStorage.removeItem('theme');
-      } else {
-        document.documentElement.setAttribute('data-theme', 'light');
-        localStorage.setItem('theme', 'light');
+  var _toastTimer = null;
+
+  function showToast(msg, type) {
+    type = type || 'info';
+    var el  = document.getElementById('toast');
+    var ico = document.getElementById('toast-ico');
+    var txt = document.getElementById('toast-msg');
+    if (!el) return;
+    var icons = { ok: '✓', err: '✕', info: 'ℹ', warn: '⚠' };
+    if (ico) ico.textContent = icons[type] || 'ℹ';
+    if (txt) txt.textContent = msg;
+    el.className = 'show ' + type;
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function () { el.className = ''; }, 3500);
+  }
+
+  // ─── Clock + Session timer ─────────────────────────────────────────────────
+
+  function startClock() {
+    if (clockTick) return;
+    clockTick = setInterval(function () {
+      var clk = document.getElementById('clock');
+      if (clk) clk.textContent = new Date().toTimeString().slice(0, 8);
+
+      var remaining = Math.max(0, sessionEnd - Date.now());
+      var mins = Math.floor(remaining / 60000);
+      var secs = Math.floor((remaining % 60000) / 1000);
+      var sess = document.getElementById('sess-t');
+      if (sess) sess.textContent = _pad(mins) + ':' + _pad(secs);
+
+      if (remaining === 0 && sessionEnd > 0) {
+        sessionEnd = 0;
+        if (typeof Auth !== 'undefined') Auth.logout();
       }
-    });
+    }, 1000);
   }
 
-  // ─── Session Countdown ───
+  function setSessionExpiry(expMs) { sessionEnd = expMs; }
 
-  function updateCountdown() {
-    var expiry    = Auth.getExpiry();
-    var remaining = expiry - Date.now();
-    var el        = document.getElementById('session-timer');
-    if (remaining <= 0) {
-      Auth.logout();
-      return;
+  // ─── Helpers ───────────────────────────────────────────────────────────────
+
+  function setText(id, val) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+
+  function setWidth(id, pct) {
+    var el = document.getElementById(id);
+    if (el) el.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  }
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = String(s == null ? '' : s);
+    return d.innerHTML;
+  }
+
+  function _pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  // ─── Dashboard stat update ─────────────────────────────────────────────────
+
+  // Approximate on-demand Linux prices in ap-south-1 (USD/hr) for projections.
+  var _PRICES = {
+    't2.nano':0.0058,'t2.micro':0.0116,'t2.small':0.0230,'t2.medium':0.0464,'t2.large':0.0928,
+    't3.nano':0.0052,'t3.micro':0.0104,'t3.small':0.0208,'t3.medium':0.0416,'t3.large':0.0832,
+    't3a.nano':0.0047,'t3a.micro':0.0094,'t3a.small':0.0188,'t3a.medium':0.0376,
+    't4g.nano':0.0042,'t4g.micro':0.0084,'t4g.small':0.0168,'t4g.medium':0.0336,
+    'm5.large':0.096,'m5.xlarge':0.192,'m5.2xlarge':0.384,
+    'm6i.large':0.0960,'m6i.xlarge':0.1920,
+    'c5.large':0.085,'c5.xlarge':0.170,
+    'c6i.large':0.085,'c6i.xlarge':0.170,
+    'r5.large':0.126,'r5.xlarge':0.252,
+  };
+
+  function updateDashStats(instances) {
+    var total   = instances.length;
+    var running = instances.filter(function (i) { return i.state === 'running'; }).length;
+    var stopped = instances.filter(function (i) { return i.state === 'stopped'; }).length;
+    var accts   = new Set(instances.map(function (i) { return i.accountId; })).size;
+
+    setText('st-total', total);
+    setText('st-run',   running);
+    setText('st-stp',   stopped);
+    setText('st-accts', accts + ' account' + (accts !== 1 ? 's' : ''));
+    setText('st-run-pct', total
+      ? Math.round(running / total * 100) + ' % of fleet active'
+      : '— % of fleet active');
+
+    setWidth('sb-run', total ? running / total * 100 : 0);
+    setWidth('sb-stp', total ? stopped / total * 100 : 0);
+
+    setText('sb-fleet-txt', running + ' / ' + total + ' running');
+
+    var badge = document.getElementById('n-inst');
+    if (badge) { badge.textContent = total; badge.style.display = total ? '' : 'none'; }
+
+    var hourlyRunning = instances
+      .filter(function (i) { return i.state === 'running'; })
+      .reduce(function (s, i) { return s + (_PRICES[i.instanceType] || 0.05); }, 0);
+    var monthly = hourlyRunning * 24 * 30;
+    setText('st-cost', monthly > 0 ? '$' + monthly.toFixed(2) : '—');
+
+    var pill    = document.getElementById('tb-cost');
+    var pillVal = document.getElementById('tb-cost-val');
+    if (pill && pillVal) {
+      if (monthly > 0) { pillVal.textContent = '$' + monthly.toFixed(2); pill.style.display = ''; }
+      else             { pill.style.display = 'none'; }
     }
-    var m = Math.floor(remaining / 60000);
-    var s = Math.floor((remaining % 60000) / 1000);
-    el.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-    el.className = 'session-timer' + (m < 5 ? ' warning' : '');
+
+    // Also populate inst-hint in Dashboard card header
+    var accumulated = hourlyRunning > 0 ? '$' + hourlyRunning.toFixed(4) : '$0.0000';
+    setText('inst-hint', total + ' instance' + (total !== 1 ? 's' : '') + ' · ' + running + ' running · ' + accumulated + ' accumulated');
   }
 
-  // ─── Tab Routing ───
+  // ─── Admin / user info ─────────────────────────────────────────────────────
 
-  function switchTab(tabName) {
-    document.querySelectorAll('.tab').forEach(function (btn) {
-      btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
-    });
-    document.querySelectorAll('.panel').forEach(function (panel) {
-      panel.style.display = panel.id === 'panel-' + tabName ? 'block' : 'none';
-    });
+  function setAdmin(flag) {
+    isAdmin = flag;
+    var admSec = document.getElementById('adm-sec');
+    var navAcc = document.getElementById('nav-accounts');
+    var badge  = document.getElementById('rbac-badge');
+    if (admSec) admSec.style.display = flag ? '' : 'none';
+    if (navAcc) navAcc.style.display = flag ? '' : 'none';
+    if (badge)  badge.style.display  = flag ? '' : 'none';
   }
 
-  // ─── Clock ───
-
-  function updateClock() {
-    var el = document.getElementById('clock');
-    if (el) el.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  function setUserInfo(email) {
+    var name = email ? email.split('@')[0] : '?';
+    setText('sb-name', email || 'Unknown');
+    var av = document.getElementById('sb-av');
+    if (av) av.textContent = (name[0] || '?').toUpperCase();
   }
 
-  // ─── Init ───
+  // ─── Init ──────────────────────────────────────────────────────────────────
 
-  async function init() {
-    var ok = await Auth.init();
-    if (!ok) return;
-
-    document.getElementById('user-email').textContent = Auth.getEmail();
-
-    // Wire up event listeners
-    document.getElementById('btn-logout').addEventListener('click', Auth.logout);
-    document.getElementById('btn-refresh').addEventListener('click', Instances.loadInstances);
-    document.getElementById('btn-clear-log').addEventListener('click', clearLog);
-    document.getElementById('btn-start').addEventListener('click', function () { Instances.controlServer('start'); });
-    document.getElementById('btn-stop').addEventListener('click',  function () { Instances.controlServer('stop'); });
-
-    // Tab buttons
-    document.querySelectorAll('.tab').forEach(function (tab) {
-      tab.addEventListener('click', function () {
-        var name = this.getAttribute('data-tab');
-        switchTab(name);
-        if (name === 'audit')    Audit.onTabActivated();
-        if (name === 'accounts') Accounts.onTabActivated();
-      });
-    });
-
-    // Init modules
+  function init() {
     Audit.init();
+    Billing.init();
     Accounts.init();
-    Instances.initDrawerControls();
-    initThemeToggle();
-
-    // Start timers
-    updateCountdown();
-    setInterval(updateCountdown, 1000);
-    updateClock();
-    setInterval(updateClock, 1000);
-
-    addLog('Portal initialized. Loading instances...', 'sys');
-
-    Instances.loadInstances();
+    startClock();
+    go('dashboard');
+    log('Portal ready', 'sys');
+    Instances.refresh();
   }
 
-  // ─── Public API ───
+  // ─── Public ────────────────────────────────────────────────────────────────
 
   return {
-    init:       init,
-    showToast:  showToast,
-    addLog:     addLog,
-    clearLog:   clearLog,
-    switchTab:  switchTab,
+    go:               go,
+    openSidebar:      openSidebar,
+    closeSidebar:     closeSidebar,
+    log:              log,
+    clearLog:         clearLog,
+    showToast:        showToast,
+    setText:          setText,
+    setWidth:         setWidth,
+    esc:              esc,
+    updateDashStats:  updateDashStats,
+    setAdmin:         setAdmin,
+    setUserInfo:      setUserInfo,
+    setSessionExpiry: setSessionExpiry,
+    init:             init,
+    prices:           _PRICES,
   };
 
 })();
-
-// Boot
-App.init();

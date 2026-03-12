@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import response, error_response, get_caller, map_aws_error
 from accounts import get_accounts, get_all_accounts, get_ec2_client, get_all_regions
 import audit
+import billing
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -35,6 +36,8 @@ def lambda_handler(event, context):
         return handle_audit_log(event)
     elif path == '/audit/daily' and method == 'GET':
         return handle_audit_daily(event)
+    elif path == '/billing' and method == 'GET':
+        return handle_billing(event)
     else:
         return error_response(404, 'Not found')
 
@@ -360,6 +363,8 @@ def handle_audit_log(event):
     qs = event.get('queryStringParameters') or {}
     instance_id = qs.get('instanceId', '').strip()
     user_email  = qs.get('userEmail', '').strip()
+    action      = qs.get('action', '').strip()
+    account_id  = qs.get('accountId', '').strip()
     limit       = int(qs.get('limit', 50))
 
     # Decode pagination key (passed as JSON string)
@@ -374,6 +379,8 @@ def handle_audit_log(event):
     items, next_key = audit.get_audit_log(
         instance_id=instance_id or None,
         user_email=user_email or None,
+        action=action or None,
+        account_id=account_id or None,
         limit=limit,
         last_key=last_key,
     )
@@ -414,3 +421,22 @@ def handle_audit_daily(event):
         'totalEstimatedCost': total_cost,
         'summary':      summary,
     })
+
+
+# ─── Billing: Cost Explorer ───────────────────────────────────────────────────
+
+def handle_billing(event):
+    qs = event.get('queryStringParameters') or {}
+    range_key  = qs.get('range', '7d').strip().lower()
+    account_id = qs.get('accountId', '').strip() or None
+
+    valid_ranges = ('today', 'yesterday', '7d', '14d', '30d')
+    if range_key not in valid_ranges:
+        return error_response(400, f'range must be one of: {", ".join(valid_ranges)}')
+
+    try:
+        data = billing.get_billing(range_key=range_key, filter_account_id=account_id)
+        return response(200, data)
+    except Exception as e:
+        logger.error("Billing handler error: %s", e)
+        return error_response(500, 'Failed to fetch billing data.')

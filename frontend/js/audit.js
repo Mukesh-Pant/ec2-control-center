@@ -1,59 +1,92 @@
 /* ═══════════════════════════════════════════════
-   Audit Module — Event Log + Daily Summary
+   Audit Module — Event Log
    ═══════════════════════════════════════════════
 
-   Two views:
-     • Event Log     — paginated table of every start/stop action
-     • Daily Summary — per-day running hours, stopped hours, est. cost
+   Displays a paginated, filterable table of every
+   audit event (start / stop / auto-stop / account-linked).
+
+   Filters:
+     • Instance ID or name  (text)
+     • User email           (text)
+     • Action               (dropdown: All | START | STOP | AUTO-STOP | ACCOUNT-LINKED)
+     • Account              (dropdown: populated from returned data)
+
+   Daily Summary has moved to billing.js.
    ═══════════════════════════════════════════════ */
 
 const Audit = (function () {
 
-  // ─── State ───
-  var currentView   = 'events';
-  var lastKey       = null;      // DynamoDB pagination cursor
-  var isLoading     = false;
-  var firstLoad     = true;      // lazy-load on first tab activation
+  // ─── State ────────────────────────────────────────────────────────────
+  var lastKey      = null;   // DynamoDB pagination cursor
+  var isLoading    = false;
+  var firstLoad    = true;   // lazy-load on first tab activation
+  var _debounceTimer = null; // input debounce
 
-  // ─── View Toggle ───────────────────────────────────────────────────────
+  // Map of accountId → accountName collected from loaded items + instances
+  var knownAccounts = {};  // { accountId: accountName }
 
-  function switchView(view) {
-    currentView = view;
-    document.getElementById('btn-view-events').classList.toggle('active', view === 'events');
-    document.getElementById('btn-view-daily').classList.toggle('active',  view === 'daily');
-    document.getElementById('audit-events-view').style.display = view === 'events' ? 'block' : 'none';
-    document.getElementById('audit-daily-view').style.display  = view === 'daily'  ? 'block' : 'none';
+  // ─── Event Log ────────────────────────────────────────────────────────
+
+  // Resolve an instance filter value (name or ID) to an instance ID
+  function _resolveInstanceId(val) {
+    if (!val) return '';
+    // If it looks like an instance ID already, use as-is
+    if (/^i-[0-9a-f]+$/i.test(val)) return val;
+    // Try to match by name from loaded instances
+    var instances = (typeof Instances !== 'undefined' && Instances.getAll) ? Instances.getAll() : [];
+    var match = instances.find(function (i) {
+      return i.name && i.name.toLowerCase() === val.toLowerCase();
+    });
+    return match ? match.instanceId : val;
   }
-
-  // ─── Event Log ─────────────────────────────────────────────────────────
 
   async function loadEvents(reset) {
     if (isLoading) return;
     if (reset) lastKey = null;
 
-    var instanceId = document.getElementById('audit-filter-instance').value.trim();
-    var userEmail  = document.getElementById('audit-filter-user').value.trim();
+    var rawInstance    = document.getElementById('audit-filter-instance').value.trim();
+    var instanceFilter = _resolveInstanceId(rawInstance);
+    var userFilter     = document.getElementById('audit-filter-user').value.trim();
+    var actionFilter   = document.getElementById('audit-filter-action').value;   // '' means All
+    var accountFilter  = document.getElementById('audit-filter-account').value;  // '' means All
 
     var tbody = document.getElementById('audit-events-tbody');
     if (reset) {
-      tbody.innerHTML = '<tr><td colspan="6" class="audit-loading">Loading events...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="audit-loading">Loading events\u2026</td></tr>';
     }
 
     isLoading = true;
     document.getElementById('btn-audit-more').disabled = true;
 
     try {
-      var res  = await API.getAuditLog({ instanceId: instanceId, userEmail: userEmail, limit: 50, lastKey: lastKey });
+      var res = await API.getAuditLog({
+        instanceId: instanceFilter || undefined,
+        userEmail:  userFilter     || undefined,
+        action:     actionFilter   || undefined,
+        accountId:  accountFilter  || undefined,
+        limit:      50,
+        lastKey:    lastKey,
+      });
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Request failed');
 
       var items = data.items || [];
       lastKey   = data.lastKey || null;
 
+      // Collect unique accounts from returned items
+      items.forEach(function (item) {
+        if (item.accountId) {
+          knownAccounts[item.accountId] = item.accountName || item.accountId;
+        }
+      });
+
       if (reset) tbody.innerHTML = '';
 
       if (items.length === 0 && reset) {
-        tbody.innerHTML = '<tr><td colspan="6" class="audit-empty">No audit events found. Start or stop an instance to create entries.</td></tr>';
+        tbody.innerHTML =
+          '<tr><td colspan="7" class="audit-empty">' +
+          'No audit events found. Start or stop an instance to create entries.' +
+          '</td></tr>';
       } else {
         items.forEach(function (item) {
           var tr = document.createElement('tr');
@@ -62,6 +95,16 @@ const Audit = (function () {
         });
       }
 
+      // Update record count
+      var countEl = document.getElementById('audit-record-count');
+      if (countEl) {
+        var rowCount = tbody.querySelectorAll('tr').length;
+        countEl.textContent = rowCount + ' record' + (rowCount === 1 ? '' : 's');
+      }
+
+      // Populate account dropdown (preserve current selection)
+      populateAccountDropdown();
+
       var moreBtn = document.getElementById('btn-audit-more');
       moreBtn.style.display = lastKey ? 'inline-flex' : 'none';
       moreBtn.disabled = false;
@@ -69,7 +112,8 @@ const Audit = (function () {
     } catch (err) {
       if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
         if (reset) {
-          tbody.innerHTML = '<tr><td colspan="6" class="audit-empty">Error: ' + escHtml(err.message) + '</td></tr>';
+          tbody.innerHTML =
+            '<tr><td colspan="7" class="audit-empty">Error: ' + escHtml(err.message) + '</td></tr>';
         }
         App.showToast('Audit load failed: ' + err.message, 'err');
       }
@@ -80,130 +124,59 @@ const Audit = (function () {
 
   function buildEventRow(item) {
     var actionCls = actionClass(item.action);
-    var resultCls = item.result === 'success' ? 'result-ok' : 'result-err';
+    var actionLabel = (item.action || '--').toUpperCase();
+
+    // INSTANCE cell — bold name + smaller blue mono ID
+    var instName = escHtml(item.instanceName || item.instanceId || '--');
+    var instId   = item.instanceName ? escHtml(item.instanceId || '') : '';
+    var instCell =
+      '<td class="audit-cell-instance">' +
+        '<div class="audit-inst-name">' + instName + '</div>' +
+        (instId ? '<div class="audit-inst-id">' + instId + '</div>' : '') +
+      '</td>';
+
+    // ACCOUNT cell — account name + smaller mono ID
+    var acctName = escHtml(item.accountName || item.accountId || '--');
+    var acctId   = item.accountId && item.accountName ? escHtml(item.accountId) : '';
+    var acctCell =
+      '<td class="audit-cell-account">' +
+        '<div class="audit-acct-name">' + acctName + '</div>' +
+        (acctId ? '<div class="audit-acct-id">' + acctId + '</div>' : '') +
+      '</td>';
+
     return (
-      '<td class="audit-cell-mono audit-cell-time">' + escHtml(fmtTs(item.timestamp)) + '</td>' +
-      '<td>' +
-        '<div class="audit-inst-name">' + escHtml(item.instanceName || item.instanceId) + '</div>' +
-        '<div class="audit-inst-id">'   + escHtml(item.instanceId)  + ' &middot; ' + escHtml(item.region || '') + '</div>' +
-      '</td>' +
-      '<td><span class="audit-action ' + actionCls + '">' + escHtml(item.action || '--') + '</span></td>' +
-      '<td class="audit-cell-mono audit-cell-user">' + escHtml(item.userEmail || '--') + '</td>' +
-      '<td class="audit-cell-mono">'   + escHtml(item.instanceType || '--') + '</td>' +
-      '<td><span class="audit-result ' + resultCls + '">' + escHtml(item.result || '--') + '</span></td>'
+      '<td class="audit-cell-mono audit-cell-time">'  + escHtml(fmtTs(item.timestamp)) + '</td>' +
+      '<td><span class="audit-action ' + actionCls + '">' + escHtml(actionLabel) + '</span></td>' +
+      instCell +
+      '<td class="audit-cell-type">'  + escHtml(item.instanceType || '\u2014') + '</td>' +
+      acctCell +
+      '<td class="audit-cell-region">' + escHtml(item.region    || '\u2014') + '</td>' +
+      '<td class="audit-cell-user">'   + escHtml(item.userEmail || '\u2014') + '</td>'
     );
   }
 
-  // ─── Daily Summary ─────────────────────────────────────────────────────
+  // ─── Account Dropdown ─────────────────────────────────────────────────
 
-  async function loadDailySummary() {
-    var instanceId = document.getElementById('daily-instance-id').value.trim();
-    var days       = parseInt(document.getElementById('daily-days').value) || 30;
+  function populateAccountDropdown() {
+    var sel = document.getElementById('audit-filter-account');
+    if (!sel) return;
+    var current = sel.value;
 
-    if (!instanceId) {
-      App.showToast('Enter an instance ID first', 'info');
-      document.getElementById('daily-instance-id').focus();
-      return;
-    }
+    // Remove all options except the first ("All accounts")
+    while (sel.options.length > 1) sel.remove(1);
 
-    var container = document.getElementById('audit-daily-table');
-    container.innerHTML = '<div class="audit-loading">Computing daily summary...</div>';
-    document.getElementById('btn-daily-load').disabled = true;
-
-    try {
-      var res  = await API.getAuditDaily(instanceId, days);
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Request failed');
-
-      renderDailySummary(data);
-
-    } catch (err) {
-      if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
-        container.innerHTML = '<div class="audit-empty">Error: ' + escHtml(err.message) + '</div>';
-        App.showToast('Daily summary failed: ' + err.message, 'err');
-      }
-    } finally {
-      document.getElementById('btn-daily-load').disabled = false;
-    }
-  }
-
-  function renderDailySummary(data) {
-    var container = document.getElementById('audit-daily-table');
-    var rows      = data.summary || [];
-
-    if (rows.length === 0) {
-      container.innerHTML =
-        '<div class="audit-empty">No data found for <strong>' + escHtml(data.instanceId) + '</strong>.<br>' +
-        'Start or stop the instance to begin capturing data.</div>';
-      return;
-    }
-
-    var iType      = data.instanceType || 'unknown';
-    var rate       = data.hourlyRate   || 0;
-    var totalRun   = data.totalRunningHours   || 0;
-    var totalCost  = data.totalEstimatedCost  || 0;
-
-    var rowsHtml = '';
-    rows.forEach(function (r) {
-      var pct    = Math.min(100, (r.runningHours / 24) * 100).toFixed(1);
-      var costTxt = r.estimatedCost > 0 ? '$' + r.estimatedCost.toFixed(4) : '—';
-      rowsHtml +=
-        '<tr>' +
-        '<td class="audit-cell-mono">' + escHtml(r.date) + '</td>' +
-        '<td>' +
-          '<div class="daily-bar-wrap" title="' + r.runningHours.toFixed(2) + ' hrs running">' +
-            '<div class="daily-bar-fill" style="width:' + pct + '%"></div>' +
-          '</div>' +
-          '<span class="daily-hrs running-hrs">' + r.runningHours.toFixed(2) + ' h</span>' +
-        '</td>' +
-        '<td><span class="daily-hrs stopped-hrs">' + r.stoppedHours.toFixed(2) + ' h</span></td>' +
-        '<td class="audit-cell-center daily-events-count">' + r.events + '</td>' +
-        '<td class="audit-cell-cost">' + costTxt + '</td>' +
-        '</tr>';
+    Object.keys(knownAccounts).sort().forEach(function (id) {
+      var opt = document.createElement('option');
+      opt.value       = id;
+      opt.textContent = knownAccounts[id] + ' (' + id + ')';
+      sel.appendChild(opt);
     });
 
-    container.innerHTML =
-      '<div class="daily-summary-header">' +
-        '<div class="daily-meta-badges">' +
-          '<span class="daily-badge badge-id">'   + escHtml(data.instanceId) + '</span>' +
-          '<span class="daily-badge badge-type">' + escHtml(iType) + '</span>' +
-          (rate > 0 ? '<span class="daily-badge badge-rate">$' + rate.toFixed(4) + '/hr on-demand</span>' : '') +
-        '</div>' +
-        '<div class="daily-totals-row">' +
-          '<div class="daily-total-box">' +
-            '<div class="daily-total-label">Total Running</div>' +
-            '<div class="daily-total-val running-hrs">' + totalRun.toFixed(2) + ' hrs</div>' +
-          '</div>' +
-          '<div class="daily-total-box">' +
-            '<div class="daily-total-label">Est. Total Cost</div>' +
-            '<div class="daily-total-val cost-val">' + (totalCost > 0 ? '$' + totalCost.toFixed(4) : '—') + '</div>' +
-          '</div>' +
-          '<div class="daily-total-box">' +
-            '<div class="daily-total-label">Days Analysed</div>' +
-            '<div class="daily-total-val">' + rows.length + '</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-
-      '<table class="audit-table daily-table">' +
-        '<thead><tr>' +
-          '<th>Date</th>' +
-          '<th>Running Hours</th>' +
-          '<th>Stopped Hours</th>' +
-          '<th>Events</th>' +
-          '<th>Est. Cost (USD)</th>' +
-        '</tr></thead>' +
-        '<tbody>' + rowsHtml + '</tbody>' +
-      '</table>' +
-
-      '<div class="daily-disclaimer">' +
-        '&#9432;&nbsp; Estimates use on-demand Linux pricing in ap-south-1. ' +
-        'Actual charges depend on your pricing tier (reserved / spot), EBS volumes, and data transfer. ' +
-        'Unknown instance types show — for cost.' +
-      '</div>';
+    // Restore previous selection if still available
+    if (current) sel.value = current;
   }
 
-  // ─── Helpers ───────────────────────────────────────────────────────────
+  // ─── Helpers ──────────────────────────────────────────────────────────
 
   function actionClass(action) {
     if (!action) return 'action-neutral';
@@ -211,13 +184,26 @@ const Audit = (function () {
     if (a === 'start' || a === 'scheduled-start' || a === 'auto-start') return 'action-start';
     if (a === 'stop'  || a === 'scheduled-stop')                         return 'action-stop';
     if (a === 'auto-stop-idle' || a === 'auto-stop')                     return 'action-auto';
+    if (a === 'account-linked' || a === 'account_linked')                return 'action-linked';
     return 'action-neutral';
   }
 
   function fmtTs(ts) {
     if (!ts) return '--';
     try {
-      return new Date(ts).toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+      var d = new Date(ts);
+      var datePart = d.toLocaleDateString('en-GB', {
+        day:   '2-digit',
+        month: 'short',
+        year:  'numeric',
+      }); // e.g. "12 Mar 2026"
+      var timePart = d.toLocaleTimeString('en-GB', {
+        hour:   '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }); // e.g. "15:03:05"
+      return datePart + ', ' + timePart;
     } catch (e) { return ts; }
   }
 
@@ -227,45 +213,98 @@ const Audit = (function () {
     return d.innerHTML;
   }
 
+  // ─── Seed knownAccounts from already-loaded instances ─────────────────
+
+  function _seedAccountsFromInstances() {
+    var instances = (typeof Instances !== 'undefined' && Instances.getAll) ? Instances.getAll() : [];
+    instances.forEach(function (i) {
+      if (i.accountId) {
+        knownAccounts[i.accountId] = i.accountName || i.accountId;
+      }
+    });
+    populateAccountDropdown();
+    _populateInstanceDatalist(instances);
+  }
+
+  function _populateInstanceDatalist(instances) {
+    var dl = document.getElementById('audit-instance-datalist');
+    if (!dl) return;
+    dl.innerHTML = '';
+    instances.forEach(function (i) {
+      if (i.name && i.name !== i.instanceId) {
+        var opt = document.createElement('option');
+        opt.value = i.name;
+        opt.setAttribute('data-id', i.instanceId);
+        dl.appendChild(opt);
+      }
+      var opt2 = document.createElement('option');
+      opt2.value = i.instanceId;
+      dl.appendChild(opt2);
+    });
+  }
+
   // ─── Public: called by app.js when Audit tab is clicked ───────────────
 
   function onTabActivated() {
+    _seedAccountsFromInstances();
     if (firstLoad) {
       firstLoad = false;
-      loadEvents(true);
+      loadEvents(true);  // Load all recent events by default (no filters)
     }
   }
 
   // ─── Init — wire all event listeners ──────────────────────────────────
 
   function init() {
-    // View toggle
-    document.getElementById('btn-view-events').addEventListener('click', function () { switchView('events'); });
-    document.getElementById('btn-view-daily').addEventListener('click',  function () { switchView('daily');  });
-
-    // Event log controls
-    document.getElementById('btn-audit-search').addEventListener('click', function () { loadEvents(true); });
-    document.getElementById('btn-audit-more').addEventListener('click',   function () { loadEvents(false); });
-
-    // Allow Enter in filter inputs
-    ['audit-filter-instance', 'audit-filter-user'].forEach(function (id) {
-      document.getElementById(id).addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') loadEvents(true);
-      });
+    // Search button
+    document.getElementById('btn-audit-search').addEventListener('click', function () {
+      loadEvents(true);
     });
 
-    // Daily summary controls
-    document.getElementById('btn-daily-load').addEventListener('click', loadDailySummary);
-    document.getElementById('daily-instance-id').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') loadDailySummary();
+    // Load More button
+    document.getElementById('btn-audit-more').addEventListener('click', function () {
+      loadEvents(false);
+    });
+
+    // Clear button — reset all 4 filters then reload
+    document.getElementById('btn-audit-clear').addEventListener('click', function () {
+      document.getElementById('audit-filter-instance').value = '';
+      document.getElementById('audit-filter-user').value     = '';
+      document.getElementById('audit-filter-action').value   = '';
+      document.getElementById('audit-filter-account').value  = '';
+      loadEvents(true);
+    });
+
+    // Dropdowns trigger immediate search on change
+    document.getElementById('audit-filter-action').addEventListener('change', function () {
+      loadEvents(true);
+    });
+    document.getElementById('audit-filter-account').addEventListener('change', function () {
+      loadEvents(true);
+    });
+
+    // Text inputs: trigger search on every keystroke (debounced 350 ms) + Enter for instant
+    ['audit-filter-instance', 'audit-filter-user'].forEach(function (id) {
+      var el = document.getElementById(id);
+      el.addEventListener('input', function () {
+        clearTimeout(_debounceTimer);
+        _debounceTimer = setTimeout(function () { loadEvents(true); }, 350);
+      });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          clearTimeout(_debounceTimer);
+          loadEvents(true);
+        }
+      });
     });
   }
 
-  // ─── Public API ────────────────────────────────────────────────────────
+  // ─── Public API ───────────────────────────────────────────────────────
 
   return {
     init:           init,
     onTabActivated: onTabActivated,
+    search:         function () { loadEvents(true); },
   };
 
 })();

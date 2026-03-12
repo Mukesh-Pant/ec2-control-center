@@ -71,6 +71,8 @@ const API = (function () {
     var qs = [];
     if (params.instanceId) qs.push('instanceId=' + encodeURIComponent(params.instanceId));
     if (params.userEmail)  qs.push('userEmail='  + encodeURIComponent(params.userEmail));
+    if (params.action)     qs.push('action='     + encodeURIComponent(params.action));
+    if (params.accountId)  qs.push('accountId='  + encodeURIComponent(params.accountId));
     if (params.limit)      qs.push('limit='      + encodeURIComponent(params.limit));
     if (params.lastKey)    qs.push('lastKey='    + encodeURIComponent(JSON.stringify(params.lastKey)));
     return call('/audit' + (qs.length ? '?' + qs.join('&') : ''), 'GET', null);
@@ -96,6 +98,17 @@ const API = (function () {
     return call('/accounts', 'POST', body);
   }
 
+  /**
+   * GET /billing — Cost Explorer data
+   * @param {string} range - today|yesterday|7d|14d|30d
+   * @param {string|null} accountId - optional account filter
+   */
+  async function getBilling(range, accountId) {
+    var qs = 'range=' + encodeURIComponent(range || '7d');
+    if (accountId) qs += '&accountId=' + encodeURIComponent(accountId);
+    return call('/billing?' + qs, 'GET', null);
+  }
+
   return {
     call,
     ec2Action,
@@ -103,6 +116,7 @@ const API = (function () {
     postAccounts,
     getAuditLog,
     getAuditDaily,
+    getBilling,
   };
 
 })();

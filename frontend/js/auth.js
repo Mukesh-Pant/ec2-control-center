@@ -174,8 +174,17 @@ const Auth = (function () {
       }
     }
 
-    // Session is valid
+    // Session is valid — boot the app
     document.body.classList.add('ready');
+
+    var email      = sessionStorage.getItem('user_email') || '';
+    var adminEmail = 'joshiadarsh421@gmail.com';
+
+    App.setUserInfo(email);
+    App.setAdmin(email === adminEmail);
+    App.setSessionExpiry(expiry);  // expiry declared as const above
+    App.init();
+
     return true;
   }
 
