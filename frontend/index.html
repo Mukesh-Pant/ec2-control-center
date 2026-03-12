@@ -3,386 +3,690 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#122c53"/>
   <title>EC2 Control Portal</title>
-
-  <!-- Theme: restore preference before CSS to avoid flash -->
-  <script>
-    if (localStorage.getItem('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  </script>
-
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='2' y='2' width='20' height='8' rx='2' fill='%232460e0'/><rect x='2' y='14' width='20' height='8' rx='2' fill='%232460e0'/></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="css/styles.css"/>
 </head>
 <body>
 
-  <!-- ═══ NAVBAR ═══ -->
-  <nav class="navbar">
-    <div class="nav-brand">
-      <div class="nav-logo">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 7h16M4 12h16M4 17h16"/>
-          <circle cx="20" cy="7" r="1.2" fill="currentColor" stroke="none" opacity="0.5"/>
-          <circle cx="20" cy="12" r="1.2" fill="currentColor" stroke="none" opacity="0.5"/>
-          <circle cx="20" cy="17" r="1.2" fill="currentColor" stroke="none" opacity="0.5"/>
-        </svg>
-      </div>
-      <div class="nav-brand-text">
-        <span class="nav-title">EC2 Control</span>
-        <span class="nav-subtitle">Multi-Account Portal</span>
-      </div>
-    </div>
+<!-- ════════ SIDEBAR BACKDROP (mobile) ════════ -->
+<div class="sb-backdrop" id="sb-backdrop" onclick="App.closeSidebar()"></div>
 
-    <div class="nav-right">
-      <div class="nav-user">
-        <span class="nav-user-dot"></span>
-        <span class="nav-email" id="user-email">loading...</span>
+<!-- ════════ MODAL: Add Account ════════ -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-stripe"></div>
+    <div class="modal-hd">
+      <div>
+        <div class="modal-title">Register Member Account</div>
+        <div class="modal-sub">Deploy <code>member-role-stack.yaml</code> in the target account first, then paste the Role ARN here.</div>
       </div>
-      <div class="nav-timer-wrap">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span class="session-timer" id="session-timer">--:--</span>
-      </div>
-      <button class="btn-icon-nav" id="btn-theme-toggle" title="Toggle theme" aria-label="Toggle theme">
-        <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-        <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
-      <button class="btn-logout" id="btn-logout">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        Sign Out
+      <button class="modal-close" onclick="Accounts.closeModal()">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
-  </nav>
-
-  <!-- ═══ TAB BAR ═══ -->
-  <div class="tab-bar">
-    <button class="tab active" data-tab="instances" id="tab-instances">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-      Instances
-    </button>
-    <button class="tab" data-tab="audit" id="tab-audit">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      Audit Logs
-    </button>
-    <button class="tab" data-tab="accounts" id="tab-accounts">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
-      Accounts
-    </button>
-  </div>
-
-  <!-- ═══ INSTANCES PANEL ═══ -->
-  <div class="panel" id="panel-instances">
-
-    <!-- Stat Cards -->
-    <div class="stat-cards">
-      <div class="stat-card" data-accent="blue">
-        <div class="stat-value" id="stat-total">--</div>
-        <div class="stat-label">Total Instances</div>
-      </div>
-      <div class="stat-card" data-accent="green">
-        <div class="stat-value green" id="stat-running">--</div>
-        <div class="stat-label">Running</div>
-      </div>
-      <div class="stat-card" data-accent="red">
-        <div class="stat-value red" id="stat-stopped">--</div>
-        <div class="stat-label">Stopped</div>
-      </div>
-      <div class="stat-card" data-accent="blue">
-        <div class="stat-value" id="stat-accounts">--</div>
-        <div class="stat-label">Accounts</div>
-      </div>
+    <div class="fg">
+      <label class="fl" for="modal-acct-id">AWS Account ID</label>
+      <input class="finp" id="modal-acct-id" type="text" placeholder="123456789012" maxlength="12" autocomplete="off" inputmode="numeric"/>
+      <div class="fhint">12-digit numeric AWS Account ID</div>
     </div>
-
-    <!-- Toolbar -->
-    <div class="instances-toolbar" id="account-filter-bar">
-      <div class="toolbar-left">
-        <span class="toolbar-label">Filter</span>
-        <div class="filter-chips" id="account-chips">
-          <button class="filter-chip active" data-account="all">All</button>
-        </div>
-      </div>
-      <button class="btn-refresh" id="btn-refresh">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        <span>Refresh</span>
-        <span class="pulse-dot"></span>
-      </button>
+    <div class="fg">
+      <label class="fl" for="modal-acct-name">Account Name</label>
+      <input class="finp" id="modal-acct-name" type="text" placeholder="e.g. Production, Finance, Dev"/>
+      <div class="fhint">Friendly name shown across the portal</div>
     </div>
-
-    <!-- Instance table header (static) -->
-    <div class="instance-table-head">
-      <span class="col-name">Name</span>
-      <span class="col-id">Instance ID</span>
-      <span class="col-type">Type</span>
-      <span class="col-state">State</span>
-      <span class="col-ip">Public IP</span>
+    <div class="fg" style="margin-top:10px">
+      <label class="fl" for="modal-acct-role">Cross-Account Role ARN</label>
+      <input class="finp" id="modal-acct-role" type="text" placeholder="arn:aws:iam::123456789012:role/EC2ControlCrossAccountRole-production" style="font-family:var(--mono);font-size:12px"/>
+      <div class="fhint">From the RoleArn output of member-role-stack.yaml</div>
     </div>
-
-    <!-- Instance list (JS-rendered) -->
-    <div class="instance-list" id="instance-list">
-      <div class="loading-msg">
-        <svg class="spin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-        Loading instances from AWS...
-      </div>
-    </div>
-
-    <!-- Detail Drawer -->
-    <div class="detail-drawer" id="server-card">
-      <div class="drawer-header-bar">
-        <span class="drawer-title">Instance Details</span>
-        <button class="drawer-close" id="drawer-close" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-
-      <div class="drawer-body">
-        <!-- Instance identity -->
-        <div class="drawer-instance-header">
-          <div class="drawer-server-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-          </div>
-          <div class="drawer-instance-info">
-            <div class="drawer-server-name" id="server-name">--</div>
-            <div class="drawer-instance-id" id="instance-display">Select an instance</div>
-          </div>
-          <div class="status-badge stopped" id="status-badge">
-            <span class="status-dot"></span>
-            <span id="status-text">--</span>
-          </div>
-        </div>
-
-        <!-- Metrics grid -->
-        <div class="metrics-grid">
-          <div class="metric-cell">
-            <div class="metric-label">Account</div>
-            <div class="metric-value" id="metric-account">--</div>
-          </div>
-          <div class="metric-cell">
-            <div class="metric-label">Region</div>
-            <div class="metric-value" id="metric-region">--</div>
-          </div>
-          <div class="metric-cell">
-            <div class="metric-label">Type</div>
-            <div class="metric-value" id="metric-type">--</div>
-          </div>
-          <div class="metric-cell">
-            <div class="metric-label">Public IP</div>
-            <div class="metric-value mono" id="metric-ip">--</div>
-          </div>
-        </div>
-
-        <!-- Controls -->
-        <div id="controls-section" style="display:none">
-          <div class="drawer-section-label">Controls</div>
-          <div class="actions-row">
-            <button class="action-btn btn-start" id="btn-start" disabled>
-              <div class="btn-spinner" id="spin-start" style="display:none"></div>
-              <div class="btn-icon-wrap" id="icon-start">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-              </div>
-              <span id="label-start">Start</span>
-            </button>
-            <button class="action-btn btn-stop" id="btn-stop" disabled>
-              <div class="btn-spinner" id="spin-stop" style="display:none"></div>
-              <div class="btn-icon-wrap" id="icon-stop">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-              </div>
-              <span id="label-stop">Stop</span>
-            </button>
-          </div>
-
-          <!-- Recent Actions from audit log -->
-          <div class="recent-actions-section">
-            <div class="drawer-section-label">Recent Actions</div>
-            <div id="recent-actions">
-              <div class="recent-actions-empty">Select an instance to load history</div>
-            </div>
-          </div>
-
-          <!-- Activity Log -->
-          <div class="log-section">
-            <div class="log-header">
-              <span class="drawer-section-label">Activity</span>
-              <button class="btn-clear-log" id="btn-clear-log">Clear</button>
-            </div>
-            <ul class="log-list" id="log-list">
-              <li class="log-entry">
-                <span class="log-time">--:--:--</span>
-                <span class="log-msg">Portal ready.</span>
-                <span class="log-tag tag-sys">SYS</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <!-- No selection placeholder -->
-        <div class="no-selection" id="no-selection">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.3"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-          <p>Select an instance to view details and controls</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Drawer backdrop -->
-    <div class="drawer-backdrop" id="drawer-backdrop"></div>
-
-  </div><!-- /panel-instances -->
-
-  <!-- ═══ AUDIT PANEL ═══ -->
-  <div class="panel" id="panel-audit" style="display:none">
-
-    <!-- View toggle -->
-    <div class="audit-toolbar">
-      <div class="view-toggle">
-        <button class="view-btn active" id="btn-view-events">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-          Event Log
-        </button>
-        <button class="view-btn" id="btn-view-daily">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          Daily Summary
-        </button>
-      </div>
-    </div>
-
-    <!-- Event Log view -->
-    <div id="audit-events-view">
-      <div class="audit-filters">
-        <input class="audit-input" type="text" id="audit-filter-instance" placeholder="Instance ID (i-0abc...)"/>
-        <input class="audit-input" type="text" id="audit-filter-user" placeholder="User email"/>
-        <select class="audit-select" id="audit-limit-select">
-          <option value="25">25 rows</option>
-          <option value="50" selected>50 rows</option>
-          <option value="100">100 rows</option>
-        </select>
-        <button class="btn-search" id="btn-audit-search">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          Search
-        </button>
-      </div>
-
-      <div class="audit-table-wrap">
-        <table class="audit-table">
-          <thead>
-            <tr>
-              <th>Time (UTC)</th>
-              <th>Instance</th>
-              <th>Action</th>
-              <th>User</th>
-              <th>Type</th>
-              <th>Result</th>
-            </tr>
-          </thead>
-          <tbody id="audit-events-tbody">
-            <tr><td colspan="6" class="table-empty">Search for audit events above.</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="audit-more-row">
-        <button class="btn-load-more" id="btn-audit-more" style="display:none">Load more</button>
-      </div>
-    </div>
-
-    <!-- Daily Summary view -->
-    <div id="audit-daily-view" style="display:none">
-      <div class="audit-filters">
-        <input class="audit-input audit-input-wide" type="text" id="daily-instance-id" placeholder="Instance ID (required — e.g. i-0abc12345)"/>
-        <select class="audit-select" id="daily-days">
-          <option value="7">Last 7 days</option>
-          <option value="14">Last 14 days</option>
-          <option value="30" selected>Last 30 days</option>
-          <option value="60">Last 60 days</option>
-          <option value="90">Last 90 days</option>
-        </select>
-        <button class="btn-search" id="btn-daily-load">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          Load
-        </button>
-      </div>
-      <div id="audit-daily-table">
-        <div class="table-empty-block">Enter an instance ID above and click Load to see the daily breakdown.</div>
-      </div>
-    </div>
-
-  </div><!-- /panel-audit -->
-
-  <!-- ═══ ACCOUNTS PANEL ═══ -->
-  <div class="panel" id="panel-accounts" style="display:none">
-
-    <!-- Toolbar -->
-    <div class="acct-toolbar">
-      <div class="acct-toolbar-left">
-        <span class="acct-toolbar-title">AWS Accounts</span>
-        <button class="btn-icon-sm" id="btn-reload-accounts" title="Refresh accounts">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        </button>
-      </div>
-      <button class="btn-add-account" id="btn-show-add-account">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    <div class="merr" id="modal-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-out" onclick="Accounts.closeModal()">Cancel</button>
+      <button class="btn btn-blue" id="btn-modal-add" onclick="Accounts.confirmAdd()">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Account
       </button>
     </div>
-
-    <!-- Add Account Form -->
-    <div class="add-account-form" id="add-account-form" style="display:none">
-      <div class="add-form-title">Register Member Account</div>
-      <div class="add-form-fields">
-        <div class="add-form-field">
-          <label class="add-form-label">AWS Account ID</label>
-          <input class="add-form-input" type="text" id="add-acct-id" placeholder="123456789012" maxlength="12"/>
-        </div>
-        <div class="add-form-field">
-          <label class="add-form-label">Account Name</label>
-          <input class="add-form-input" type="text" id="add-acct-name" placeholder="e.g. Production, Dev, Staging"/>
-        </div>
-        <div class="add-form-field add-form-field-wide">
-          <label class="add-form-label">Cross-Account Role ARN</label>
-          <input class="add-form-input mono" type="text" id="add-acct-role" placeholder="arn:aws:iam::123456789012:role/EC2ControlCrossAccountRole-production"/>
-        </div>
-      </div>
-      <div class="add-form-error" id="add-acct-error"></div>
-      <div class="add-form-actions">
-        <button class="btn-cancel-form" id="btn-cancel-add-account">Cancel</button>
-        <button class="btn-submit-form" id="btn-add-account-submit">Add Account</button>
-      </div>
-      <div class="add-form-hint">
-        <strong>Step 1:</strong> Deploy <code>member-role-stack.yaml</code> in the target AWS account, then copy the <code>RoleArn</code> output above.
-      </div>
-    </div>
-
-    <!-- Account cards (JS-rendered) -->
-    <div class="acct-cards" id="accounts-tbody">
-      <div class="acct-loading">Loading accounts...</div>
-    </div>
-
-  </div><!-- /panel-accounts -->
-
-  <!-- ═══ FOOTER ═══ -->
-  <div class="footer">
-    <div class="footer-left">
-      <span class="footer-tag">Lambda</span>
-      <span class="footer-tag">REST API</span>
-      <span class="footer-tag">Cognito PKCE</span>
-    </div>
-    <span class="footer-clock" id="clock">--:--:--</span>
   </div>
+</div>
 
-  <!-- Toast -->
-  <div id="toast"></div>
+<!-- ════════ APP SHELL ════════ -->
+<div class="app" id="app">
 
-  <!-- CONFIG — Injected by Config Injector Lambda during deployment -->
-  <script>
-    const CONFIG = { /*__INJECT__*/ };
-  </script>
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar" id="sidebar">
 
-  <script src="js/auth.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/instances.js"></script>
-  <script src="js/audit.js"></script>
-  <script src="js/accounts.js"></script>
-  <script src="js/app.js"></script>
+    <div class="sb-logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="2" width="20" height="8" rx="2"/>
+          <rect x="2" y="14" width="20" height="8" rx="2"/>
+          <line x1="6" y1="6" x2="6.01" y2="6"/>
+          <line x1="6" y1="18" x2="6.01" y2="18"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-name">EC2 Control</div>
+        <div class="logo-tag">Multi-Account Portal</div>
+      </div>
+      <button class="sb-close-btn" onclick="App.closeSidebar()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="sb-fleet" id="sb-fleet">
+      <span class="fleet-dot"></span>
+      <span class="fleet-label">Fleet</span>
+      <span class="fleet-val" id="sb-fleet-txt">—</span>
+    </div>
+
+    <nav class="sb-nav">
+      <div class="nav-section">Overview</div>
+      <a class="nitem on" id="nav-dashboard" onclick="App.go('dashboard')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </a>
+      <a class="nitem" id="nav-instances" onclick="App.go('instances')">
+        <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        Instances
+        <span class="nbadge" id="n-inst" style="display:none">0</span>
+      </a>
+
+      <div class="nav-section">Intelligence</div>
+      <a class="nitem" id="nav-billing" onclick="App.go('billing')">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Billing &amp; Cost
+      </a>
+      <a class="nitem" id="nav-analytics" onclick="App.go('analytics')">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Analytics
+      </a>
+      <a class="nitem" id="nav-audit" onclick="App.go('audit')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Audit Log
+      </a>
+
+      <div class="nav-section" id="adm-sec" style="display:none">Administration</div>
+      <a class="nitem" id="nav-accounts" onclick="App.go('accounts')" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Accounts
+        <span class="nbadge nbadge-gold" id="n-act" style="display:none">0</span>
+      </a>
+    </nav>
+
+    <div class="sb-foot">
+      <div class="rbac-badge" id="rbac-badge" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span id="rbac-role-txt">ADMIN</span>
+      </div>
+      <div class="sb-user">
+        <div class="sb-av" id="sb-av">?</div>
+        <div>
+          <div class="sb-uname" id="sb-name">Loading…</div>
+          <div class="sb-urole" id="sb-role">member</div>
+        </div>
+        <span class="online-dot"></span>
+        <button class="btn-logout" onclick="Auth.logout()" title="Sign out">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+
+  </aside><!-- /sidebar -->
+
+  <!-- ══ MAIN ══ -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <button class="hamburger" id="hamburger" onclick="App.openSidebar()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="tb-brand">
+        <span class="tb-logo-text">EC2 Control</span>
+        <span class="tb-sep">/</span>
+        <span class="tb-page" id="tb-page">Dashboard</span>
+      </div>
+      <div class="tb-right">
+        <div class="tb-pill pill-cost" id="tb-cost" style="display:none">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span id="tb-cost-val">$0.00</span>/mo
+        </div>
+        <div class="tb-pill pill-sess">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span class="sess-timer" id="sess-t">--:--</span>
+        </div>
+        <div class="tb-divider"></div>
+        <div class="tb-clock" id="clock">--:--:--</div>
+      </div>
+    </header>
+
+    <!-- Page Views -->
+    <main class="content">
+
+      <!-- ══════ DASHBOARD ══════ -->
+      <div class="pv on" id="pv-dashboard">
+        <div class="ph">
+          <div class="ph-l">
+            <h1 class="ph-title">Dashboard</h1>
+            <p class="ph-sub">Real-time fleet overview across all linked accounts</p>
+          </div>
+          <div class="ph-r">
+            <button class="btn btn-out btn-sm" onclick="Instances.refresh()">
+              <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="stat-grid" id="dash-stats">
+          <div class="scard blue">
+            <div class="scard-top">
+              <div class="scard-ico blue"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg></div>
+            </div>
+            <div class="scard-val" id="st-total">—</div>
+            <div class="scard-lbl">Total Instances</div>
+            <div class="scard-sub" id="st-accts">across all accounts</div>
+            <div class="scard-bar"><div class="scard-fill" id="sb-total" style="width:100%"></div></div>
+          </div>
+          <div class="scard green">
+            <div class="scard-top">
+              <div class="scard-ico green"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+            </div>
+            <div class="scard-val green" id="st-run">—</div>
+            <div class="scard-lbl">Running Now</div>
+            <div class="scard-sub" id="st-run-pct">— % of fleet active</div>
+            <div class="scard-bar"><div class="scard-fill green" id="sb-run" style="width:0%"></div></div>
+          </div>
+          <div class="scard red">
+            <div class="scard-top">
+              <div class="scard-ico red"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>
+            </div>
+            <div class="scard-val red" id="st-stp">—</div>
+            <div class="scard-lbl">Stopped</div>
+            <div class="scard-sub">idle — no cost accruing</div>
+            <div class="scard-bar"><div class="scard-fill red" id="sb-stp" style="width:0%"></div></div>
+          </div>
+          <div class="scard amber">
+            <div class="scard-top">
+              <div class="scard-ico amber"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            </div>
+            <div class="scard-val amber" id="st-cost">—</div>
+            <div class="scard-lbl">Est. Monthly Cost</div>
+            <div class="scard-sub">running fleet projection</div>
+            <div class="scard-bar"><div class="scard-fill amber" id="sb-cost" style="width:75%"></div></div>
+          </div>
+        </div>
+
+        <div class="dash-grid">
+          <div class="card">
+            <div class="card-hd">
+              <div class="card-title"><span class="cdot blue"></span>Fleet — Quick Control</div>
+              <span class="card-hint" id="inst-hint">Loading…</span>
+            </div>
+            <div class="dash-list-wrap" id="dash-list">
+              <div class="empty"><div class="empty-ico">⚡</div><p class="empty-t">Loading instances…</p></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hd">
+              <div class="card-title"><span class="cdot amber"></span>Activity Feed</div>
+              <button class="btn btn-ghost btn-xs" onclick="App.clearLog()">
+                <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>Clear
+              </button>
+            </div>
+            <div class="feed-wrap" id="feed-wrap">
+              <ul class="log-ul" id="log-ul">
+                <li class="log-li">
+                  <span class="log-t">--:--:--</span>
+                  <i class="log-d sys"></i>
+                  <span class="log-m">Portal initialised — ready</span>
+                  <span class="lchip sys">SYS</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div><!-- /dashboard -->
+
+      <!-- ══════ INSTANCES ══════ -->
+      <div class="pv" id="pv-instances">
+        <div class="ph">
+          <div class="ph-l">
+            <h1 class="ph-title">Instances</h1>
+            <p class="ph-sub">Servers grouped by account — click any row to inspect and control</p>
+          </div>
+          <div class="ph-r">
+            <button class="btn btn-out btn-sm" onclick="Instances.refresh()">
+              <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh All
+            </button>
+          </div>
+        </div>
+
+        <div id="ag-wrap">
+          <div class="empty"><div class="empty-ico">🖥️</div><p class="empty-t">Loading instances…</p></div>
+        </div>
+
+        <div id="dp-wrap" style="display:none;visibility:hidden;height:0;overflow:hidden">
+          <div class="dp">
+            <div class="dp-stripe"></div>
+            <div class="dp-banner">
+              <div class="dp-left">
+                <div class="dp-name" id="dp-name">—</div>
+                <div class="dp-id" id="dp-id">—</div>
+              </div>
+              <div class="dp-badge stopped" id="dp-bdg"><span class="dp-sdot"></span><span id="dp-st">STOPPED</span></div>
+            </div>
+            <div class="dp-metrics">
+              <div class="dp-m"><div class="dp-ml">Account</div><div class="dp-mv blue" id="dp-acct">—</div></div>
+              <div class="dp-m"><div class="dp-ml">Region</div><div class="dp-mv blue" id="dp-reg">—</div></div>
+              <div class="dp-m"><div class="dp-ml">Instance Type</div><div class="dp-mv" id="dp-type">—</div></div>
+              <div class="dp-m"><div class="dp-ml">Platform</div><div class="dp-mv violet" id="dp-plat">—</div></div>
+              <div class="dp-m"><div class="dp-ml">Public IP</div><div class="dp-mv mono-sm" id="dp-pub">—</div></div>
+            </div>
+            <div class="dp-ctrl">
+              <span class="dp-ctrl-lbl">Controls</span>
+              <button class="btn btn-green btn-sm" id="dp-start" onclick="Instances.ctrlInst('start')" disabled>
+                <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg><span id="dp-sl">Start</span>
+              </button>
+              <button class="btn btn-red btn-sm" id="dp-stop" onclick="Instances.ctrlInst('stop')" disabled>
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span id="dp-stl">Stop</span>
+              </button>
+              <button class="btn btn-out btn-sm" onclick="Instances.refreshDP()">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Refresh
+              </button>
+              <button class="btn btn-ghost btn-sm ml-auto" onclick="Instances.closeDP()">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Close
+              </button>
+            </div>
+            <div class="dp-tags" id="dp-tags" style="display:none">
+              <div class="dp-tags-lbl">EC2 Tags</div>
+              <div class="tagchips" id="dp-tchips"></div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /instances -->
+
+      <!-- ══════ BILLING & COST ══════ -->
+      <div class="pv" id="pv-billing">
+        <div class="ph">
+          <div class="ph-l">
+            <h1 class="ph-title">Billing &amp; Cost</h1>
+            <p class="ph-sub">Full AWS bill from Cost Explorer — all services, with EC2 &amp; EBS broken out</p>
+          </div>
+          <div class="ph-r" style="display:flex;align-items:center;gap:12px">
+            <span id="bill-last-updated" style="font-size:11px;color:var(--ink3);display:none"></span>
+            <button class="btn btn-amber btn-sm" id="btn-get-cost" onclick="Billing.load()">
+              <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10"/><polyline points="22 2 22 8 16 8"/></svg>
+              Get Cost Update
+            </button>
+          </div>
+        </div>
+
+        <!-- Filters — no onchange auto-load; use Get Cost Update button -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="filter-bar">
+            <div class="filter-group">
+              <label class="filter-lbl">Filter By</label>
+              <select class="fsel" id="bill-filter-type" onchange="Billing.onFilterTypeChange()">
+                <option value="all">All Accounts</option>
+                <option value="account">Specific Account</option>
+              </select>
+            </div>
+            <div class="filter-group" id="bill-filter-val-wrap" style="display:none">
+              <label class="filter-lbl">Account</label>
+              <select class="fsel" id="bill-filter-val"></select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-lbl">Time Range</label>
+              <select class="fsel" id="bill-range">
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="7d" selected>Last 7 Days</option>
+                <option value="14d">Last 14 Days</option>
+                <option value="30d">Last 30 Days</option>
+              </select>
+            </div>
+            <div class="filter-group" style="align-self:flex-end">
+              <div class="bill-filter-note">Changes take effect when you click Get Cost Update</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary cards (4 cards) -->
+        <div class="stat-grid billing-stats" style="margin-bottom:16px">
+          <div class="scard blue">
+            <div class="scard-top"><div class="scard-ico blue">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div></div>
+            <div class="scard-val" id="bill-period">$—</div>
+            <div class="scard-lbl">Total AWS Bill</div>
+            <div class="scard-sub" id="bill-period-lbl">all services</div>
+          </div>
+          <div class="scard amber">
+            <div class="scard-top"><div class="scard-ico amber">
+              <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div></div>
+            <div class="scard-val amber" id="bill-ec2">$—</div>
+            <div class="scard-lbl">EC2 Compute</div>
+            <div class="scard-sub">compute hours only</div>
+          </div>
+          <div class="scard cyan">
+            <div class="scard-top"><div class="scard-ico cyan">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            </div></div>
+            <div class="scard-val cyan" id="bill-ebs">$—</div>
+            <div class="scard-lbl">EBS Storage</div>
+            <div class="scard-sub">block storage volumes</div>
+          </div>
+          <div class="scard green">
+            <div class="scard-top"><div class="scard-ico green">
+              <svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            </div></div>
+            <div class="scard-val green" id="bill-proj">$—</div>
+            <div class="scard-lbl">Month Projection</div>
+            <div class="scard-sub">at current run rate</div>
+          </div>
+        </div>
+
+        <!-- Detailed cost report (populated on Get Cost Update) -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hd">
+            <div class="card-title"><span class="cdot amber"></span>Detailed Cost Report by Account</div>
+            <span class="ce-badge">Cost Explorer</span>
+            <span class="card-hint" id="bill-count"></span>
+          </div>
+          <div id="bill-report-wrap">
+            <div class="bill-prompt-state">
+              <div class="bill-prompt-ico">💰</div>
+              <div class="bill-prompt-msg">Click <strong>Get Cost Update</strong> to fetch your AWS bill from Cost Explorer</div>
+              <div class="bill-prompt-sub">API calls are charged by AWS — fetch only when needed. Results are not cached automatically.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Today's running instances session estimate -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hd">
+            <div class="card-title"><span class="cdot green"></span>Today's Running Instances — Session Estimate</div>
+            <span class="card-hint">On-demand pricing estimate (not from Cost Explorer)</span>
+          </div>
+          <div id="today-sessions-wrap">
+            <div class="empty"><div class="empty-ico">📊</div><p class="empty-t">Switch to this tab to compute session estimates</p></div>
+          </div>
+        </div>
+
+        <!-- Daily Summary (per-instance cost history from audit logs) -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hd">
+            <div class="card-title"><span class="cdot cyan"></span>Per-Instance Daily History</div>
+            <span class="card-hint">Running hours &amp; estimated cost from audit events</span>
+          </div>
+          <div class="audit-filters daily-filter-bar" style="padding:12px 16px 0">
+            <div class="daily-inst-wrap">
+              <select class="audit-select daily-inst-select" id="daily-instance-select">
+                <option value="">— Pick an instance —</option>
+              </select>
+              <span class="daily-inst-or">or</span>
+              <input class="audit-input audit-input-wide" type="text" id="daily-instance-id" placeholder="Paste Instance ID (e.g. i-0abc12345)"/>
+            </div>
+            <select class="audit-select" id="daily-days">
+              <option value="1">Last 1 day</option>
+              <option value="7">Last 7 days</option>
+              <option value="14">Last 14 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="60">Last 60 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+            <button class="btn-search" id="btn-daily-load">
+              <svg width="13" height="13" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Load
+            </button>
+          </div>
+          <div id="audit-daily-table" style="padding:0 16px 16px">
+            <div class="table-empty-block">Select or enter an instance ID above and click Load to see the daily breakdown.</div>
+          </div>
+        </div>
+
+      </div><!-- /billing -->
+
+      <!-- ══════ ANALYTICS ══════ -->
+      <div class="pv" id="pv-analytics">
+        <div class="ph">
+          <div class="ph-l">
+            <h1 class="ph-title">Analytics</h1>
+            <p class="ph-sub">Usage patterns, fleet health, and activity intelligence</p>
+          </div>
+          <div class="ph-r">
+            <button class="btn btn-blue btn-sm" onclick="Analytics.load()">
+              <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="scard blue">
+            <div class="scard-ico blue"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+            <div class="scard-val blue" id="an-total">—</div>
+            <div class="scard-lbl">Total Actions (30d)</div>
+            <div class="scard-sub">all logged events</div>
+          </div>
+          <div class="scard green">
+            <div class="scard-ico green"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+            <div class="scard-val green" id="an-starts">—</div>
+            <div class="scard-lbl">Server Starts</div>
+            <div class="scard-sub">power-on events</div>
+          </div>
+          <div class="scard red">
+            <div class="scard-ico red"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>
+            <div class="scard-val red" id="an-stops">—</div>
+            <div class="scard-lbl">Server Stops</div>
+            <div class="scard-sub">shutdown events</div>
+          </div>
+          <div class="scard amber">
+            <div class="scard-ico amber"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <div class="scard-val amber" id="an-proj">—</div>
+            <div class="scard-lbl">Monthly Projection</div>
+            <div class="scard-sub">running fleet estimate</div>
+          </div>
+        </div>
+
+        <div class="an-grid">
+          <div class="card">
+            <div class="card-hd">
+              <div class="card-title"><span class="cdot blue"></span>Fleet Health</div>
+              <span class="card-hint" id="fleet-upd">—</span>
+            </div>
+            <div id="fleet-ring"></div>
+          </div>
+          <div class="card">
+            <div class="card-hd">
+              <div class="card-title"><span class="cdot amber"></span>Cost by Account</div>
+            </div>
+            <div id="an-acct-cost">
+              <div class="empty"><div class="empty-ico">💰</div><p class="empty-t">No running instances</p></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hd">
+            <div class="card-title"><span class="cdot cyan"></span>Instance Type Breakdown</div>
+            <span class="card-hint" id="type-ct"></span>
+          </div>
+          <div class="type-grid" id="an-type-grid">
+            <div class="empty"><div class="empty-ico">🔎</div><p class="empty-t">Load instances first</p></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hd">
+            <div class="card-title"><span class="cdot green"></span>Running Cost Projection — Per Instance</div>
+            <span class="card-hint">Uptime × on-demand hourly rate</span>
+          </div>
+          <div id="an-cost-proj">
+            <div class="empty"><div class="empty-ico">💤</div><p class="empty-t">No instances currently running</p></div>
+          </div>
+        </div>
+
+        <div class="an-grid">
+          <div class="card">
+            <div class="card-hd">
+              <div class="card-title"><span class="cdot navy"></span>Activity by Instance</div>
+              <span class="card-hint" id="an-ict"></span>
+            </div>
+            <div id="an-inst-rows">
+              <div class="empty"><div class="empty-ico">📊</div><p class="empty-t">No data yet</p></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hd">
+              <div class="card-title"><span class="cdot violet"></span>Activity by User</div>
+              <span class="card-hint" id="an-uct"></span>
+            </div>
+            <div id="an-user-rows">
+              <div class="empty"><div class="empty-ico">👤</div><p class="empty-t">No data yet</p></div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /analytics -->
+
+      <!-- ══════ AUDIT LOG ══════ -->
+      <div class="pv" id="pv-audit">
+        <div class="ph">
+          <div class="ph-l">
+            <h1 class="ph-title">Audit Log</h1>
+            <p class="ph-sub">Complete history — every action, every user, every server — filterable by any dimension</p>
+          </div>
+          <div class="ph-r">
+            <button class="btn btn-blue btn-sm" onclick="Audit.search()">
+              <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="audit-card">
+          <!-- Filter bar -->
+          <div class="audit-filters audit-filters-v2">
+            <div class="audit-filter-input-wrap">
+              <svg class="audit-filter-icon" viewBox="0 0 24 24" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input class="audit-input" type="text" id="audit-filter-instance" placeholder="Instance ID or name…" list="audit-instance-datalist" autocomplete="off"/>
+            </div>
+            <datalist id="audit-instance-datalist"></datalist>
+            <div class="audit-filter-input-wrap">
+              <svg class="audit-filter-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <input class="audit-input" type="text" id="audit-filter-user" placeholder="User email…"/>
+            </div>
+            <select class="audit-select" id="audit-filter-action">
+              <option value="">All actions</option>
+              <option value="start">START</option>
+              <option value="stop">STOP</option>
+              <option value="auto-stop-idle">AUTO-STOP</option>
+              <option value="account-linked">ACCOUNT-LINKED</option>
+            </select>
+            <select class="audit-select" id="audit-filter-account">
+              <option value="">All accounts</option>
+            </select>
+            <button class="btn-audit-clear" id="btn-audit-clear">Clear</button>
+            <span class="audit-record-count" id="audit-record-count"></span>
+          </div>
+
+          <!-- Table -->
+          <div class="audit-table-wrap">
+            <table class="audit-table audit-table-v2">
+              <thead><tr>
+                <th>TIMESTAMP</th><th>ACTION</th><th>INSTANCE</th><th>TYPE</th><th>ACCOUNT</th><th>REGION</th><th>USER</th>
+              </tr></thead>
+              <tbody id="audit-events-tbody">
+                <tr><td colspan="7" class="audit-empty">Search for audit events above.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="audit-more-row">
+            <button class="btn-load-more" id="btn-audit-more" style="display:none">Load more</button>
+          </div>
+        </div>
+        <button id="btn-audit-search" style="display:none"></button>
+      </div><!-- /audit -->
+
+      <!-- ══════ ACCOUNTS ══════ -->
+      <div class="pv" id="pv-accounts">
+        <div class="ph">
+          <div class="ph-l">
+            <h1 class="ph-title">Accounts</h1>
+            <p class="ph-sub">AWS accounts managed by this portal — each with cross-account IAM role</p>
+          </div>
+          <div class="ph-r">
+            <button class="btn btn-out btn-sm" onclick="Accounts.load()">
+              <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh
+            </button>
+            <button class="btn btn-blue" onclick="Accounts.openModal()">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Account
+            </button>
+          </div>
+        </div>
+
+        <div class="rbac-info-card">
+          <div class="rbac-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div class="rbac-info-body">
+            <div class="rbac-info-title">Access Control</div>
+            <div class="rbac-info-text">
+              Admin users see this Accounts page and can add/remove linked AWS accounts.
+              <span class="rbac-tag">Admin</span> Full control — link/remove accounts, start/stop any instance.
+              <span class="rbac-tag">Member</span> View and control instances, analytics, audit — cannot manage accounts.
+            </div>
+          </div>
+        </div>
+
+        <div class="act-grid" id="accounts-grid">
+          <div class="acct-loading">Loading accounts…</div>
+        </div>
+      </div><!-- /accounts -->
+
+    </main><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Toast -->
+<div id="toast"><span class="toast-ico" id="toast-ico">✓</span><span id="toast-msg"></span></div>
+
+<!-- CONFIG — Injected by Config Injector Lambda during deployment -->
+<script>
+  const CONFIG = { /*__INJECT__*/ };
+</script>
+
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="js/instances.js"></script>
+<script src="js/audit.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/billing.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/app.js"></script>
+
+<script>
+  // Show errors visually so we can debug a blank screen
+  window.onerror = function(msg, src, line) {
+    document.body.style.display = 'flex';
+    document.body.style.alignItems = 'center';
+    document.body.style.justifyContent = 'center';
+    document.body.style.background = '#f1f5fb';
+    document.body.innerHTML = '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;max-width:600px;font-family:sans-serif"><h2 style="color:#dc2626;margin:0 0 12px">JS Error</h2><p style="margin:0;font-family:monospace;font-size:13px;color:#1e2a3a">' + msg + '<br><span style="color:#8596ae">' + src + ':' + line + '</span></p></div>';
+  };
+  // Bootstrap — start auth flow once all modules are loaded
+  Auth.init().catch(function(e) { window.onerror(e.message || String(e), 'auth.js', 0); });
+</script>
 
 </body>
 </html>
