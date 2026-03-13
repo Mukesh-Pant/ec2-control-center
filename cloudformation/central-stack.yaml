@@ -61,8 +61,30 @@ Parameters:
     MaxValue: 240
     Description: 'Minutes of sustained low CPU before auto-stop is triggered (default: 60)'
 
+  CustomDomain:
+    Type: String
+    Default: ''
+    Description: >
+      Custom domain for the portal (e.g. portal.solobil.com).
+      Leave blank to use the auto-generated CloudFront domain.
+
+  AcmCertificateArn:
+    Type: String
+    Default: ''
+    Description: >
+      ACM Certificate ARN for the custom domain (must be from us-east-1).
+      Required when CustomDomain is set. Get this from the acm-cert-stack output.
+
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: >
+      Route 53 Hosted Zone ID for the custom domain.
+      Required when CustomDomain is set. Used to create the A ALIAS record automatically.
+
 Conditions:
   HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, '']]
+  HasCustomDomain: !Not [!Equals [!Ref CustomDomain, '']]
 
 Resources:
 
@@ -131,6 +153,16 @@ Resources:
             QueryString: false
             Cookies:
               Forward: none
+        Aliases: !If
+          - HasCustomDomain
+          - [!Ref CustomDomain]
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - HasCustomDomain
+          - AcmCertificateArn: !Ref AcmCertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
         CustomErrorResponses:
           - ErrorCode: 403
             ResponseCode: 200
@@ -521,7 +553,10 @@ Resources:
       FrontendS3Key: !Sub 'frontend/frontend-${Environment}.zip'
       CognitoDomain: !Sub 'https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
       ClientId: !Ref CognitoAppClient
-      RedirectUri: !Sub 'https://${CloudFrontDistribution.DomainName}/index.html'
+      RedirectUri: !If
+          - HasCustomDomain
+          - !Sub 'https://${CustomDomain}/index.html'
+          - !Sub 'https://${CloudFrontDistribution.DomainName}/index.html'
       ApiUrl: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
       UserPoolId: !Ref CognitoUserPool
       Version: !Ref LambdaCodeVersion
@@ -1014,12 +1049,35 @@ Resources:
       SourceArn: !GetAtt IdleCheckerSchedule.Arn
 
 # =============================================
+# ROUTE 53 - Custom domain A ALIAS record
+# Created only when CustomDomain + HostedZoneId are set
+# =============================================
+  PortalDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCustomDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref CustomDomain
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront global hosted zone ID (always this value)
+        EvaluateTargetHealth: false
+
+# =============================================
 # OUTPUTS
 # =============================================
 Outputs:
 
   PortalURL:
     Description: Portal URL - open in browser after deployment completes.
+    Value: !If
+      - HasCustomDomain
+      - !Sub 'https://${CustomDomain}'
+      - !Sub 'https://${CloudFrontDistribution.DomainName}'
+
+  CloudFrontURL:
+    Description: CloudFront auto-generated URL (always available, useful for debugging).
     Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
 
   S3BucketName:

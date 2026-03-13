@@ -10,6 +10,7 @@ venv/
 *.zip
 
 # AWS credentials / secrets
+deploy-config.env
 .env.local
 *.pem
 *.key

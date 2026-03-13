@@ -13,6 +13,12 @@ if [ ! -f "$SCRIPT_DIR/deploy-config.env" ]; then
 fi
 source "$SCRIPT_DIR/deploy-config.env"
 
+# Set AWS profile if specified
+if [ -n "${AWS_PROFILE:-}" ]; then
+  export AWS_PROFILE
+  echo "Using AWS profile: $AWS_PROFILE"
+fi
+
 # Validate required vars
 for VAR in ADMIN_EMAIL COGNITO_DOMAIN_PREFIX ENVIRONMENT AWS_REGION; do
   if [ -z "${!VAR:-}" ]; then
@@ -97,7 +103,8 @@ echo "==> Deploying CloudFormation stack: $STACK_NAME"
 echo "    This may take 8-12 minutes on first deploy..."
 echo ""
 
-# Build parameter overrides — NotificationEmail is optional
+
+# Build parameter overrides — NotificationEmail and custom domain fields are optional
 PARAM_OVERRIDES=(
   "AdminEmail=${ADMIN_EMAIL}"
   "CognitoDomainPrefix=${COGNITO_DOMAIN_PREFIX}"
@@ -108,6 +115,12 @@ PARAM_OVERRIDES=(
 
 if [ -n "${NOTIFICATION_EMAIL:-}" ]; then
   PARAM_OVERRIDES+=("NotificationEmail=${NOTIFICATION_EMAIL}")
+fi
+
+if [ -n "${CUSTOM_DOMAIN:-}" ]; then
+  PARAM_OVERRIDES+=("CustomDomain=${CUSTOM_DOMAIN}")
+  PARAM_OVERRIDES+=("AcmCertificateArn=${ACM_CERT_ARN}")
+  PARAM_OVERRIDES+=("HostedZoneId=${HOSTED_ZONE_ID}")
 fi
 
 aws cloudformation deploy \
@@ -159,8 +172,19 @@ PORTAL_URL=$(aws cloudformation describe-stacks \
   --output text \
   --region "$AWS_REGION")
 
+CLOUDFRONT_URL=$(aws cloudformation describe-stacks \
+  --stack-name "$STACK_NAME" \
+  --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontURL`].OutputValue' \
+  --output text \
+  --region "$AWS_REGION")
+
 echo ""
-echo "Portal URL: $PORTAL_URL"
+if [ -n "${CUSTOM_DOMAIN:-}" ]; then
+  echo "Portal URL:     $PORTAL_URL  (custom domain)"
+  echo "CloudFront URL: $CLOUDFRONT_URL  (direct, for debugging)"
+else
+  echo "Portal URL: $PORTAL_URL"
+fi
 echo ""
 echo "The Config Injector has automatically:"
 echo "  - Injected CONFIG values into index.html"

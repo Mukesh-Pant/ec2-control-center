@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  EC2 Control Portal - ACM Certificate Stack
+  Deploy this stack in us-east-1 ONLY (required for CloudFront).
+  CloudFormation auto-validates the certificate via Route 53.
+  Run ONCE per AWS account. Copy the CertificateArn output to deploy-config.env.
+
+Parameters:
+
+  DomainName:
+    Type: String
+    Default: portal.solobil.com
+    Description: >
+      Primary domain for the portal certificate.
+      Example: portal.solobil.com
+
+  HostedZoneId:
+    Type: String
+    Description: >
+      Route 53 Hosted Zone ID for your domain.
+      Find it in AWS Console → Route 53 → Hosted zones → your domain → Hosted zone ID.
+      Example: Z1PA6795UKMFR9
+
+Resources:
+
+  PortalCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Domain
+          Value: !Ref DomainName
+
+Outputs:
+
+  CertificateArn:
+    Description: >
+      Copy this ARN into deploy-config.env as ACM_CERT_ARN=<value>
+      Then run ./deploy.sh to deploy the main stack with custom domain support.
+    Value: !Ref PortalCertificate
+
+  DomainName:
+    Description: Domain this certificate is valid for.
+    Value: !Ref DomainName
