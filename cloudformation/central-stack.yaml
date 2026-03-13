@@ -388,6 +388,11 @@ Resources:
                 Action:
                   - ce:GetCostAndUsage
                 Resource: '*'
+              - Sid: PriceListAPI
+                Effect: Allow
+                Action:
+                  - pricing:GetProducts
+                Resource: '*'
               - Sid: CloudWatchLogs
                 Effect: Allow
                 Action:

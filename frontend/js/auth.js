@@ -178,7 +178,7 @@ const Auth = (function () {
     document.body.classList.add('ready');
 
     var email      = sessionStorage.getItem('user_email') || '';
-    var adminEmail = 'joshiadarsh421@gmail.com';
+    var adminEmail = 'pantm8877@gmail.com';
 
     App.setUserInfo(email);
     App.setAdmin(email === adminEmail);

@@ -8,7 +8,7 @@ can Start / Stop / check Status of any instance, view audit logs, get idle auto-
 and manage member AWS accounts — all serverless, zero infrastructure to manage.
 
 **Owner:** Mukesh
-**Admin email (Cognito):** joshiadarsh421@gmail.com
+**Admin email (Cognito):** pantm8877@gmail.com
 **Primary region:** ap-south-1 (Mumbai)
 **Cognito domain prefix:** ocu-ec2-ctrl-v2
 
@@ -219,11 +219,11 @@ Response: { "instanceId", "instanceType", "hourlyRate", "totalRunningHours", "to
 ## Deploy Config (Already Set)
 
 ```
-ADMIN_EMAIL=joshiadarsh421@gmail.com
+ADMIN_EMAIL=pantm8877@gmail.com
 COGNITO_DOMAIN_PREFIX=ocu-ec2-ctrl-v2
 ENVIRONMENT=production
 AWS_REGION=ap-south-1
-NOTIFICATION_EMAIL=joshiadarsh421@gmail.com
+NOTIFICATION_EMAIL=pantm8877@gmail.com
 ```
 
 Stack name: `ec2-control-production`

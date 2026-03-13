@@ -555,7 +555,7 @@ const Billing = (function () {
         '<thead><tr><th>Date</th><th>Running Hours</th><th>Stopped Hours</th><th>Events</th><th>Est. Cost (USD)</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
       '</table>' +
-      '<div class="daily-disclaimer">&#9432;&nbsp; Estimates use on-demand Linux pricing in ap-south-1. ' +
+      '<div class="daily-disclaimer">&#9432;&nbsp; Estimates use live on-demand Linux pricing from AWS Price List API (region-specific). ' +
       'Actual charges depend on your pricing tier, EBS volumes, and data transfer.</div>';
   }
 

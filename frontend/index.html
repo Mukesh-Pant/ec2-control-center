@@ -394,33 +394,6 @@
           </div>
         </div>
 
-        <!-- Detailed cost report (populated on Get Cost Update) -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-hd">
-            <div class="card-title"><span class="cdot amber"></span>Detailed Cost Report by Account</div>
-            <span class="ce-badge">Cost Explorer</span>
-            <span class="card-hint" id="bill-count"></span>
-          </div>
-          <div id="bill-report-wrap">
-            <div class="bill-prompt-state">
-              <div class="bill-prompt-ico">💰</div>
-              <div class="bill-prompt-msg">Click <strong>Get Cost Update</strong> to fetch your AWS bill from Cost Explorer</div>
-              <div class="bill-prompt-sub">API calls are charged by AWS — fetch only when needed. Results are not cached automatically.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Today's running instances session estimate -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-hd">
-            <div class="card-title"><span class="cdot green"></span>Today's Running Instances — Session Estimate</div>
-            <span class="card-hint">On-demand pricing estimate (not from Cost Explorer)</span>
-          </div>
-          <div id="today-sessions-wrap">
-            <div class="empty"><div class="empty-ico">📊</div><p class="empty-t">Switch to this tab to compute session estimates</p></div>
-          </div>
-        </div>
-
         <!-- Daily Summary (per-instance cost history from audit logs) -->
         <div class="card" style="margin-bottom:16px">
           <div class="card-hd">
@@ -450,6 +423,33 @@
           </div>
           <div id="audit-daily-table" style="padding:0 16px 16px">
             <div class="table-empty-block">Select or enter an instance ID above and click Load to see the daily breakdown.</div>
+          </div>
+        </div>
+
+        <!-- Detailed cost report (populated on Get Cost Update) -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hd">
+            <div class="card-title"><span class="cdot amber"></span>Detailed Cost Report by Account</div>
+            <span class="ce-badge">Cost Explorer</span>
+            <span class="card-hint" id="bill-count"></span>
+          </div>
+          <div id="bill-report-wrap">
+            <div class="bill-prompt-state">
+              <div class="bill-prompt-ico">💰</div>
+              <div class="bill-prompt-msg">Click <strong>Get Cost Update</strong> to fetch your AWS bill from Cost Explorer</div>
+              <div class="bill-prompt-sub">API calls are charged by AWS — fetch only when needed. Results are not cached automatically.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Today's running instances session estimate -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hd">
+            <div class="card-title"><span class="cdot green"></span>Today's Running Instances — Session Estimate</div>
+            <span class="card-hint">On-demand pricing estimate (not from Cost Explorer)</span>
+          </div>
+          <div id="today-sessions-wrap">
+            <div class="empty"><div class="empty-ico">📊</div><p class="empty-t">Switch to this tab to compute session estimates</p></div>
           </div>
         </div>
 
