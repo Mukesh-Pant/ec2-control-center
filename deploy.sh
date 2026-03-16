@@ -123,6 +123,10 @@ if [ -n "${CUSTOM_DOMAIN:-}" ]; then
   PARAM_OVERRIDES+=("HostedZoneId=${HOSTED_ZONE_ID}")
 fi
 
+if [ -n "${APEX_DOMAIN:-}" ]; then
+  PARAM_OVERRIDES+=("ApexDomain=${APEX_DOMAIN}")
+fi
+
 aws cloudformation deploy \
   --template-file "$SCRIPT_DIR/cloudformation/central-stack.yaml" \
   --stack-name "$STACK_NAME" \

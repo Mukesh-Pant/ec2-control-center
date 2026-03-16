@@ -99,14 +99,14 @@ const API = (function () {
   }
 
   /**
-   * GET /billing — Cost Explorer data
-   * @param {string} range - today|yesterday|7d|14d|30d
-   * @param {string|null} accountId - optional account filter
+   * GET /pricing — live on-demand hourly rates
+   * @param {string} region - AWS region code (e.g. 'ap-south-1')
+   * @param {string[]} types - instance type list (e.g. ['t3.micro', 'm5.large'])
    */
-  async function getBilling(range, accountId) {
-    var qs = 'range=' + encodeURIComponent(range || '7d');
-    if (accountId) qs += '&accountId=' + encodeURIComponent(accountId);
-    return call('/billing?' + qs, 'GET', null);
+  async function getPricing(region, types) {
+    var qs = 'region=' + encodeURIComponent(region);
+    if (types && types.length) qs += '&types=' + encodeURIComponent(types.join(','));
+    return call('/pricing?' + qs, 'GET', null);
   }
 
   return {
@@ -116,7 +116,7 @@ const API = (function () {
     postAccounts,
     getAuditLog,
     getAuditDaily,
-    getBilling,
+    getPricing,
   };
 
 })();

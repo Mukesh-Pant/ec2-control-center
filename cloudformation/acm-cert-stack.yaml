@@ -9,10 +9,17 @@ Parameters:
 
   DomainName:
     Type: String
-    Default: portal.solobil.com
+    Default: www.solobil.com
     Description: >
       Primary domain for the portal certificate.
-      Example: portal.solobil.com
+      Example: www.solobil.com
+
+  ApexDomain:
+    Type: String
+    Default: ''
+    Description: >
+      Naked/apex domain to include as a Subject Alternative Name (e.g. solobil.com).
+      Leave blank to create a cert for DomainName only.
 
   HostedZoneId:
     Type: String
@@ -21,16 +28,29 @@ Parameters:
       Find it in AWS Console → Route 53 → Hosted zones → your domain → Hosted zone ID.
       Example: Z1PA6795UKMFR9
 
+Conditions:
+  HasApexDomain: !Not [!Equals [!Ref ApexDomain, '']]
+
 Resources:
 
   PortalCertificate:
     Type: AWS::CertificateManager::Certificate
     Properties:
       DomainName: !Ref DomainName
+      SubjectAlternativeNames: !If
+        - HasApexDomain
+        - - !Ref DomainName
+          - !Ref ApexDomain
+        - !Ref AWS::NoValue
       ValidationMethod: DNS
       DomainValidationOptions:
         - DomainName: !Ref DomainName
           HostedZoneId: !Ref HostedZoneId
+        - !If
+          - HasApexDomain
+          - DomainName: !Ref ApexDomain
+            HostedZoneId: !Ref HostedZoneId
+          - !Ref AWS::NoValue
       Tags:
         - Key: Project
           Value: EC2Control

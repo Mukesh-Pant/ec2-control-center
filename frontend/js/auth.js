@@ -1,180 +1,213 @@
 /* ═══════════════════════════════════════════════
-   Auth Module — Authorization Code + PKCE Flow
+   Auth Module — Cognito SDK (SRP) Authentication
+   Replaces PKCE Hosted UI with custom login page
    ═══════════════════════════════════════════════ */
 
 const Auth = (function () {
 
-  // ─── PKCE Utilities ───
+  var userPool = null;
+  var challengeUser = null;   // Held during NEW_PASSWORD_REQUIRED
+  var pendingEmail = '';       // Email awaiting verification
 
-  function generateCodeVerifier() {
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    return base64URLEncode(array);
-  }
+  // ─── Pool / User helpers ───
 
-  async function generateCodeChallenge(verifier) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(verifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return base64URLEncode(new Uint8Array(digest));
-  }
-
-  function base64URLEncode(buffer) {
-    return btoa(String.fromCharCode.apply(null, buffer))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-  }
-
-  // ─── Login ───
-
-  async function redirectToLogin() {
-    const verifier = generateCodeVerifier();
-    const challenge = await generateCodeChallenge(verifier);
-    sessionStorage.setItem('pkce_verifier', verifier);
-
-    const params = new URLSearchParams({
-      client_id: CONFIG.CLIENT_ID,
-      response_type: 'code',
-      scope: 'email openid',
-      redirect_uri: CONFIG.REDIRECT_URI,
-      code_challenge: challenge,
-      code_challenge_method: 'S256',
-    });
-    window.location.replace(CONFIG.COGNITO_DOMAIN + '/oauth2/authorize?' + params.toString());
-  }
-
-  // ─── Token Exchange ───
-
-  async function exchangeCodeForTokens(code) {
-    const verifier = sessionStorage.getItem('pkce_verifier');
-    if (!verifier) {
-      redirectToLogin();
-      return false;
-    }
-
-    try {
-      const response = await fetch(CONFIG.COGNITO_DOMAIN + '/oauth2/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          client_id: CONFIG.CLIENT_ID,
-          code: code,
-          redirect_uri: CONFIG.REDIRECT_URI,
-          code_verifier: verifier,
-        }),
+  function _pool() {
+    if (!userPool) {
+      userPool = new AmazonCognitoIdentity.CognitoUserPool({
+        UserPoolId: CONFIG.USER_POOL_ID,
+        ClientId:   CONFIG.CLIENT_ID,
+        Storage:    sessionStorage,
       });
-
-      if (!response.ok) {
-        console.error('Token exchange failed:', response.status);
-        sessionStorage.removeItem('pkce_verifier');
-        redirectToLogin();
-        return false;
-      }
-
-      const data = await response.json();
-      sessionStorage.removeItem('pkce_verifier');
-
-      storeTokens(data);
-
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return true;
-
-    } catch (err) {
-      console.error('Token exchange error:', err);
-      redirectToLogin();
-      return false;
     }
+    return userPool;
   }
 
-  // ─── Token Refresh ───
+  function _cognitoUser(email) {
+    return new AmazonCognitoIdentity.CognitoUser({
+      Username: email,
+      Pool:     _pool(),
+      Storage:  sessionStorage,
+    });
+  }
+
+  // ─── Session Storage (api.js compat keys) ───
+
+  function _storeSession(session) {
+    var idToken     = session.getIdToken();
+    var accessToken = session.getAccessToken();
+    var refreshTok  = session.getRefreshToken();
+
+    sessionStorage.setItem('id_token',      idToken.getJwtToken());
+    sessionStorage.setItem('access_token',  accessToken.getJwtToken());
+    sessionStorage.setItem('refresh_token', refreshTok.getToken());
+    sessionStorage.setItem('token_expiry',  String(idToken.getExpiration() * 1000));
+
+    var payload = idToken.decodePayload();
+    sessionStorage.setItem('user_email', payload.email || payload['cognito:username'] || 'User');
+  }
+
+  // ─── Login (SRP) ───
+
+  function login(email, password) {
+    return new Promise(function (resolve, reject) {
+      var authDetails = new AmazonCognitoIdentity.AuthenticationDetails({
+        Username: email,
+        Password: password,
+      });
+      var cognitoUser = _cognitoUser(email);
+
+      cognitoUser.authenticateUser(authDetails, {
+        onSuccess: function (session) {
+          _storeSession(session);
+          resolve({ type: 'SUCCESS' });
+        },
+        onFailure: function (err) {
+          reject(err);
+        },
+        newPasswordRequired: function () {
+          challengeUser = cognitoUser;
+          resolve({ type: 'NEW_PASSWORD_REQUIRED' });
+        },
+      });
+    });
+  }
+
+  // ─── Complete New Password Challenge ───
+
+  function completeNewPassword(newPassword) {
+    return new Promise(function (resolve, reject) {
+      if (!challengeUser) return reject(new Error('No pending challenge'));
+      challengeUser.completeNewPasswordChallenge(newPassword, {}, {
+        onSuccess: function (session) {
+          _storeSession(session);
+          challengeUser = null;
+          resolve();
+        },
+        onFailure: function (err) { reject(err); },
+      });
+    });
+  }
+
+  // ─── Signup ───
+
+  function signup(email, password) {
+    return new Promise(function (resolve, reject) {
+      var attrs = [
+        new AmazonCognitoIdentity.CognitoUserAttribute({ Name: 'email', Value: email }),
+      ];
+      _pool().signUp(email, password, attrs, null, function (err, result) {
+        if (err) return reject(err);
+        pendingEmail = email;
+        resolve(result);
+      });
+    });
+  }
+
+  function confirmSignup(email, code) {
+    return new Promise(function (resolve, reject) {
+      _cognitoUser(email).confirmRegistration(code, true, function (err, result) {
+        if (err) return reject(err);
+        resolve(result);
+      });
+    });
+  }
+
+  function resendConfirmationCode(email) {
+    return new Promise(function (resolve, reject) {
+      _cognitoUser(email).resendConfirmationCode(function (err, result) {
+        if (err) return reject(err);
+        resolve(result);
+      });
+    });
+  }
+
+  // ─── Forgot / Reset Password ───
+
+  function forgotPassword(email) {
+    return new Promise(function (resolve, reject) {
+      pendingEmail = email;
+      _cognitoUser(email).forgotPassword({
+        onSuccess: function () { resolve(); },
+        onFailure: function (err) { reject(err); },
+        inputVerificationCode: function () { resolve(); },
+      });
+    });
+  }
+
+  function confirmForgotPassword(email, code, newPassword) {
+    return new Promise(function (resolve, reject) {
+      _cognitoUser(email).confirmPassword(code, newPassword, {
+        onSuccess: function () { resolve(); },
+        onFailure: function (err) { reject(err); },
+      });
+    });
+  }
+
+  // ─── Token Refresh (returns true/false for api.js compat) ───
 
   async function refreshTokens() {
-    const refreshToken = sessionStorage.getItem('refresh_token');
-    if (!refreshToken) {
-      redirectToLogin();
-      return false;
-    }
-
     try {
-      const response = await fetch(CONFIG.COGNITO_DOMAIN + '/oauth2/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          client_id: CONFIG.CLIENT_ID,
-          refresh_token: refreshToken,
-        }),
+      var cognitoUser = _pool().getCurrentUser();
+      if (!cognitoUser) return false;
+
+      return await new Promise(function (resolve) {
+        cognitoUser.getSession(function (err, session) {
+          if (!err && session && session.isValid()) {
+            _storeSession(session);
+            resolve(true);
+            return;
+          }
+          // Try explicit refresh
+          if (session && session.getRefreshToken()) {
+            cognitoUser.refreshSession(session.getRefreshToken(), function (err2, newSession) {
+              if (err2 || !newSession) { resolve(false); return; }
+              _storeSession(newSession);
+              resolve(true);
+            });
+          } else {
+            resolve(false);
+          }
+        });
       });
-
-      if (!response.ok) {
-        console.error('Token refresh failed:', response.status);
-        sessionStorage.clear();
-        redirectToLogin();
-        return false;
-      }
-
-      const data = await response.json();
-      // Refresh response doesn't include refresh_token, keep the existing one
-      storeTokens(data, false);
-      return true;
-
-    } catch (err) {
-      console.error('Token refresh error:', err);
-      redirectToLogin();
-      return false;
-    }
-  }
-
-  // ─── Token Storage ───
-
-  function storeTokens(data, storeRefresh = true) {
-    sessionStorage.setItem('id_token', data.id_token);
-    sessionStorage.setItem('access_token', data.access_token);
-    if (storeRefresh && data.refresh_token) {
-      sessionStorage.setItem('refresh_token', data.refresh_token);
-    }
-    sessionStorage.setItem('token_expiry', String(Date.now() + data.expires_in * 1000));
-
-    // Decode user email from id_token
-    try {
-      const payload = JSON.parse(atob(data.id_token.split('.')[1]));
-      sessionStorage.setItem('user_email', payload.email || payload['cognito:username'] || 'User');
     } catch (e) {
-      sessionStorage.setItem('user_email', 'User');
+      console.error('Token refresh error:', e);
+      return false;
     }
   }
 
   // ─── Session Guard ───
 
   async function init() {
-    // Check for authorization code in URL
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
+    // 1. Check existing tokens in sessionStorage
+    var token  = sessionStorage.getItem('id_token');
+    var expiry = parseInt(sessionStorage.getItem('token_expiry') || '0', 10);
 
-    if (code) {
-      const ok = await exchangeCodeForTokens(code);
-      if (!ok) return false;
+    if (token && Date.now() < expiry) {
+      _bootApp(expiry);
+      return true;
     }
 
-    // Check existing session
-    const token = sessionStorage.getItem('id_token');
-    const expiry = parseInt(sessionStorage.getItem('token_expiry') || '0', 10);
-
-    if (!token || Date.now() > expiry) {
-      // Try refresh
-      if (sessionStorage.getItem('refresh_token')) {
-        const ok = await refreshTokens();
-        if (!ok) return false;
-      } else {
-        await redirectToLogin();
-        return false;
+    // 2. Try SDK session restore
+    try {
+      var cognitoUser = _pool().getCurrentUser();
+      if (cognitoUser) {
+        var ok = await refreshTokens();
+        if (ok) {
+          expiry = parseInt(sessionStorage.getItem('token_expiry') || '0', 10);
+          _bootApp(expiry);
+          return true;
+        }
       }
-    }
+    } catch (e) { /* no valid session */ }
 
-    // Session is valid — boot the app
+    // 3. No session — show login page
+    _showAuthPage();
+    return false;
+  }
+
+  function _bootApp(expiry) {
+    document.getElementById('auth-page').style.display = 'none';
+    document.getElementById('app').style.display = '';
     document.body.classList.add('ready');
 
     var email      = sessionStorage.getItem('user_email') || '';
@@ -182,51 +215,48 @@ const Auth = (function () {
 
     App.setUserInfo(email);
     App.setAdmin(email === adminEmail);
-    App.setSessionExpiry(expiry);  // expiry declared as const above
+    App.setSessionExpiry(expiry);
     App.init();
-
-    return true;
   }
 
-  // ─── Getters ───
-
-  function getToken() {
-    return sessionStorage.getItem('id_token');
+  function _showAuthPage() {
+    document.getElementById('auth-page').style.display = '';
+    document.getElementById('app').style.display = 'none';
+    document.body.classList.add('ready');
   }
 
-  function getEmail() {
-    return sessionStorage.getItem('user_email') || 'User';
-  }
+  // ─── Getters (preserved for api.js) ───
 
-  function getExpiry() {
-    return parseInt(sessionStorage.getItem('token_expiry') || '0', 10);
-  }
+  function getToken()     { return sessionStorage.getItem('id_token'); }
+  function getEmail()     { return sessionStorage.getItem('user_email') || 'User'; }
+  function getExpiry()    { return parseInt(sessionStorage.getItem('token_expiry') || '0', 10); }
+  function isNearExpiry() { return (getExpiry() - Date.now()) < 600000; }
 
-  function isNearExpiry() {
-    return (getExpiry() - Date.now()) < 600000; // 10 minutes
-  }
+  // ─── Redirect / Logout ───
 
-  // ─── Logout ───
+  function redirectToLogin() {
+    sessionStorage.clear();
+    window.location.reload();
+  }
 
   function logout() {
+    try {
+      var cognitoUser = _pool().getCurrentUser();
+      if (cognitoUser) cognitoUser.signOut();
+    } catch (e) { /* ignore */ }
     sessionStorage.clear();
-    window.location.replace(
-      CONFIG.COGNITO_DOMAIN + '/logout?client_id=' + CONFIG.CLIENT_ID +
-      '&logout_uri=' + encodeURIComponent(CONFIG.REDIRECT_URI)
-    );
+    window.location.reload();
   }
 
   // ─── Public API ───
 
   return {
-    init,
-    getToken,
-    getEmail,
-    getExpiry,
-    isNearExpiry,
-    refreshTokens,
-    redirectToLogin,
-    logout,
+    init, login, completeNewPassword,
+    signup, confirmSignup, resendConfirmationCode,
+    forgotPassword, confirmForgotPassword,
+    refreshTokens, getToken, getEmail, getExpiry, isNearExpiry,
+    redirectToLogin, logout,
+    getPendingEmail: function () { return pendingEmail; },
   };
 
 })();

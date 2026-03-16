@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="theme-color" content="#122c53"/>
-  <title>EC2 Control Portal</title>
+  <title>EC2 Control — One Cloud Utopia</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='2' y='2' width='20' height='8' rx='2' fill='%232460e0'/><rect x='2' y='14' width='20' height='8' rx='2' fill='%232460e0'/></svg>">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="css/styles.css"/>
@@ -52,6 +52,259 @@
     </div>
   </div>
 </div>
+
+<!-- ════════ AUTH PAGE ════════ -->
+<div class="auth-page" id="auth-page">
+
+  <!-- ══ BRAND PANEL (left) ══ -->
+  <div class="auth-brand">
+    <!-- Animated network topology background -->
+    <svg class="auth-bg-net" viewBox="0 0 400 700" fill="none" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
+      <circle class="anode" cx="40"  cy="100" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="130" cy="55"  r="3" fill="#2460e0"/>
+      <circle class="anode" cx="250" cy="80"  r="3" fill="#2460e0"/>
+      <circle class="anode" cx="360" cy="140" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="75"  cy="210" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="200" cy="190" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="310" cy="270" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="55"  cy="330" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="175" cy="370" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="330" cy="390" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="100" cy="460" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="255" cy="490" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="370" cy="540" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="150" cy="580" r="3" fill="#2460e0"/>
+      <circle class="anode" cx="310" cy="630" r="3" fill="#2460e0"/>
+      <line class="aline" x1="40"  y1="100" x2="130" y2="55"/>
+      <line class="aline" x1="130" y1="55"  x2="250" y2="80"/>
+      <line class="aline" x1="250" y1="80"  x2="360" y2="140"/>
+      <line class="aline" x1="40"  y1="100" x2="75"  y2="210"/>
+      <line class="aline" x1="130" y1="55"  x2="200" y2="190"/>
+      <line class="aline" x1="250" y1="80"  x2="200" y2="190"/>
+      <line class="aline" x1="360" y1="140" x2="310" y2="270"/>
+      <line class="aline" x1="75"  y1="210" x2="200" y2="190"/>
+      <line class="aline" x1="200" y1="190" x2="310" y2="270"/>
+      <line class="aline" x1="75"  y1="210" x2="55"  y2="330"/>
+      <line class="aline" x1="200" y1="190" x2="175" y2="370"/>
+      <line class="aline" x1="310" y1="270" x2="330" y2="390"/>
+      <line class="aline" x1="55"  y1="330" x2="175" y2="370"/>
+      <line class="aline" x1="175" y1="370" x2="330" y2="390"/>
+      <line class="aline" x1="55"  y1="330" x2="100" y2="460"/>
+      <line class="aline" x1="175" y1="370" x2="255" y2="490"/>
+      <line class="aline" x1="330" y1="390" x2="370" y2="540"/>
+      <line class="aline" x1="100" y1="460" x2="255" y2="490"/>
+      <line class="aline" x1="255" y1="490" x2="370" y2="540"/>
+      <line class="aline" x1="100" y1="460" x2="150" y2="580"/>
+      <line class="aline" x1="255" y1="490" x2="310" y2="630"/>
+      <line class="aline" x1="150" y1="580" x2="310" y2="630"/>
+    </svg>
+
+    <div class="auth-brand-inner">
+      <!-- Logo -->
+      <div class="auth-logorow">
+        <img id="brand-logo-img" src="oculogo.png" alt="One Cloud Utopia" class="auth-logo-img">
+        <div>
+          <div class="auth-logo-name">EC2 Control</div>
+          <div class="auth-logo-by">by One Cloud Utopia</div>
+        </div>
+      </div>
+
+      <!-- Headline -->
+      <h1 class="auth-headline">Multi-Account EC2<br>Management,<br>Simplified.</h1>
+      <p class="auth-lead">Start, stop, and monitor EC2 instances across every AWS account from a single, unified dashboard.</p>
+
+      <!-- Features -->
+      <ul class="auth-feats">
+        <li>
+          <span class="auth-feat-icon">
+            <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="16" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="12" width="16" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>
+          </span>
+          <span>Multi-account fleet control</span>
+        </li>
+        <li>
+          <span class="auth-feat-icon">
+            <svg viewBox="0 0 20 20" fill="none"><path d="M10 3v14M6 7H4a2 2 0 0 0 0 4h6a2 2 0 0 1 0 4H8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </span>
+          <span>Real-time cost analytics</span>
+        </li>
+        <li>
+          <span class="auth-feat-icon">
+            <svg viewBox="0 0 20 20" fill="none"><path d="M10 2l7 3v6c0 4-3 6.5-7 8-4-1.5-7-4-7-8V5l7-3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+          </span>
+          <span>Tamper-proof audit trail</span>
+        </li>
+      </ul>
+
+      <p class="auth-brand-footer">&copy; 2026 One Cloud Utopia. All rights reserved.</p>
+    </div>
+  </div>
+
+  <!-- ══ FORM PANEL (right) ══ -->
+  <div class="auth-form-side">
+    <div class="auth-form-scroller">
+      <div class="auth-form-wrap">
+
+        <!-- ── LOGIN ── -->
+        <div class="auth-card" id="auth-login">
+          <div class="auth-card-hd">
+            <h2 class="auth-title">Welcome back</h2>
+            <p class="auth-sub">Sign in to your account</p>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="login-email">Email address</label>
+            <input class="auth-input" id="login-email" type="email" placeholder="you@company.com" autocomplete="email" spellcheck="false"/>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="login-password">
+              Password
+              <a class="auth-link auth-link-sm" onclick="AuthUI.showView('forgot')">Forgot password?</a>
+            </label>
+            <div class="auth-pw-wrap">
+              <input class="auth-input" id="login-password" type="password" placeholder="Enter your password" autocomplete="current-password"/>
+              <button class="auth-eye" type="button" onclick="AuthUI.togglePassword('login-password', this)" tabindex="-1" aria-label="Toggle password visibility">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="auth-error" id="login-error" style="display:none"></div>
+          <button class="auth-btn auth-btn-primary" id="btn-login" onclick="AuthUI.login()">
+            <span class="auth-btn-text">Sign in</span>
+            <span class="auth-btn-spinner" style="display:none"></span>
+          </button>
+          <p class="auth-switch">No account? <a class="auth-link" onclick="AuthUI.showView('signup')">Create one &rarr;</a></p>
+        </div>
+
+        <!-- ── SIGNUP ── -->
+        <div class="auth-card" id="auth-signup" style="display:none">
+          <div class="auth-card-hd">
+            <h2 class="auth-title">Create account</h2>
+            <p class="auth-sub">Start managing your EC2 fleet in minutes</p>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="signup-email">Email address</label>
+            <input class="auth-input" id="signup-email" type="email" placeholder="you@company.com" autocomplete="email" spellcheck="false"/>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="signup-password">Password</label>
+            <div class="auth-pw-wrap">
+              <input class="auth-input" id="signup-password" type="password" placeholder="Min 8 chars, uppercase, number, symbol" autocomplete="new-password"/>
+              <button class="auth-eye" type="button" onclick="AuthUI.togglePassword('signup-password', this)" tabindex="-1" aria-label="Toggle password visibility">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <div class="auth-strength" id="signup-strength">
+              <div class="str-bar"></div><div class="str-bar"></div><div class="str-bar"></div><div class="str-bar"></div>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="signup-confirm">Confirm password</label>
+            <input class="auth-input" id="signup-confirm" type="password" placeholder="Re-enter password" autocomplete="new-password"/>
+          </div>
+          <div class="auth-error" id="signup-error" style="display:none"></div>
+          <button class="auth-btn auth-btn-primary" id="btn-signup" onclick="AuthUI.signup()">
+            <span class="auth-btn-text">Create account</span>
+            <span class="auth-btn-spinner" style="display:none"></span>
+          </button>
+          <p class="auth-switch">Already have an account? <a class="auth-link" onclick="AuthUI.showView('login')">Sign in</a></p>
+        </div>
+
+        <!-- ── VERIFY EMAIL ── -->
+        <div class="auth-card" id="auth-verify" style="display:none">
+          <div class="auth-card-hd">
+            <div class="auth-icon-badge auth-icon-badge--blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </div>
+            <h2 class="auth-title">Check your email</h2>
+            <p class="auth-sub">We sent a 6-digit code to <strong id="verify-email-display"></strong></p>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="verify-code">Verification code</label>
+            <input class="auth-input auth-input-code" id="verify-code" type="text" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code"/>
+          </div>
+          <div class="auth-error" id="verify-error" style="display:none"></div>
+          <button class="auth-btn auth-btn-primary" id="btn-verify" onclick="AuthUI.confirmSignup()">
+            <span class="auth-btn-text">Verify email</span>
+            <span class="auth-btn-spinner" style="display:none"></span>
+          </button>
+          <button class="auth-btn auth-btn-ghost" onclick="AuthUI.resendCode()">Resend code</button>
+          <p class="auth-switch"><a class="auth-link" onclick="AuthUI.showView('login')">&larr; Back to sign in</a></p>
+        </div>
+
+        <!-- ── FORGOT PASSWORD ── -->
+        <div class="auth-card" id="auth-forgot" style="display:none">
+          <div class="auth-card-hd">
+            <h2 class="auth-title">Reset password</h2>
+            <p class="auth-sub">Enter your email and we&rsquo;ll send a reset code</p>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="forgot-email">Email address</label>
+            <input class="auth-input" id="forgot-email" type="email" placeholder="you@company.com" autocomplete="email" spellcheck="false"/>
+          </div>
+          <div class="auth-error" id="forgot-error" style="display:none"></div>
+          <button class="auth-btn auth-btn-primary" id="btn-forgot" onclick="AuthUI.forgotPassword()">
+            <span class="auth-btn-text">Send reset code</span>
+            <span class="auth-btn-spinner" style="display:none"></span>
+          </button>
+          <p class="auth-switch"><a class="auth-link" onclick="AuthUI.showView('login')">&larr; Back to sign in</a></p>
+        </div>
+
+        <!-- ── RESET PASSWORD ── -->
+        <div class="auth-card" id="auth-reset" style="display:none">
+          <div class="auth-card-hd">
+            <h2 class="auth-title">Set new password</h2>
+            <p class="auth-sub">Enter the reset code from your email and your new password</p>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reset-code">Reset code</label>
+            <input class="auth-input auth-input-code" id="reset-code" type="text" placeholder="000000" maxlength="6" inputmode="numeric"/>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reset-password">New password</label>
+            <div class="auth-pw-wrap">
+              <input class="auth-input" id="reset-password" type="password" placeholder="Min 8 chars, uppercase, number, symbol" autocomplete="new-password"/>
+              <button class="auth-eye" type="button" onclick="AuthUI.togglePassword('reset-password', this)" tabindex="-1" aria-label="Toggle password visibility">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="auth-error" id="reset-error" style="display:none"></div>
+          <button class="auth-btn auth-btn-primary" id="btn-reset" onclick="AuthUI.confirmResetPassword()">
+            <span class="auth-btn-text">Reset password</span>
+            <span class="auth-btn-spinner" style="display:none"></span>
+          </button>
+          <p class="auth-switch"><a class="auth-link" onclick="AuthUI.showView('login')">&larr; Back to sign in</a></p>
+        </div>
+
+        <!-- ── FORCE NEW PASSWORD (admin first login) ── -->
+        <div class="auth-card" id="auth-newpass" style="display:none">
+          <div class="auth-card-hd">
+            <div class="auth-icon-badge auth-icon-badge--amber">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <h2 class="auth-title">Set your password</h2>
+            <p class="auth-sub">This is your first login. Please set a permanent password to continue.</p>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="newpass-password">New password</label>
+            <div class="auth-pw-wrap">
+              <input class="auth-input" id="newpass-password" type="password" placeholder="Min 8 chars, uppercase, number, symbol" autocomplete="new-password"/>
+              <button class="auth-eye" type="button" onclick="AuthUI.togglePassword('newpass-password', this)" tabindex="-1" aria-label="Toggle password visibility">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="auth-error" id="newpass-error" style="display:none"></div>
+          <button class="auth-btn auth-btn-primary" id="btn-newpass" onclick="AuthUI.completeNewPassword()">
+            <span class="auth-btn-text">Set password &amp; sign in</span>
+            <span class="auth-btn-spinner" style="display:none"></span>
+          </button>
+        </div>
+
+      </div><!-- /auth-form-wrap -->
+    </div><!-- /auth-form-scroller -->
+  </div><!-- /auth-form-side -->
+
+</div><!-- /auth-page -->
 
 <!-- ════════ APP SHELL ════════ -->
 <div class="app" id="app">
@@ -317,80 +570,6 @@
         <div class="ph">
           <div class="ph-l">
             <h1 class="ph-title">Billing &amp; Cost</h1>
-            <p class="ph-sub">Full AWS bill from Cost Explorer — all services, with EC2 &amp; EBS broken out</p>
-          </div>
-          <div class="ph-r" style="display:flex;align-items:center;gap:12px">
-            <span id="bill-last-updated" style="font-size:11px;color:var(--ink3);display:none"></span>
-            <button class="btn btn-amber btn-sm" id="btn-get-cost" onclick="Billing.load()">
-              <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10"/><polyline points="22 2 22 8 16 8"/></svg>
-              Get Cost Update
-            </button>
-          </div>
-        </div>
-
-        <!-- Filters — no onchange auto-load; use Get Cost Update button -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="filter-bar">
-            <div class="filter-group">
-              <label class="filter-lbl">Filter By</label>
-              <select class="fsel" id="bill-filter-type" onchange="Billing.onFilterTypeChange()">
-                <option value="all">All Accounts</option>
-                <option value="account">Specific Account</option>
-              </select>
-            </div>
-            <div class="filter-group" id="bill-filter-val-wrap" style="display:none">
-              <label class="filter-lbl">Account</label>
-              <select class="fsel" id="bill-filter-val"></select>
-            </div>
-            <div class="filter-group">
-              <label class="filter-lbl">Time Range</label>
-              <select class="fsel" id="bill-range">
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="7d" selected>Last 7 Days</option>
-                <option value="14d">Last 14 Days</option>
-                <option value="30d">Last 30 Days</option>
-              </select>
-            </div>
-            <div class="filter-group" style="align-self:flex-end">
-              <div class="bill-filter-note">Changes take effect when you click Get Cost Update</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Summary cards (4 cards) -->
-        <div class="stat-grid billing-stats" style="margin-bottom:16px">
-          <div class="scard blue">
-            <div class="scard-top"><div class="scard-ico blue">
-              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            </div></div>
-            <div class="scard-val" id="bill-period">$—</div>
-            <div class="scard-lbl">Total AWS Bill</div>
-            <div class="scard-sub" id="bill-period-lbl">all services</div>
-          </div>
-          <div class="scard amber">
-            <div class="scard-top"><div class="scard-ico amber">
-              <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            </div></div>
-            <div class="scard-val amber" id="bill-ec2">$—</div>
-            <div class="scard-lbl">EC2 Compute</div>
-            <div class="scard-sub">compute hours only</div>
-          </div>
-          <div class="scard cyan">
-            <div class="scard-top"><div class="scard-ico cyan">
-              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-            </div></div>
-            <div class="scard-val cyan" id="bill-ebs">$—</div>
-            <div class="scard-lbl">EBS Storage</div>
-            <div class="scard-sub">block storage volumes</div>
-          </div>
-          <div class="scard green">
-            <div class="scard-top"><div class="scard-ico green">
-              <svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            </div></div>
-            <div class="scard-val green" id="bill-proj">$—</div>
-            <div class="scard-lbl">Month Projection</div>
-            <div class="scard-sub">at current run rate</div>
           </div>
         </div>
 
@@ -426,27 +605,11 @@
           </div>
         </div>
 
-        <!-- Detailed cost report (populated on Get Cost Update) -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-hd">
-            <div class="card-title"><span class="cdot amber"></span>Detailed Cost Report by Account</div>
-            <span class="ce-badge">Cost Explorer</span>
-            <span class="card-hint" id="bill-count"></span>
-          </div>
-          <div id="bill-report-wrap">
-            <div class="bill-prompt-state">
-              <div class="bill-prompt-ico">💰</div>
-              <div class="bill-prompt-msg">Click <strong>Get Cost Update</strong> to fetch your AWS bill from Cost Explorer</div>
-              <div class="bill-prompt-sub">API calls are charged by AWS — fetch only when needed. Results are not cached automatically.</div>
-            </div>
-          </div>
-        </div>
-
         <!-- Today's running instances session estimate -->
         <div class="card" style="margin-bottom:16px">
           <div class="card-hd">
             <div class="card-title"><span class="cdot green"></span>Today's Running Instances — Session Estimate</div>
-            <span class="card-hint">On-demand pricing estimate (not from Cost Explorer)</span>
+            <span class="card-hint">Live on-demand pricing via AWS Price List API (region-specific)</span>
           </div>
           <div id="today-sessions-wrap">
             <div class="empty"><div class="empty-ico">📊</div><p class="empty-t">Switch to this tab to compute session estimates</p></div>
@@ -666,7 +829,12 @@
   const CONFIG = { /*__INJECT__*/ };
 </script>
 
+<!-- Cognito SDK — version-pinned CDN with local fallback -->
+<script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js"></script>
+<script>window.AmazonCognitoIdentity || document.write('<script src="js\/vendor\/amazon-cognito-identity.min.js"><\/script>')</script>
+
 <script src="js/auth.js"></script>
+<script src="js/authui.js"></script>
 <script src="js/api.js"></script>
 <script src="js/instances.js"></script>
 <script src="js/audit.js"></script>

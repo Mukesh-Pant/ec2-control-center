@@ -82,9 +82,17 @@ Parameters:
       Route 53 Hosted Zone ID for the custom domain.
       Required when CustomDomain is set. Used to create the A ALIAS record automatically.
 
+  ApexDomain:
+    Type: String
+    Default: ''
+    Description: >
+      Secondary domain that should 301-redirect to CustomDomain (e.g. www.solobil.com → solobil.com).
+      Leave blank to skip redirect. Requires CustomDomain, AcmCertificateArn, and HostedZoneId.
+
 Conditions:
   HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, '']]
   HasCustomDomain: !Not [!Equals [!Ref CustomDomain, '']]
+  HasApexDomain: !Not [!Equals [!Ref ApexDomain, '']]
 
 Resources:
 
@@ -126,10 +134,37 @@ Resources:
         SigningProtocol: sigv4
 
   # =============================================
+  # CLOUDFRONT FUNCTION - Secondary domain redirect
+  # Redirects ApexDomain → CustomDomain (301)
+  # Always created but only associated when ApexDomain is set
+  # =============================================
+  ApexRedirectFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub 'ec2-ctrl-apex-redir-${Environment}'
+      AutoPublish: true
+      FunctionCode: !Sub |
+        function handler(event) {
+          var host = event.request.headers.host.value;
+          if (host === '${ApexDomain}') {
+            return {
+              statusCode: 301,
+              statusDescription: 'Moved Permanently',
+              headers: { location: { value: 'https://${CustomDomain}' + event.request.uri } }
+            };
+          }
+          return event.request;
+        }
+      FunctionConfig:
+        Comment: !Sub 'Redirect ${ApexDomain} to ${CustomDomain}'
+        Runtime: cloudfront-js-2.0
+
+  # =============================================
   # CLOUDFRONT DISTRIBUTION - HTTPS portal
   # =============================================
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
+    DependsOn: ApexRedirectFunction
     Properties:
       DistributionConfig:
         Enabled: true
@@ -153,9 +188,18 @@ Resources:
             QueryString: false
             Cookies:
               Forward: none
+          FunctionAssociations: !If
+            - HasApexDomain
+            - - EventType: viewer-request
+                FunctionARN: !GetAtt ApexRedirectFunction.FunctionARN
+            - !Ref AWS::NoValue
         Aliases: !If
           - HasCustomDomain
-          - [!Ref CustomDomain]
+          - !If
+            - HasApexDomain
+            - - !Ref CustomDomain
+              - !Ref ApexDomain
+            - - !Ref CustomDomain
           - !Ref AWS::NoValue
         ViewerCertificate: !If
           - HasCustomDomain
@@ -219,7 +263,7 @@ Resources:
           RequireSymbols: true
           TemporaryPasswordValidityDays: 7
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: true
+        AllowAdminCreateUserOnly: false
         InviteMessageTemplate:
           EmailMessage: !Sub |
             Hello,
@@ -228,6 +272,13 @@ Resources:
             Your temporary password: {####}
             Please log in and change your password on first login.
           EmailSubject: Your EC2 Control Portal Invitation
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailMessage: !Sub |
+          Welcome to One Cloud Utopia!
+          Your verification code is: {####}
+          Enter this code in the portal to verify your email address.
+        EmailSubject: Verify your One Cloud Utopia account
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Name: verified_email
@@ -269,6 +320,7 @@ Resources:
         IdToken: minutes
         RefreshToken: days
       ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
         - ALLOW_USER_PASSWORD_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
       AllowedOAuthFlows:
@@ -414,11 +466,6 @@ Resources:
                 Effect: Allow
                 Action:
                   - sns:Publish
-                Resource: '*'
-              - Sid: CostExplorer
-                Effect: Allow
-                Action:
-                  - ce:GetCostAndUsage
                 Resource: '*'
               - Sid: PriceListAPI
                 Effect: Allow
@@ -617,12 +664,12 @@ Resources:
       ParentId: !Ref ResourceAudit
       PathPart: daily
 
-  ResourceBilling:
+  ResourcePricing:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref RestApi
       ParentId: !GetAtt RestApi.RootResourceId
-      PathPart: billing
+      PathPart: pricing
 
   # =============================================
   # REST API - CORS Gateway Responses
@@ -828,13 +875,13 @@ Resources:
             method.response.header.Access-Control-Allow-Origin: true
 
   # =============================================
-  # REST API - GET /billing
+  # REST API - GET /pricing
   # =============================================
-  MethodGetBilling:
+  MethodGetPricing:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref RestApi
-      ResourceId: !Ref ResourceBilling
+      ResourceId: !Ref ResourcePricing
       HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref RestApiAuthorizer
@@ -843,11 +890,11 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
 
-  MethodOptionsBilling:
+  MethodOptionsPricing:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref RestApi
-      ResourceId: !Ref ResourceBilling
+      ResourceId: !Ref ResourcePricing
       HttpMethod: OPTIONS
       AuthorizationType: NONE
       Integration:
@@ -884,8 +931,8 @@ Resources:
       - MethodOptionsAudit
       - MethodGetAuditDaily
       - MethodOptionsAuditDaily
-      - MethodGetBilling
-      - MethodOptionsBilling
+      - MethodGetPricing
+      - MethodOptionsPricing
     Properties:
       RestApiId: !Ref RestApi
       Description: !Sub 'Deployment ${LambdaCodeVersion}'
@@ -1062,6 +1109,18 @@ Resources:
       AliasTarget:
         DNSName: !GetAtt CloudFrontDistribution.DomainName
         HostedZoneId: Z2FDTNDATAQYW2  # CloudFront global hosted zone ID (always this value)
+        EvaluateTargetHealth: false
+
+  ApexDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasApexDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref ApexDomain
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
         EvaluateTargetHealth: false
 
 # =============================================

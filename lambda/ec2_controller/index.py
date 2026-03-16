@@ -5,6 +5,7 @@ Routes:
   GET  /accounts      — list registered AWS accounts
   GET  /audit         — audit event log  (query: instanceId, userEmail, limit, lastKey)
   GET  /audit/daily   — per-day running hours + cost (query: instanceId, days)
+  GET  /pricing       — live on-demand hourly rates (query: region, types)
 """
 
 import json
@@ -14,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import response, error_response, get_caller, map_aws_error
 from accounts import get_accounts, get_all_accounts, get_ec2_client, get_all_regions
 import audit
-import billing
+import pricing
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -36,8 +37,8 @@ def lambda_handler(event, context):
         return handle_audit_log(event)
     elif path == '/audit/daily' and method == 'GET':
         return handle_audit_daily(event)
-    elif path == '/billing' and method == 'GET':
-        return handle_billing(event)
+    elif path == '/pricing' and method == 'GET':
+        return handle_pricing(event)
     else:
         return error_response(404, 'Not found')
 
@@ -423,20 +424,12 @@ def handle_audit_daily(event):
     })
 
 
-# ─── Billing: Cost Explorer ───────────────────────────────────────────────────
+# ─── Pricing: Live on-demand rates ───────────────────────────────────────────
 
-def handle_billing(event):
+def handle_pricing(event):
     qs = event.get('queryStringParameters') or {}
-    range_key  = qs.get('range', '7d').strip().lower()
-    account_id = qs.get('accountId', '').strip() or None
-
-    valid_ranges = ('today', 'yesterday', '7d', '14d', '30d')
-    if range_key not in valid_ranges:
-        return error_response(400, f'range must be one of: {", ".join(valid_ranges)}')
-
-    try:
-        data = billing.get_billing(range_key=range_key, filter_account_id=account_id)
-        return response(200, data)
-    except Exception as e:
-        logger.error("Billing handler error: %s", e)
-        return error_response(500, 'Failed to fetch billing data.')
+    region    = qs.get('region', 'ap-south-1').strip()
+    types_str = qs.get('types', '').strip()
+    instance_types = [t.strip() for t in types_str.split(',') if t.strip()] if types_str else []
+    prices = {t: pricing.get_hourly_price(t, region) for t in instance_types}
+    return response(200, {'region': region, 'prices': prices})
