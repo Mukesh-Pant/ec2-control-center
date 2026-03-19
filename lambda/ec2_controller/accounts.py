@@ -8,6 +8,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 ACCOUNTS_TABLE = os.environ.get('ACCOUNTS_TABLE', 'ec2-control-accounts-production')
+USER_ACCOUNTS_TABLE = os.environ.get('USER_ACCOUNTS_TABLE', 'ec2-control-user-accounts-production')
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'production')
 CENTRAL_ACCOUNT_ID = os.environ.get('CENTRAL_ACCOUNT_ID', '')
 
@@ -72,6 +73,39 @@ def get_ec2_client(account_id, region):
         aws_secret_access_key=creds['SecretAccessKey'],
         aws_session_token=creds['SessionToken']
     )
+
+
+def get_user_accounts(email):
+    """Return all account assignments for a user. Each item has accountId, accessLevel, grantedBy, grantedAt."""
+    table = _get_ddb().Table(USER_ACCOUNTS_TABLE)
+    resp = table.query(
+        KeyConditionExpression=boto3.dynamodb.conditions.Key('userEmail').eq(email)
+    )
+    return resp.get('Items', [])
+
+
+def get_allowed_account_ids(email):
+    """Return the set of accountIds this user is assigned to (any access level)."""
+    return {item['accountId'] for item in get_user_accounts(email)}
+
+
+def grant_account(email, account_id, access_level, granted_by):
+    """Grant or update a user's access to an account."""
+    from datetime import datetime, timezone
+    table = _get_ddb().Table(USER_ACCOUNTS_TABLE)
+    table.put_item(Item={
+        'userEmail':   email,
+        'accountId':   account_id,
+        'accessLevel': access_level,
+        'grantedBy':   granted_by,
+        'grantedAt':   datetime.now(timezone.utc).isoformat(),
+    })
+
+
+def revoke_account(email, account_id):
+    """Remove a user's access to a specific account."""
+    table = _get_ddb().Table(USER_ACCOUNTS_TABLE)
+    table.delete_item(Key={'userEmail': email, 'accountId': account_id})
 
 
 def get_all_regions(account_id=None):

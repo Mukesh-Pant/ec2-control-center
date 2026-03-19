@@ -53,6 +53,44 @@
   </div>
 </div>
 
+<!-- ════════ MODAL: Grant Account Access ════════ -->
+<div class="overlay" id="overlay-grant">
+  <div class="modal">
+    <div class="modal-stripe"></div>
+    <div class="modal-hd">
+      <div>
+        <div class="modal-title">Grant Account Access</div>
+        <div class="modal-sub">Assign an AWS account to <strong id="grant-modal-email"></strong></div>
+      </div>
+      <button class="modal-close" onclick="Users.closeGrantModal()">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <input type="hidden" id="grant-user-email"/>
+    <div class="fg">
+      <label class="fl" for="grant-account-select">AWS Account</label>
+      <select class="finp" id="grant-account-select">
+        <option value="">Loading accounts…</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label class="fl" for="grant-level-select">Access Level</label>
+      <select class="finp" id="grant-level-select">
+        <option value="operator">Operator — can start/stop instances</option>
+        <option value="viewer">Viewer — read-only (list &amp; status only)</option>
+      </select>
+    </div>
+    <div class="merr" id="grant-modal-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-out" onclick="Users.closeGrantModal()">Cancel</button>
+      <button class="btn btn-blue" id="btn-confirm-grant" onclick="Users.confirmGrant()">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Grant Access
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ════════ AUTH PAGE ════════ -->
 <div class="auth-page" id="auth-page">
 
@@ -300,6 +338,22 @@
           </button>
         </div>
 
+        <!-- ── PENDING APPROVAL ── -->
+        <div class="auth-card" id="auth-pending" style="display:none">
+          <div class="auth-card-hd">
+            <div class="auth-icon-badge auth-icon-badge--amber">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <h2 class="auth-title">Awaiting approval</h2>
+            <p class="auth-sub">
+              Your account <strong id="pending-email-display"></strong> has been created but has not been assigned a role yet.
+              Please contact an administrator to get access.
+            </p>
+          </div>
+          <div class="auth-pending-hint">Contact: <strong>pantm8877@gmail.com</strong></div>
+          <button class="auth-btn auth-btn-ghost" onclick="Auth.logout()">Sign out</button>
+        </div>
+
       </div><!-- /auth-form-wrap -->
     </div><!-- /auth-form-scroller -->
   </div><!-- /auth-form-side -->
@@ -367,6 +421,10 @@
         <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         Accounts
         <span class="nbadge nbadge-gold" id="n-act" style="display:none">0</span>
+      </a>
+      <a class="nitem" id="nav-users" onclick="App.go('users')" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Users
       </a>
     </nav>
 
@@ -817,6 +875,25 @@
         </div>
       </div><!-- /accounts -->
 
+      <!-- ══════ USERS ══════ -->
+      <div class="pv" id="pv-users">
+        <div class="ph">
+          <div class="ph-l">
+            <h1 class="ph-title">Users</h1>
+            <p class="ph-sub">Manage user roles and per-account access permissions</p>
+          </div>
+          <div class="ph-r">
+            <button class="btn btn-out btn-sm" onclick="Users.load()">
+              <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+        <div id="users-table-wrap">
+          <div class="acct-loading">Loading users…</div>
+        </div>
+      </div><!-- /users -->
+
     </main><!-- /content -->
   </div><!-- /main -->
 </div><!-- /app -->
@@ -841,6 +918,7 @@
 <script src="js/accounts.js"></script>
 <script src="js/billing.js"></script>
 <script src="js/analytics.js"></script>
+<script src="js/users.js"></script>
 <script src="js/app.js"></script>
 
 <script>

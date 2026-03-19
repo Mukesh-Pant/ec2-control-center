@@ -44,6 +44,8 @@ const Auth = (function () {
 
     var payload = idToken.decodePayload();
     sessionStorage.setItem('user_email', payload.email || payload['cognito:username'] || 'User');
+    var groups = payload['cognito:groups'] || [];
+    sessionStorage.setItem('user_groups', JSON.stringify(groups));
   }
 
   // ─── Login (SRP) ───
@@ -205,16 +207,33 @@ const Auth = (function () {
     return false;
   }
 
+  function _getRole() {
+    var groups = JSON.parse(sessionStorage.getItem('user_groups') || '[]');
+    if (groups.indexOf('admins') >= 0)    return 'admin';
+    if (groups.indexOf('operators') >= 0) return 'operator';
+    if (groups.indexOf('viewers') >= 0)   return 'viewer';
+    return 'none';
+  }
+
   function _bootApp(expiry) {
+    var email = sessionStorage.getItem('user_email') || '';
+    var role  = _getRole();
+
+    // New self-signed-up users with no group assigned are blocked until admin approves
+    if (role === 'none') {
+      document.getElementById('auth-page').style.display = '';
+      document.getElementById('app').style.display = 'none';
+      document.body.classList.add('ready');
+      AuthUI.showPendingApproval(email);
+      return;
+    }
+
     document.getElementById('auth-page').style.display = 'none';
     document.getElementById('app').style.display = '';
     document.body.classList.add('ready');
 
-    var email      = sessionStorage.getItem('user_email') || '';
-    var adminEmail = 'pantm8877@gmail.com';
-
-    App.setUserInfo(email);
-    App.setAdmin(email === adminEmail);
+    App.setUserInfo(email, role);
+    App.setAdmin(role === 'admin');
     App.setSessionExpiry(expiry);
     App.init();
   }
@@ -231,6 +250,7 @@ const Auth = (function () {
   function getEmail()     { return sessionStorage.getItem('user_email') || 'User'; }
   function getExpiry()    { return parseInt(sessionStorage.getItem('token_expiry') || '0', 10); }
   function isNearExpiry() { return (getExpiry() - Date.now()) < 600000; }
+  function getRole()      { return _getRole(); }
 
   // ─── Redirect / Logout ───
 
@@ -254,7 +274,7 @@ const Auth = (function () {
     init, login, completeNewPassword,
     signup, confirmSignup, resendConfirmationCode,
     forgotPassword, confirmForgotPassword,
-    refreshTokens, getToken, getEmail, getExpiry, isNearExpiry,
+    refreshTokens, getToken, getEmail, getExpiry, isNearExpiry, getRole,
     redirectToLogin, logout,
     getPendingEmail: function () { return pendingEmail; },
   };

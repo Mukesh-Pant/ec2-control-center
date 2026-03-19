@@ -8,7 +8,7 @@ const AuthUI = (function () {
   // ─── View Switching ───
 
   function showView(view) {
-    var views = ['login', 'signup', 'verify', 'forgot', 'reset', 'newpass'];
+    var views = ['login', 'signup', 'verify', 'forgot', 'reset', 'newpass', 'pending'];
     views.forEach(function (v) {
       var el = document.getElementById('auth-' + v);
       if (el) el.style.display = (v === view) ? '' : 'none';
@@ -24,6 +24,14 @@ const AuthUI = (function () {
       var firstInput = card.querySelector('input');
       if (firstInput) setTimeout(function () { firstInput.focus(); }, 100);
     }
+  }
+
+  // ─── Pending Approval Screen ───
+
+  function showPendingApproval(email) {
+    showView('pending');
+    var emailEl = document.getElementById('pending-email-display');
+    if (emailEl) emailEl.textContent = email || '';
   }
 
   // ─── Login ───
@@ -326,7 +334,8 @@ const AuthUI = (function () {
   // ─── Public API ───
 
   return {
-    showView, login, signup, confirmSignup, resendCode,
+    showView, showPendingApproval,
+    login, signup, confirmSignup, resendCode,
     forgotPassword, confirmResetPassword, completeNewPassword,
     togglePassword, updateStrength,
   };

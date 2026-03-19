@@ -1,19 +1,25 @@
-"""EC2 Controller Lambda — Main handler for HTTP API v2.
+"""EC2 Controller Lambda — Main handler for REST API v1.
 
 Routes:
   POST /ec2           — actions: list, status, start, stop
-  GET  /accounts      — list registered AWS accounts
+  GET  /accounts      — list registered AWS accounts (admin only)
+  POST /accounts      — account mutations (admin only)
   GET  /audit         — audit event log  (query: instanceId, userEmail, limit, lastKey)
   GET  /audit/daily   — per-day running hours + cost (query: instanceId, days)
   GET  /pricing       — live on-demand hourly rates (query: region, types)
+  GET  /users         — list all Cognito users with roles and assignments (admin only)
+  POST /users         — setRole, grantAccount, revokeAccount, getPermissions (admin only)
 """
 
 import json
 import logging
+import os
+import boto3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from utils import response, error_response, get_caller, map_aws_error
-from accounts import get_accounts, get_all_accounts, get_ec2_client, get_all_regions
+from utils import response, error_response, get_caller, map_aws_error, is_admin, require_admin, get_caller_groups
+from accounts import (get_accounts, get_all_accounts, get_ec2_client, get_all_regions,
+                      get_user_accounts, get_allowed_account_ids, grant_account, revoke_account)
 import audit
 import pricing
 
@@ -39,6 +45,10 @@ def lambda_handler(event, context):
         return handle_audit_daily(event)
     elif path == '/pricing' and method == 'GET':
         return handle_pricing(event)
+    elif path == '/users' and method == 'GET':
+        return handle_users_list(event)
+    elif path == '/users' and method == 'POST':
+        return handle_users_mutation(event)
     else:
         return error_response(404, 'Not found')
 
@@ -68,12 +78,26 @@ def handle_ec2(event):
 
     try:
         if action == 'list':
-            return handle_list()
+            return handle_list(event)
 
         if not instance_id:
             return error_response(400, 'instanceId is required.')
         if not region:
             return error_response(400, 'region is required.')
+
+        # ── RBAC: non-admins may only act on their assigned accounts ──
+        if not is_admin(event):
+            groups = get_caller_groups(event)
+            if not groups:
+                return error_response(403, 'Your account is pending approval. Contact an administrator.')
+            allowed_ids = get_allowed_account_ids(caller)
+            if account_id not in allowed_ids:
+                return error_response(403, 'You do not have access to this account.')
+            if action in ('start', 'stop'):
+                assignments = get_user_accounts(caller)
+                assignment = next((a for a in assignments if a['accountId'] == account_id), None)
+                if not assignment or assignment.get('accessLevel') == 'viewer':
+                    return error_response(403, 'Viewer access is read-only. Start/stop not permitted.')
 
         client = get_ec2_client(account_id, region)
 
@@ -92,8 +116,21 @@ def handle_ec2(event):
         return map_aws_error(e, region)
 
 
-def handle_list():
-    accounts = get_accounts()
+def handle_list(event):
+    caller = get_caller(event)
+
+    if is_admin(event):
+        accounts = get_accounts()
+    else:
+        groups = get_caller_groups(event)
+        if not groups:
+            return response(200, {'instances': [], 'pendingApproval': True})
+        allowed_ids = get_allowed_account_ids(caller)
+        if not allowed_ids:
+            return response(200, {'instances': [], 'noAccountsAssigned': True})
+        all_enabled = get_accounts()
+        accounts = [a for a in all_enabled if a['accountId'] in allowed_ids]
+
     all_instances = []
 
     with ThreadPoolExecutor(max_workers=20) as executor:
@@ -215,6 +252,9 @@ def handle_stop(client, instance_id, region, account_id,
 # ─── Accounts: List ──────────────────────────────────────────────────────────
 
 def handle_accounts_list(event):
+    err = require_admin(event)
+    if err:
+        return err
     accounts = get_all_accounts()
     safe = [{
         'accountId':   a['accountId'],
@@ -229,6 +269,9 @@ def handle_accounts_list(event):
 # ─── Accounts: Mutations (M5) ────────────────────────────────────────────────
 
 def handle_accounts_mutation(event):
+    err = require_admin(event)
+    if err:
+        return err
     try:
         body = json.loads(event.get('body') or '{}')
     except json.JSONDecodeError:
@@ -244,8 +287,6 @@ def handle_accounts_mutation(event):
     logger.info("accounts mutation: action=%s accountId=%s caller=%s",
                 action, account_id, caller)
 
-    import boto3
-    import os
     ddb   = boto3.resource('dynamodb')
     table = ddb.Table(os.environ.get('ACCOUNTS_TABLE', 'ec2-control-accounts-production'))
 
@@ -329,7 +370,6 @@ def handle_accounts_mutation(event):
 
 def _test_account_connection(account_id):
     """Test cross-account connectivity by attempting to list instances in one region."""
-    import os
     region = os.environ.get('AWS_REGION', 'ap-south-1')
     try:
         client = get_ec2_client(account_id, region)
@@ -433,3 +473,127 @@ def handle_pricing(event):
     instance_types = [t.strip() for t in types_str.split(',') if t.strip()] if types_str else []
     prices = {t: pricing.get_hourly_price(t, region) for t in instance_types}
     return response(200, {'region': region, 'prices': prices})
+
+
+# ─── Users: List (M8) ────────────────────────────────────────────────────────
+
+def handle_users_list(event):
+    err = require_admin(event)
+    if err:
+        return err
+
+    user_pool_id = os.environ.get('USER_POOL_ID', '')
+    cognito = boto3.client('cognito-idp')
+
+    users = []
+    paginator = cognito.get_paginator('list_users')
+    for page in paginator.paginate(UserPoolId=user_pool_id):
+        for u in page['Users']:
+            email = next(
+                (a['Value'] for a in u.get('Attributes', []) if a['Name'] == 'email'),
+                u['Username']
+            )
+            users.append({
+                'email':     email,
+                'username':  u['Username'],
+                'status':    u['UserStatus'],
+                'enabled':   u['Enabled'],
+                'createdAt': str(u.get('UserCreateDate', '')),
+                'updatedAt': str(u.get('UserLastModifiedDate', '')),
+                'groups':    [],
+                'accountAssignments': [],
+            })
+
+    def _enrich(user):
+        try:
+            resp = cognito.admin_list_groups_for_user(
+                UserPoolId=user_pool_id,
+                Username=user['username']
+            )
+            user['groups'] = [g['GroupName'] for g in resp.get('Groups', [])]
+        except Exception as e:
+            logger.warning("Could not fetch groups for %s: %s", user['username'], e)
+        user['accountAssignments'] = get_user_accounts(user['email'])
+        return user
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        results = list(executor.map(_enrich, users))
+
+    return response(200, {'users': results})
+
+
+# ─── Users: Mutations (M8) ───────────────────────────────────────────────────
+
+def handle_users_mutation(event):
+    err = require_admin(event)
+    if err:
+        return err
+
+    try:
+        body = json.loads(event.get('body') or '{}')
+    except json.JSONDecodeError:
+        return error_response(400, 'Invalid JSON body')
+
+    action = body.get('action', '').strip().lower()
+    email  = body.get('email', '').strip()
+    caller = get_caller(event)
+
+    if not email:
+        return error_response(400, 'email is required.')
+
+    user_pool_id = os.environ.get('USER_POOL_ID', '')
+    cognito = boto3.client('cognito-idp')
+    ALL_GROUPS = ['admins', 'operators', 'viewers']
+    GROUP_MAP  = {'admin': 'admins', 'operator': 'operators', 'viewer': 'viewers'}
+
+    if action == 'setrole':
+        role = body.get('role', '').strip().lower()
+        if role not in ('admin', 'operator', 'viewer', 'none'):
+            return error_response(400, 'role must be admin, operator, viewer, or none.')
+        for g in ALL_GROUPS:
+            try:
+                cognito.admin_remove_user_from_group(
+                    UserPoolId=user_pool_id, Username=email, GroupName=g)
+            except Exception:
+                pass
+        if role != 'none':
+            cognito.admin_add_user_to_group(
+                UserPoolId=user_pool_id,
+                Username=email,
+                GroupName=GROUP_MAP[role]
+            )
+        logger.info("Role %s set for %s by %s", role, email, caller)
+        return response(200, {'message': f'Role set to {role} for {email}.', 'email': email, 'role': role})
+
+    elif action == 'grantaccount':
+        account_id   = body.get('accountId', '').strip()
+        access_level = body.get('accessLevel', 'viewer').strip().lower()
+        if not account_id:
+            return error_response(400, 'accountId is required.')
+        if access_level not in ('operator', 'viewer'):
+            return error_response(400, 'accessLevel must be operator or viewer.')
+        grant_account(email, account_id, access_level, caller)
+        logger.info("Account %s granted (%s) to %s by %s", account_id, access_level, email, caller)
+        return response(200, {'message': 'Access granted.', 'email': email, 'accountId': account_id,
+                               'accessLevel': access_level})
+
+    elif action == 'revokeaccount':
+        account_id = body.get('accountId', '').strip()
+        if not account_id:
+            return error_response(400, 'accountId is required.')
+        revoke_account(email, account_id)
+        logger.info("Account %s revoked from %s by %s", account_id, email, caller)
+        return response(200, {'message': 'Access revoked.', 'email': email, 'accountId': account_id})
+
+    elif action == 'getpermissions':
+        assignments = get_user_accounts(email)
+        try:
+            groups_resp = cognito.admin_list_groups_for_user(
+                UserPoolId=user_pool_id, Username=email)
+            groups = [g['GroupName'] for g in groups_resp.get('Groups', [])]
+        except Exception:
+            groups = []
+        return response(200, {'email': email, 'groups': groups, 'accountAssignments': assignments})
+
+    else:
+        return error_response(400, 'Invalid action. Must be setRole, grantAccount, revokeAccount, or getPermissions.')

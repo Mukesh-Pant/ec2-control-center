@@ -29,6 +29,34 @@ def get_caller(event):
         return 'unknown'
 
 
+def get_caller_groups(event):
+    """Extract cognito:groups list from JWT claims.
+    Handles both JSON-array encoding '["admins"]' and comma-separated 'admins,operators'.
+    Returns [] if no groups claim present."""
+    try:
+        claims = event['requestContext']['authorizer']['claims']
+        raw = claims.get('cognito:groups', '')
+        if not raw:
+            return []
+        if raw.startswith('['):
+            return json.loads(raw)
+        return [g.strip() for g in raw.split(',') if g.strip()]
+    except Exception:
+        return []
+
+
+def is_admin(event):
+    """Return True if the caller is in the 'admins' Cognito group."""
+    return 'admins' in get_caller_groups(event)
+
+
+def require_admin(event):
+    """Return a 403 error response if the caller is not an admin, else None."""
+    if not is_admin(event):
+        return error_response(403, 'Admin access required.')
+    return None
+
+
 def response(status_code, body):
     """Build an HTTP API response with CORS headers."""
     return {

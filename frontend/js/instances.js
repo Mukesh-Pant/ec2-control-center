@@ -24,6 +24,22 @@ const Instances = (function () {
       if (!res.ok) throw new Error(data.message || 'Failed to list instances');
 
       allInstances = data.instances || [];
+
+      if (data.pendingApproval) {
+        var msg = '<div class="empty"><div class="empty-ico">⏳</div><p class="empty-t">Your account is pending approval.<br>Contact an administrator to get access.</p></div>';
+        if (agWrap)  agWrap.innerHTML  = msg;
+        if (dashLst) dashLst.innerHTML = msg;
+        App.updateDashStats([]);
+        return;
+      }
+      if (data.noAccountsAssigned) {
+        var msg2 = '<div class="empty"><div class="empty-ico">🔒</div><p class="empty-t">No accounts have been assigned to you yet.<br>Contact an administrator.</p></div>';
+        if (agWrap)  agWrap.innerHTML  = msg2;
+        if (dashLst) dashLst.innerHTML = msg2;
+        App.updateDashStats([]);
+        return;
+      }
+
       _renderAGroups();
       _renderDashList();
       App.updateDashStats(allInstances);
@@ -116,11 +132,24 @@ const Instances = (function () {
       return;
     }
 
+    var role      = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : 'admin';
+    var canMutate = (role === 'admin' || role === 'operator');
+
     var html = allInstances.map(function (i) {
       var isRunning = i.state === 'running';
       var isStopped = i.state === 'stopped';
       var dotCls = isRunning ? 'running' : (isStopped ? 'stopped' : 'pending');
       var meta = App.esc(i.accountName || i.accountId) + ' · ' + App.esc(i.region) + ' · ' + App.esc(i.instanceType || '—');
+      var ctrlBtns = canMutate
+        ? '<div class="dl-btns">' +
+            '<button class="btn btn-green btn-xs dl-start-btn" onclick="event.stopPropagation();Instances._qCtrl(event,\'start\',\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\',\'' + App.esc(i.region) + '\',\'' + App.esc(i.name||i.instanceId) + '\',\'' + App.esc(i.instanceType||'') + '\')"' + (isStopped ? '' : ' disabled') + '>' +
+              '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Start' +
+            '</button>' +
+            '<button class="btn btn-red btn-xs" onclick="event.stopPropagation();Instances._qCtrl(event,\'stop\',\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\',\'' + App.esc(i.region) + '\',\'' + App.esc(i.name||i.instanceId) + '\',\'' + App.esc(i.instanceType||'') + '\')"' + (isRunning ? '' : ' disabled') + '>' +
+              '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Stop' +
+            '</button>' +
+          '</div>'
+        : '<div class="dl-btns"><span class="usr-badge usr-badge-viewers" style="font-size:10px">View only</span></div>';
       return (
         '<div class="dl-row" onclick="App.go(\'instances\'); Instances.openDP(\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\')">' +
           '<span class="dl-dot ' + dotCls + '"></span>' +
@@ -130,14 +159,7 @@ const Instances = (function () {
           '</div>' +
           '<span class="dl-sep">—</span>' +
           _stateBadge(i.state) +
-          '<div class="dl-btns">' +
-            '<button class="btn btn-green btn-xs dl-start-btn" onclick="event.stopPropagation();Instances._qCtrl(event,\'start\',\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\',\'' + App.esc(i.region) + '\',\'' + App.esc(i.name||i.instanceId) + '\',\'' + App.esc(i.instanceType||'') + '\')"' + (isStopped ? '' : ' disabled') + '>' +
-              '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Start' +
-            '</button>' +
-            '<button class="btn btn-red btn-xs" onclick="event.stopPropagation();Instances._qCtrl(event,\'stop\',\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\',\'' + App.esc(i.region) + '\',\'' + App.esc(i.name||i.instanceId) + '\',\'' + App.esc(i.instanceType||'') + '\')"' + (isRunning ? '' : ' disabled') + '>' +
-              '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Stop' +
-            '</button>' +
-          '</div>' +
+          ctrlBtns +
         '</div>'
       );
     }).join('');
@@ -180,6 +202,9 @@ const Instances = (function () {
     // Close any previously open panel
     closeDP();
 
+    var role      = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : 'admin';
+    var canMutate = (role === 'admin' || role === 'operator');
+
     selInst = inst;
 
     var sourceRow = document.getElementById('irow-' + instanceId);
@@ -207,21 +232,31 @@ const Instances = (function () {
             '<div class="dp-m"><div class="dp-ml">Platform</div><div class="dp-mv violet" id="dp-plat">—</div></div>' +
             '<div class="dp-m"><div class="dp-ml">Public IP</div><div class="dp-mv mono-sm" id="dp-pub">—</div></div>' +
           '</div>' +
-          '<div class="dp-ctrl">' +
-            '<span class="dp-ctrl-lbl">Controls</span>' +
-            '<button class="btn btn-green btn-sm" id="dp-start" onclick="Instances.ctrlInst(\'start\')" disabled>' +
-              '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg><span id="dp-sl">Start</span>' +
-            '</button>' +
-            '<button class="btn btn-red btn-sm" id="dp-stop" onclick="Instances.ctrlInst(\'stop\')" disabled>' +
-              '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span id="dp-stl">Stop</span>' +
-            '</button>' +
-            '<button class="btn btn-out btn-sm" onclick="Instances.refreshDP()">' +
-              '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Refresh' +
-            '</button>' +
-            '<button class="btn btn-ghost btn-sm ml-auto" onclick="Instances.closeDP()">' +
-              '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Close' +
-            '</button>' +
-          '</div>' +
+          (canMutate
+            ? '<div class="dp-ctrl">' +
+                '<span class="dp-ctrl-lbl">Controls</span>' +
+                '<button class="btn btn-green btn-sm" id="dp-start" onclick="Instances.ctrlInst(\'start\')" disabled>' +
+                  '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg><span id="dp-sl">Start</span>' +
+                '</button>' +
+                '<button class="btn btn-red btn-sm" id="dp-stop" onclick="Instances.ctrlInst(\'stop\')" disabled>' +
+                  '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span id="dp-stl">Stop</span>' +
+                '</button>' +
+                '<button class="btn btn-out btn-sm" onclick="Instances.refreshDP()">' +
+                  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Refresh' +
+                '</button>' +
+                '<button class="btn btn-ghost btn-sm ml-auto" onclick="Instances.closeDP()">' +
+                  '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Close' +
+                '</button>' +
+              '</div>'
+            : '<div class="dp-ctrl">' +
+                '<span class="dp-ctrl-lbl" style="color:var(--ink3)">View only — no start/stop access</span>' +
+                '<button class="btn btn-out btn-sm" onclick="Instances.refreshDP()">' +
+                  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Refresh' +
+                '</button>' +
+                '<button class="btn btn-ghost btn-sm ml-auto" onclick="Instances.closeDP()">' +
+                  '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Close' +
+                '</button>' +
+              '</div>') +
         '</div>' +
       '</td>';
 

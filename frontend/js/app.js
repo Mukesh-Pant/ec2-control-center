@@ -17,6 +17,7 @@ const App = (function () {
     analytics: 'Analytics',
     audit:     'Audit Log',
     accounts:  'Accounts',
+    users:     'Users',
   };
 
   // ─── Navigation ────────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ const App = (function () {
     if (page === 'analytics') Analytics.onTabActivated();
     if (page === 'billing')   Billing.onTabActivated();
     if (page === 'accounts')  Accounts.onTabActivated();
+    if (page === 'users')     Users.onTabActivated();
   }
 
   // ─── Sidebar ───────────────────────────────────────────────────────────────
@@ -199,19 +201,33 @@ const App = (function () {
 
   function setAdmin(flag) {
     isAdmin = flag;
-    var admSec = document.getElementById('adm-sec');
-    var navAcc = document.getElementById('nav-accounts');
-    var badge  = document.getElementById('rbac-badge');
+    var admSec  = document.getElementById('adm-sec');
+    var navAcc  = document.getElementById('nav-accounts');
+    var navUsr  = document.getElementById('nav-users');
     if (admSec) admSec.style.display = flag ? '' : 'none';
     if (navAcc) navAcc.style.display = flag ? '' : 'none';
-    if (badge)  badge.style.display  = flag ? '' : 'none';
+    if (navUsr) navUsr.style.display = flag ? '' : 'none';
   }
 
-  function setUserInfo(email) {
+  function setUserInfo(email, role) {
     var name = email ? email.split('@')[0] : '?';
     setText('sb-name', email || 'Unknown');
     var av = document.getElementById('sb-av');
     if (av) av.textContent = (name[0] || '?').toUpperCase();
+
+    // Role badge in sidebar
+    var badge    = document.getElementById('rbac-badge');
+    var badgeTxt = document.getElementById('rbac-role-txt');
+    var LABELS   = { admin: 'ADMIN', operator: 'OPERATOR', viewer: 'VIEWER' };
+    if (badge && badgeTxt) {
+      if (role && LABELS[role]) {
+        badgeTxt.textContent = LABELS[role];
+        badge.className = 'rbac-badge rbac-' + role;
+        badge.style.display = '';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
   }
 
   // ─── Init ──────────────────────────────────────────────────────────────────
@@ -220,6 +236,7 @@ const App = (function () {
     Audit.init();
     Billing.init();
     Accounts.init();
+    Users.init();
     startClock();
     go('dashboard');
     log('Portal ready', 'sys');

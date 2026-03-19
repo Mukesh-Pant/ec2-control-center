@@ -24,6 +24,7 @@ Fully serverless, zero infrastructure to manage.
 | M5 | Multi-account — Add/enable/disable/test/remove accounts from portal UI | ✅ LIVE |
 | M6 | SaaS deployment — custom domain, ACM cert, Route 53 A ALIAS | ✅ LIVE |
 | M7 | Custom auth page + self-signup + domain migration to solobil.com | ✅ LIVE |
+| M8 | RBAC — Cognito groups, user-account assignments, /users admin panel | ✅ LIVE |
 
 **API:** REST API v1 (migrated from HTTP API v2) with COGNITO_USER_POOLS authorizer.
 
@@ -50,7 +51,7 @@ Fully serverless, zero infrastructure to manage.
 - **CloudFront Distribution:** `E1XDECJP6ONGSM`
 - **AWS CLI Profile:** `default`
 
-**Shared table names:** `ec2-control-accounts-production`, `ec2-control-audit-production`
+**Shared table names:** `ec2-control-accounts-production`, `ec2-control-audit-production`, `ec2-control-user-accounts-production`
 
 ---
 
@@ -63,16 +64,16 @@ EC2-control-center/
 ├── example-deploy-config.env   ← Template for deploy-config.env
 ├── oculogo.png                 ← One Cloud Utopia logo (source)
 ├── cloudformation/
-│   ├── central-stack.yaml      ← All AWS resources (M1-M7 + custom domain + auth)
+│   ├── central-stack.yaml      ← All AWS resources (M1-M8 + custom domain + auth + RBAC)
 │   ├── acm-cert-stack.yaml     ← ACM cert for custom domain (us-east-1, deploy ONCE)
 │   └── member-role-stack.yaml  ← Cross-account IAM role (deploy in each member account)
 ├── lambda/
 │   ├── ec2_controller/
-│   │   ├── index.py            ← Main handler: /ec2, /accounts, /audit, /pricing routes
-│   │   ├── accounts.py         ← Account registry (DynamoDB + STS AssumeRole)
+│   │   ├── index.py            ← Main handler: /ec2, /accounts, /audit, /pricing, /users routes
+│   │   ├── accounts.py         ← Account registry + user-account assignment CRUD
 │   │   ├── audit.py            ← Audit log read/write
 │   │   ├── pricing.py          ← EC2 on-demand pricing lookup
-│   │   └── utils.py            ← CORS helpers, JWT claims, error mapping
+│   │   └── utils.py            ← CORS helpers, JWT claims, error mapping, RBAC helpers
 │   ├── config_injector/
 │   │   └── index.py            ← Custom resource: injects CONFIG, uploads frontend, invalidates CDN
 │   └── idle_checker/
@@ -90,7 +91,8 @@ EC2-control-center/
         ├── billing.js          ← Billing dashboard
         ├── analytics.js        ← Usage analytics
         ├── accounts.js         ← Multi-account management
-        ├── app.js              ← App init, tabs, toast, session timer
+        ├── users.js            ← User management: roles, account grants (admin only)
+        ├── app.js              ← App init, tabs, toast, session timer, role badge
         └── vendor/
             └── amazon-cognito-identity.min.js  ← Cognito SDK v6.3.12 (CDN fallback)
 ```
@@ -113,7 +115,8 @@ Browser → CloudFront → S3 (private — frontend files)
        Lambda: ec2-controller (Python 3.12, 256MB, 120s)
          ├── STS AssumeRole → member accounts
          ├── ThreadPoolExecutor → parallel multi-account/region queries
-         ├── DynamoDB → account registry + audit logs
+         ├── DynamoDB → account registry + audit logs + user-account assignments
+         ├── Cognito IdP → group management (admins/operators/viewers)
          └── Cost Explorer → billing data
 
 Domain: solobil.com (primary) → CloudFront
@@ -149,10 +152,12 @@ for SRP (Secure Remote Password) authentication. The password never leaves the b
 - `redirectToLogin()` — Clear session + reload (called by `api.js` on 401)
 - `logout()` — SDK signOut + sessionStorage clear + reload
 - `_bootApp(expiry)` — Hides auth page, shows app, calls `App.setUserInfo/setAdmin/setSessionExpiry/App.init`
-- Admin check: `email === 'pantm8877@gmail.com'` in `_bootApp()`
+- Admin check: reads `cognito:groups` from JWT payload (stored in `user_groups` sessionStorage key); falls back to role `none` → shows pending-approval screen via `AuthUI.showPendingApproval()`
+- `getRole()` — public getter: returns `'admin'`/`'operator'`/`'viewer'`/`'none'` from sessionStorage
 
 **`authui.js`** — Auth page UI controller (IIFE → `AuthUI` global)
-- `showView(view)` — Toggles between 6 form states: `login`, `signup`, `verify`, `forgot`, `reset`, `newpass`
+- `showView(view)` — Toggles between 7 form states: `login`, `signup`, `verify`, `forgot`, `reset`, `newpass`, `pending`
+- `showPendingApproval(email)` — Shows pending-approval card for users with no Cognito group
 - Form handlers: `login()`, `signup()`, `confirmSignup()`, `resendCode()`, `forgotPassword()`, `confirmResetPassword()`, `completeNewPassword()`
 - `togglePassword(inputId, btn)` — Show/hide with SVG icon swap
 - `updateStrength(password)` — 4-bar strength indicator (red/amber/green)
@@ -167,6 +172,7 @@ access_token   — Cognito access token
 refresh_token  — For session refresh
 token_expiry   — Unix ms timestamp of id_token expiry
 user_email     — Display name extracted from JWT payload
+user_groups    — JSON array of Cognito groups e.g. ["admins"]
 ```
 
 ### api.js Contract (must be preserved)
@@ -174,6 +180,7 @@ user_email     — Display name extracted from JWT payload
 Auth.isNearExpiry()    // returns boolean — true if < 10 min to expiry
 Auth.refreshTokens()   // returns Promise<boolean> — true on success, false on failure
 Auth.getToken()        // returns string — JWT id_token
+Auth.getRole()         // returns string — 'admin'|'operator'|'viewer'|'none'
 Auth.redirectToLogin() // clears session, reloads page
 ```
 
@@ -189,6 +196,45 @@ Auth.redirectToLogin() // clears session, reloads page
 - Animated SVG network topology background on brand panel
 - Responsive: stacks vertically at 768px, compact at 480px
 - All styles in `css/styles.css` (classes prefixed `.auth-`)
+
+---
+
+## RBAC System (M8)
+
+### Cognito Groups
+- `admins` — full access: all accounts, start/stop, user management, account management
+- `operators` — assigned accounts only: can start/stop instances
+- `viewers` — assigned accounts only: read-only (no start/stop)
+- No group — blocked at login with pending-approval screen
+
+### User-Account Assignments (DynamoDB)
+- Table: `ec2-control-user-accounts-production`
+- PK: `userEmail` | SK: `accountId` | GSI: `account-index` (PK: accountId)
+- Fields: `accessLevel` (`operator`|`viewer`), `grantedBy`, `grantedAt`
+- Admins bypass the table — they see all enabled accounts
+
+### Lambda RBAC Helpers (utils.py)
+- `get_caller_groups(event)` — extracts `cognito:groups` from JWT claims; handles both JSON-array `["admins"]` and comma-separated `admins,operators` encoding (REST API v1 authorizer quirk)
+- `is_admin(event)` — returns True if caller is in admins group
+- `require_admin(event)` — returns 403 error response if not admin; used as guard at top of admin-only handlers
+
+### /users API Endpoint
+- `GET /users` — admin only; lists all Cognito users with groups + account assignments (enriched via ThreadPoolExecutor)
+- `POST /users` — admin only; actions: `setRole`, `grantAccount`, `revokeAccount`, `getPermissions`
+- **CRITICAL BUG FIX:** `handle_users_mutation` calls `.lower()` on `action`, so comparisons must use lowercase (`'setrole'`, `'grantaccount'`, `'revokeaccount'`, `'getpermissions'`) — NOT camelCase
+
+### Frontend Users Module (users.js)
+- `Users.load()` — fetches GET /users + GET /accounts, renders management table
+- `Users.applyRole(email)` — POST /users `{action:'setRole', email, role}`
+- `Users.openGrantModal(email)` / `confirmGrant()` — grant account access overlay
+- `Users.revokeAccount(email, accountId)` — revoke with confirm dialog
+- `Users.onTabActivated()` — lazy-loads on first visit
+- Role badges: `usr-badge-admins` (blue), `usr-badge-operators` (green), `usr-badge-viewers` (gray), `usr-badge-none` (red)
+
+### Instance Controls RBAC (instances.js)
+- Viewers see "View only" badge instead of Start/Stop buttons (checked via `Auth.getRole()`)
+- Pending-approval users see empty state with message instead of instance list
+- No-accounts-assigned users (have a group but no grants) see separate empty state
 
 ---
 
@@ -219,6 +265,8 @@ Auth.redirectToLogin() // clears session, reloads page
 | GET | /audit | `?instanceId&userEmail&limit&lastKey` |
 | GET | /audit/daily | `?instanceId&days` — cost estimate |
 | GET | /pricing | `?region&types` — live on-demand hourly rates |
+| GET | /users | All Cognito users with groups + account assignments (admin only) |
+| POST | /users | `action: setRole/grantAccount/revokeAccount/getPermissions` (admin only) |
 
 ---
 
@@ -229,15 +277,17 @@ Auth.redirectToLogin() // clears session, reloads page
 - JWT caller email: `event['requestContext']['authorizer']['claims'].get('email')`
 - CORS headers required in EVERY response (REST API v1 doesn't auto-add them)
 - `get_accounts()` → enabled only (EC2 listing); `get_all_accounts()` → all (admin panel)
+- `action` strings from POST body: always call `.strip().lower()` before comparing → use lowercase in `if/elif` checks (e.g. `'setrole'` not `'setRole'`)
 
 ### Frontend (JavaScript)
 - All modules: IIFE pattern — `const ModuleName = (function() { ... return {...}; })()`
-- **Script load order:** `cognito-sdk (CDN+fallback)` → `auth` → `authui` → `api` → `instances` → `audit` → `billing` → `analytics` → `accounts` → `app`
+- **Script load order:** `cognito-sdk (CDN+fallback)` → `auth` → `authui` → `api` → `instances` → `audit` → `billing` → `analytics` → `accounts` → `users` → `app`
 - `const CONFIG = { /*__INJECT__*/ };` in index.html — replaced at deploy by config_injector
 - Auth uses `sessionStorage`; `isNearExpiry()` = < 10 min buffer (handles Cognito clock skew)
 - `Auth.init()` is the entry point — decides whether to show login page or boot dashboard
-- Dashboard pages: `dashboard`, `instances`, `billing`, `analytics`, `audit`, `accounts`
-- Admin-only pages: `accounts` tab visible only when `App.setAdmin(true)`
+- Dashboard pages: `dashboard`, `instances`, `billing`, `analytics`, `audit`, `accounts`, `users`
+- Admin-only pages: `accounts` and `users` tabs visible only when `App.setAdmin(true)`
+- Role badge shown in sidebar: `rbac-admin` (blue) / `rbac-operator` (green) / `rbac-viewer` (gray)
 
 ### CloudFormation
 - `AuthorizationType: COGNITO_USER_POOLS` + `AuthorizerId: !Ref RestApiAuthorizer`

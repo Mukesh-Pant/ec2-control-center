@@ -355,6 +355,40 @@ Resources:
           Value: 'true'
 
   # =============================================
+  # COGNITO GROUPS - Role-based access control (M8)
+  # =============================================
+  CognitoGroupAdmins:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admins
+      UserPoolId: !Ref CognitoUserPool
+      Description: Full access — manage accounts, users, start/stop all instances
+
+  CognitoGroupOperators:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: operators
+      UserPoolId: !Ref CognitoUserPool
+      Description: Start/stop instances on assigned accounts only
+
+  CognitoGroupViewers:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: viewers
+      UserPoolId: !Ref CognitoUserPool
+      Description: Read-only access — list/status on assigned accounts only
+
+  AdminGroupMembership:
+    Type: AWS::Cognito::UserPoolUserToGroupAttachment
+    DependsOn:
+      - CognitoGroupAdmins
+      - CognitoFirstUser
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      GroupName: admins
+      Username: !Ref AdminEmail
+
+  # =============================================
   # DYNAMODB - Account Registry
   # =============================================
   AccountRegistryTable:
@@ -409,6 +443,41 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
+  # DYNAMODB - User Account Assignments (M8)
+  # PK: userEmail  SK: accountId
+  # GSI account-index: PK: accountId  SK: userEmail
+  # =============================================
+  UserAccountsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ec2-control-user-accounts-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userEmail
+          AttributeType: S
+        - AttributeName: accountId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userEmail
+          KeyType: HASH
+        - AttributeName: accountId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: account-index
+          KeySchema:
+            - AttributeName: accountId
+              KeyType: HASH
+            - AttributeName: userEmail
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
       Tags:
         - Key: Project
           Value: EC2Control
@@ -472,6 +541,16 @@ Resources:
                 Action:
                   - pricing:GetProducts
                 Resource: '*'
+              - Sid: CognitoUserMgmt
+                Effect: Allow
+                Action:
+                  - cognito-idp:ListUsers
+                  - cognito-idp:AdminGetUser
+                  - cognito-idp:AdminListGroupsForUser
+                  - cognito-idp:AdminAddUserToGroup
+                  - cognito-idp:AdminRemoveUserFromGroup
+                  - cognito-idp:ListUsersInGroup
+                Resource: !GetAtt CognitoUserPool.Arn
               - Sid: CloudWatchLogs
                 Effect: Allow
                 Action:
@@ -503,6 +582,8 @@ Resources:
         Variables:
           ACCOUNTS_TABLE: !Ref AccountRegistryTable
           AUDIT_TABLE: !Ref AuditLogTable
+          USER_ACCOUNTS_TABLE: !Ref UserAccountsTable
+          USER_POOL_ID: !Ref CognitoUserPool
           ENVIRONMENT: !Ref Environment
           ALLOWED_ORIGIN: '*'
           CENTRAL_ACCOUNT_ID: !Ref 'AWS::AccountId'
@@ -670,6 +751,13 @@ Resources:
       RestApiId: !Ref RestApi
       ParentId: !GetAtt RestApi.RootResourceId
       PathPart: pricing
+
+  ResourceUsers:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: users
 
   # =============================================
   # REST API - CORS Gateway Responses
@@ -917,6 +1005,61 @@ Resources:
             method.response.header.Access-Control-Allow-Origin: true
 
   # =============================================
+  # REST API - GET /users + POST /users  (M8)
+  # =============================================
+  MethodGetUsers:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceUsers
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodPostUsers:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceUsers
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsUsers:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceUsers
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
   # REST API - Deployment + Stage
   # =============================================
   RestApiDeployment:
@@ -933,6 +1076,9 @@ Resources:
       - MethodOptionsAuditDaily
       - MethodGetPricing
       - MethodOptionsPricing
+      - MethodGetUsers
+      - MethodPostUsers
+      - MethodOptionsUsers
     Properties:
       RestApiId: !Ref RestApi
       Description: !Sub 'Deployment ${LambdaCodeVersion}'
@@ -1170,6 +1316,10 @@ Outputs:
   AuditLogTable:
     Description: DynamoDB audit log table (90-day TTL). M2.
     Value: !Ref AuditLogTable
+
+  UserAccountsTable:
+    Description: DynamoDB user-account assignments table (RBAC). M8.
+    Value: !Ref UserAccountsTable
 
   NotificationTopicArn:
     Description: SNS topic ARN for idle auto-stop alerts. M4.

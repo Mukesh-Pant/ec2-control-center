@@ -1891,3 +1891,115 @@ code {
   .auth-title { font-size: 20px; }
   .auth-form-scroller { min-height: calc(100svh - 72px); }
 }
+
+/* ════════ USERS PAGE (M8) ════════ */
+
+/* Role badges */
+.usr-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.usr-badge-admins    { background: rgba(36,96,224,.15); color: var(--blue); }
+.usr-badge-operators { background: rgba(5,150,105,.15);  color: var(--green); }
+.usr-badge-viewers   { background: rgba(107,114,128,.15); color: var(--ink3); }
+.usr-badge-none      { background: rgba(220,38,38,.12);  color: #dc2626; }
+
+/* Role badge in sidebar */
+.rbac-badge.rbac-admin    { background: rgba(36,96,224,.12); }
+.rbac-badge.rbac-operator { background: rgba(5,150,105,.12); }
+.rbac-badge.rbac-operator svg { stroke: var(--green); }
+.rbac-badge.rbac-operator span { color: #34d399; }
+.rbac-badge.rbac-viewer   { background: rgba(107,114,128,.12); }
+.rbac-badge.rbac-viewer svg { stroke: var(--ink3); }
+.rbac-badge.rbac-viewer span { color: var(--ink3); }
+
+/* Users table */
+.usr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.usr-table thead tr { border-bottom: 1px solid var(--bdr); }
+.usr-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink3);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  padding: 8px 12px;
+}
+.usr-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; }
+.usr-row:hover { background: rgba(255,255,255,.03); }
+.usr-disabled { opacity: .5; }
+.usr-email { font-weight: 500; color: var(--ink1); font-size: 13px; }
+.usr-status-ok  { font-size: 11px; color: var(--green); font-weight: 600; }
+.usr-status-dis { font-size: 11px; color: #dc2626; font-weight: 600; }
+.usr-accounts-cell { font-size: 12px; }
+
+/* Account assignment chips */
+.usr-assign {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--ink2);
+  margin: 2px;
+  font-family: var(--mono);
+}
+.usr-assign-lvl {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink3);
+  text-transform: uppercase;
+}
+
+/* User action buttons */
+.usr-btn {
+  background: rgba(255,255,255,.06);
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  color: var(--ink2);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 8px;
+  transition: background .15s;
+}
+.usr-btn:hover { background: rgba(255,255,255,.12); }
+.usr-btn-sm { padding: 2px 5px; font-size: 11px; }
+.usr-btn-grant { color: var(--blue); border-color: rgba(36,96,224,.3); }
+.usr-btn-grant:hover { background: rgba(36,96,224,.1); }
+.usr-btn-apply { background: var(--blue); border-color: var(--blue); color: #fff; }
+.usr-btn-apply:hover { background: var(--blue2); }
+
+.usr-role-select {
+  background: var(--bg2);
+  border: 1px solid var(--bdr);
+  border-radius: 5px;
+  color: var(--ink1);
+  font-size: 12px;
+  padding: 4px 8px;
+  margin-right: 6px;
+  cursor: pointer;
+}
+
+.usr-actions { white-space: nowrap; }
+
+/* Pending approval card */
+.auth-icon-badge--amber { background: rgba(217,119,6,.15); }
+.auth-icon-badge--amber svg { stroke: #d97706; }
+.auth-pending-hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink3);
+  margin: 4px 0 16px;
+}

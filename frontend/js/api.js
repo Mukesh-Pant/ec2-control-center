@@ -109,6 +109,20 @@ const API = (function () {
     return call('/pricing?' + qs, 'GET', null);
   }
 
+  /**
+   * GET /users — list all users with roles and account assignments (admin only)
+   */
+  async function getUsers() {
+    return call('/users', 'GET', null);
+  }
+
+  /**
+   * POST /users — setRole, grantAccount, revokeAccount, getPermissions (admin only)
+   */
+  async function postUsers(body) {
+    return call('/users', 'POST', body);
+  }
+
   return {
     call,
     ec2Action,
@@ -117,6 +131,8 @@ const API = (function () {
     getAuditLog,
     getAuditDaily,
     getPricing,
+    getUsers,
+    postUsers,
   };
 
 })();
