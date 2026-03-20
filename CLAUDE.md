@@ -25,6 +25,7 @@ Fully serverless, zero infrastructure to manage.
 | M6 | SaaS deployment — custom domain, ACM cert, Route 53 A ALIAS | ✅ LIVE |
 | M7 | Custom auth page + self-signup + domain migration to solobil.com | ✅ LIVE |
 | M8 | RBAC — Cognito groups, user-account assignments, /users admin panel | ✅ LIVE |
+| M9 | Backup — AWS Backup service, on-demand + scheduled backups, restore, /backup endpoint | ✅ LIVE |
 
 **API:** REST API v1 (migrated from HTTP API v2) with COGNITO_USER_POOLS authorizer.
 
@@ -64,14 +65,15 @@ EC2-control-center/
 ├── example-deploy-config.env   ← Template for deploy-config.env
 ├── oculogo.png                 ← One Cloud Utopia logo (source)
 ├── cloudformation/
-│   ├── central-stack.yaml      ← All AWS resources (M1-M8 + custom domain + auth + RBAC)
+│   ├── central-stack.yaml      ← All AWS resources (M1-M9 + custom domain + auth + RBAC + Backup)
 │   ├── acm-cert-stack.yaml     ← ACM cert for custom domain (us-east-1, deploy ONCE)
 │   └── member-role-stack.yaml  ← Cross-account IAM role (deploy in each member account)
 ├── lambda/
 │   ├── ec2_controller/
-│   │   ├── index.py            ← Main handler: /ec2, /accounts, /audit, /pricing, /users routes
+│   │   ├── index.py            ← Main handler: /ec2, /accounts, /audit, /pricing, /users, /backup routes
 │   │   ├── accounts.py         ← Account registry + user-account assignment CRUD
 │   │   ├── audit.py            ← Audit log read/write
+│   │   ├── backup.py           ← AWS Backup: on-demand, schedule, restore, delete (M9)
 │   │   ├── pricing.py          ← EC2 on-demand pricing lookup
 │   │   └── utils.py            ← CORS helpers, JWT claims, error mapping, RBAC helpers
 │   ├── config_injector/
@@ -92,6 +94,7 @@ EC2-control-center/
         ├── analytics.js        ← Usage analytics
         ├── accounts.js         ← Multi-account management
         ├── users.js            ← User management: roles, account grants (admin only)
+        ├── backup.js           ← Backup dashboard: on-demand backup, schedules, restore (M9)
         ├── app.js              ← App init, tabs, toast, session timer, role badge
         └── vendor/
             └── amazon-cognito-identity.min.js  ← Cognito SDK v6.3.12 (CDN fallback)
@@ -117,7 +120,8 @@ Browser → CloudFront → S3 (private — frontend files)
          ├── ThreadPoolExecutor → parallel multi-account/region queries
          ├── DynamoDB → account registry + audit logs + user-account assignments
          ├── Cognito IdP → group management (admins/operators/viewers)
-         └── Cost Explorer → billing data
+         ├── Cost Explorer → billing data
+         └── AWS Backup → ec2-control-vault-production (on-demand, scheduled, restore)
 
 Domain: solobil.com (primary) → CloudFront
         www.solobil.com → CloudFront Function → 301 → solobil.com
@@ -238,6 +242,48 @@ Auth.redirectToLogin() // clears session, reloads page
 
 ---
 
+## Backup System (M9)
+
+### Infrastructure (central-stack.yaml)
+- **Backup Vault:** `ec2-control-vault-production` (ap-south-1) — all recovery points stored here
+- **Backup Service Role:** `ec2-control-backup-role-production` (IAM role assumed by AWS Backup)
+  - Managed policies: `AWSBackupServiceRolePolicyForBackup` + `AWSBackupServiceRolePolicyForRestores`
+- **Lambda env vars:** `BACKUP_ROLE_ARN` + `BACKUP_VAULT_NAME`
+- **API Gateway:** `/backup` resource — GET (list), POST (mutations), OPTIONS (CORS)
+- **Vault access policy:** allows member account `196750375951:root` to call `backup:CopyIntoBackupVault`
+- **Known limitation:** Adding a new member account requires manually updating vault policy in `central-stack.yaml` and redeploying
+
+### Lambda (backup.py)
+- `handle_backup_list(event)` — GET /backup: lists recovery points + backup plans for an instance
+- `handle_backup_mutation(event)` — POST /backup: routes on `action` field (`.strip().lower()`)
+- Actions: `createbackup`, `createschedule`, `updateschedule`, `deleteschedule`, `listschedules`, `restore`, `deleterecovery`
+- **Cross-account:** Lambda assumes member role via STS, creates `boto3.client('backup', ...)` with those creds
+- **Central account** (`976792586566`): uses default Lambda credentials (no STS)
+- **Restore behaviour:** `start_restore_job()` always creates a NEW EC2 instance; `replace` mode also stops the original instance (does NOT terminate — user must do that manually)
+- **Restore metadata:** extracts `subnetId` + `securityGroupIds` from `describe_instances()`; includes `iamInstanceProfileArn` only if present (omit entirely if absent — AWS Backup rejects null/empty)
+- **Schedule naming:** `ec2ctrl-{instanceId}-{preset}` (e.g. `ec2ctrl-i-0abc123-daily`)
+- **RBAC:** admins see all; operators/viewers scoped to allowed accountIds; viewers cannot trigger mutations
+
+### Frontend (backup.js)
+- IIFE module → `Backup` global
+- Public API: `init()`, `onTabActivated()`, `load(instanceId)`, `backupNow()`, `openRestoreModal(arn)`, `confirmRestore()`, `openScheduleForm(planId)`, `saveSchedule()`, `deleteSchedule(planId)`, `deleteRecovery(arn)`, `onTimeChange()`
+- **Inline expand pattern** — restore form expands inside Recovery Points panel; schedule form expands inside Backup Schedules panel (no floating modals)
+- **Active row highlighting** — `data-arn` on `.bk-rp-row` + `.bk-rp-row--active` CSS class
+- **Cron time picker** — `#bk-sched-hour` (00–23) + `#bk-sched-minute` (00/15/30/45); `_buildCron(preset, h, m)` generates AWS EventBridge cron syntax
+- **Hidden cron input** — `#bk-sched-cron` (hidden, always holds current cron); `#bk-sched-cron-display` (visible text input, only shown for Custom preset, syncs to hidden)
+- **Cron presets:** Daily → `cron(m h * * ? *)`, Weekly → `cron(m h ? * SUN *)`, Monthly → `cron(m h 1 * ? *)`
+- `_friendlyCron(cron)` — renders e.g. "Daily at 14:30 UTC" in schedule table
+- **Critical:** `confirmRestore()` captures `restoreArn` into `arnToRestore` BEFORE calling `_closeRestoreInline()` which nulls `restoreArn`
+
+### api.js additions
+- `getBackups(instanceId, accountId, region)` — GET /backup
+- `postBackup(body)` — POST /backup
+
+### Adding a New Member Account (Backup)
+After onboarding via Accounts tab, also add account ARN to vault `AccessPolicy` in `central-stack.yaml` and redeploy.
+
+---
+
 ## Key Architecture Decisions
 
 | Decision | Choice | Why |
@@ -267,6 +313,8 @@ Auth.redirectToLogin() // clears session, reloads page
 | GET | /pricing | `?region&types` — live on-demand hourly rates |
 | GET | /users | All Cognito users with groups + account assignments (admin only) |
 | POST | /users | `action: setRole/grantAccount/revokeAccount/getPermissions` (admin only) |
+| GET | /backup | `?instanceId&accountId&region` — recovery points + backup plans |
+| POST | /backup | `action: createbackup/createschedule/updateschedule/deleteschedule/listschedules/restore/deleterecovery` |
 
 ---
 
@@ -281,11 +329,11 @@ Auth.redirectToLogin() // clears session, reloads page
 
 ### Frontend (JavaScript)
 - All modules: IIFE pattern — `const ModuleName = (function() { ... return {...}; })()`
-- **Script load order:** `cognito-sdk (CDN+fallback)` → `auth` → `authui` → `api` → `instances` → `audit` → `billing` → `analytics` → `accounts` → `users` → `app`
+- **Script load order:** `cognito-sdk (CDN+fallback)` → `auth` → `authui` → `api` → `instances` → `audit` → `billing` → `analytics` → `accounts` → `users` → `backup` → `app`
 - `const CONFIG = { /*__INJECT__*/ };` in index.html — replaced at deploy by config_injector
 - Auth uses `sessionStorage`; `isNearExpiry()` = < 10 min buffer (handles Cognito clock skew)
 - `Auth.init()` is the entry point — decides whether to show login page or boot dashboard
-- Dashboard pages: `dashboard`, `instances`, `billing`, `analytics`, `audit`, `accounts`, `users`
+- Dashboard pages: `dashboard`, `instances`, `billing`, `analytics`, `audit`, `accounts`, `users`, `backup`
 - Admin-only pages: `accounts` and `users` tabs visible only when `App.setAdmin(true)`
 - Role badge shown in sidebar: `rbac-admin` (blue) / `rbac-operator` (green) / `rbac-viewer` (gray)
 

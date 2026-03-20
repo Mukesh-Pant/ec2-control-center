@@ -1,0 +1,564 @@
+'use strict';
+
+const Backup = (function () {
+  // ─── Private state
+  var loaded         = false;
+  var selInstance    = null;   // { instanceId, accountId, region, instanceArn }
+  var recoveryPoints = [];
+  var plans          = [];
+  var editPlan       = null;   // plan being edited (null = add mode)
+  var restoreArn     = null;   // recoveryPointArn for current restore form
+
+  // ─── Schedule preset retention defaults (no hardcoded time — user picks it)
+  var CRON_PRESETS = {
+    daily:   { days: 30  },
+    weekly:  { days: 90  },
+    monthly: { days: 365 },
+    custom:  { days: 30  },
+  };
+
+  // ─── Init: register event listeners + populate hour selector
+  function init() {
+    var hourSel = document.getElementById('bk-sched-hour');
+    if (hourSel) {
+      for (var i = 0; i < 24; i++) {
+        var opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = String(i).padStart(2, '0') + ':00';
+        if (i === 2) opt.selected = true;  // default 02:00 UTC
+        hourSel.appendChild(opt);
+      }
+    }
+    var sel = document.getElementById('bk-instance-select');
+    if (sel) sel.addEventListener('change', _onInstanceChange);
+  }
+
+  // ─── Lazy-load: called by App.go('backup') on first visit
+  function onTabActivated() {
+    if (!loaded) {
+      loaded = true;
+      _populateInstanceSelector();
+    }
+  }
+
+  // ─── Populate instance dropdown from already-loaded instances
+  function _populateInstanceSelector() {
+    var sel  = document.getElementById('bk-instance-select');
+    var wrap = document.getElementById('bk-content');
+    if (!sel) return;
+
+    var instances = (typeof Instances !== 'undefined') ? Instances.getAll() : [];
+    sel.innerHTML = '<option value="">— Choose an instance to manage backups —</option>';
+
+    var role = Auth.getRole();
+    instances.forEach(function (inst) {
+      if (role === 'none') return;
+      var label = inst.instanceId + (inst.name && inst.name !== inst.instanceId ? ' (' + inst.name + ')' : '') + ' — ' + inst.accountId;
+      var val   = JSON.stringify({
+        instanceId:  inst.instanceId,
+        accountId:   inst.accountId,
+        region:      inst.region,
+        instanceArn: 'arn:aws:ec2:' + inst.region + ':' + inst.accountId + ':instance/' + inst.instanceId,
+      });
+      var opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = label;
+      sel.appendChild(opt);
+    });
+
+    if (wrap) wrap.style.display = 'none';
+  }
+
+  function _onInstanceChange() {
+    var sel = document.getElementById('bk-instance-select');
+    var val = sel ? sel.value : '';
+    var wrap = document.getElementById('bk-content');
+    // Close any open inline forms when switching instance
+    _closeRestoreInline();
+    _closeSchedInline();
+    if (!val) {
+      selInstance = null;
+      if (wrap) wrap.style.display = 'none';
+      return;
+    }
+    selInstance = JSON.parse(val);
+    load(selInstance.instanceId, selInstance.accountId, selInstance.region);
+  }
+
+  // ─── Load recovery points + plans for selected instance
+  async function load(instanceId, accountId, region) {
+    _setLoading(true);
+    try {
+      var res  = await API.getBackups(instanceId, accountId, region);
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to load backups.');
+      recoveryPoints = data.recoveryPoints || [];
+      plans          = data.plans          || [];
+      _renderRecoveryPoints();
+      _renderPlans();
+      var wrap = document.getElementById('bk-content');
+      if (wrap) wrap.style.display = '';
+      var vaultEl = document.getElementById('bk-stat-vault');
+      if (vaultEl) vaultEl.textContent = 'ec2-control-vault-production';
+    } catch (e) {
+      App.toast(e.message, 'error');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  function _setLoading(on) {
+    var el = document.getElementById('bk-loading');
+    if (el) el.style.display = on ? '' : 'none';
+  }
+
+  // ─── Cron helpers
+
+  function _buildCron(preset, hour, minute) {
+    var h = String(hour  || 0);
+    var m = String(minute || 0);
+    switch (preset) {
+      case 'daily':   return 'cron(' + m + ' ' + h + ' * * ? *)';
+      case 'weekly':  return 'cron(' + m + ' ' + h + ' ? * SUN *)';
+      case 'monthly': return 'cron(' + m + ' ' + h + ' 1 * ? *)';
+      default:        return 'cron(' + m + ' ' + h + ' * * ? *)';
+    }
+  }
+
+  function _matchPreset(cron) {
+    var match = cron && cron.match(/^cron\(\s*\d+\s+\d+\s+(.+)\)$/);
+    if (!match) return 'custom';
+    var body = match[1].trim();
+    if (body === '* * ? *')    return 'daily';
+    if (body === '? * SUN *')  return 'weekly';
+    if (body === '1 * ? *')    return 'monthly';
+    return 'custom';
+  }
+
+  function _parseCronTime(cron) {
+    var match = cron && cron.match(/^cron\(\s*(\d+)\s+(\d+)/);
+    if (!match) return { h: 2, m: 0 };
+    var m = parseInt(match[1], 10);
+    var h = parseInt(match[2], 10);
+    // Snap minute to nearest quarter-hour (0, 15, 30, 45)
+    var mSnap = [0, 15, 30, 45].reduce(function (prev, curr) {
+      return Math.abs(curr - m) < Math.abs(prev - m) ? curr : prev;
+    });
+    return { h: h, m: mSnap };
+  }
+
+  // ─── Render helpers
+
+  function _fmtBytes(bytes) {
+    if (!bytes) return '—';
+    return (bytes / 1073741824).toFixed(1) + ' GB';
+  }
+
+  function _fmtDate(d) {
+    if (!d || d === 'None') return '—';
+    try { return new Date(d).toLocaleString(); } catch (e) { return d; }
+  }
+
+  function _relTime(d) {
+    if (!d || d === 'None') return '';
+    try {
+      var diff = Date.now() - new Date(d).getTime();
+      var mins = Math.floor(diff / 60000);
+      if (mins < 1)  return 'just now';
+      if (mins < 60) return mins + ' min ago';
+      var hrs = Math.floor(mins / 60);
+      if (hrs < 24)  return hrs + ' hr' + (hrs > 1 ? 's' : '') + ' ago';
+      var days = Math.floor(hrs / 24);
+      if (days < 30) return days + ' day' + (days > 1 ? 's' : '') + ' ago';
+      return new Date(d).toLocaleDateString();
+    } catch (e) { return ''; }
+  }
+
+  function _friendlyCron(cron) {
+    var match = cron && cron.match(/^cron\(\s*(\d+)\s+(\d+)\s+(.+)\)$/);
+    if (!match) return cron || '—';
+    var m    = parseInt(match[1], 10);
+    var h    = parseInt(match[2], 10);
+    var body = match[3].trim();
+    var t    = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ' UTC';
+    if (body === '* * ? *')   return 'Daily at ' + t;
+    if (body === '? * SUN *') return 'Weekly (Sun) at ' + t;
+    if (body === '1 * ? *')   return 'Monthly (1st) at ' + t;
+    return cron;
+  }
+
+  function _renderRecoveryPoints() {
+    var wrap = document.getElementById('bk-rp-list');
+    if (!wrap) return;
+    // Close inline restore form when list re-renders
+    _closeRestoreInline();
+    // Update stat cards
+    var statCount = document.getElementById('bk-stat-count');
+    if (statCount) statCount.textContent = recoveryPoints.length || '0';
+    var statLast = document.getElementById('bk-stat-last');
+    if (statLast) {
+      if (recoveryPoints.length) {
+        var newest = recoveryPoints.reduce(function (a, b) {
+          return new Date(a.creationDate) > new Date(b.creationDate) ? a : b;
+        });
+        statLast.textContent = _relTime(newest.creationDate);
+      } else {
+        statLast.textContent = 'Never';
+      }
+    }
+    if (!recoveryPoints.length) {
+      wrap.innerHTML =
+        '<div class="bk-empty-state">' +
+        '<svg viewBox="0 0 64 64" width="48" height="48" fill="none"><circle cx="32" cy="32" r="30" stroke="var(--bd2)" stroke-width="2"/><path d="M32 18v14l8 4" stroke="var(--ink4)" stroke-width="2.5" stroke-linecap="round"/><path d="M20 44h24" stroke="var(--bd2)" stroke-width="2" stroke-linecap="round"/></svg>' +
+        '<p class="bk-empty-title">No recovery points yet</p>' +
+        '<p class="bk-empty-sub">Click \u201cBack Up Now\u201d to create your first snapshot</p>' +
+        '</div>';
+      return;
+    }
+    var canAct = _canAct();
+    wrap.innerHTML = recoveryPoints.map(function (rp) {
+      var safeArn = rp.recoveryPointArn.replace(/'/g, '');
+      var statusClass = 'bk-status-' + (rp.status || '').toLowerCase();
+      var actions = canAct
+        ? '<button class="btn btn-sm btn-out bk-restore-btn" onclick="Backup.openRestoreModal(\'' + safeArn + '\')">Restore</button>' +
+          '<button class="btn btn-sm btn-danger-out" onclick="Backup.deleteRecovery(\'' + safeArn + '\')">Delete</button>'
+        : '<span class="bk-view-only">View only</span>';
+      return '<div class="bk-rp-row" data-arn="' + safeArn + '">' +
+        '<div><div class="bk-rp-date">' + _fmtDate(rp.creationDate) + '</div>' +
+        '<div class="bk-rp-meta">' + _relTime(rp.creationDate) + '</div></div>' +
+        '<span class="bk-status ' + statusClass + '">' + (rp.status || 'Unknown') + '</span>' +
+        '<span class="bk-rp-size">' + _fmtBytes(rp.backupSizeBytes) + '</span>' +
+        '<div class="bk-rp-actions">' + actions + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function _renderPlans() {
+    var wrap = document.getElementById('bk-plans-list');
+    if (!wrap) return;
+    // Close inline schedule form when list re-renders
+    _closeSchedInline();
+    // Update stat card
+    var statSched = document.getElementById('bk-stat-schedules');
+    if (statSched) statSched.textContent = plans.length || '0';
+    if (!plans.length) {
+      wrap.innerHTML =
+        '<div class="bk-empty-state">' +
+        '<svg viewBox="0 0 64 64" width="48" height="48" fill="none"><circle cx="32" cy="32" r="30" stroke="var(--bd2)" stroke-width="2"/><rect x="18" y="20" width="28" height="24" rx="3" stroke="var(--ink4)" stroke-width="2"/><line x1="24" y1="30" x2="40" y2="30" stroke="var(--bd2)" stroke-width="2"/><line x1="24" y1="36" x2="34" y2="36" stroke="var(--bd2)" stroke-width="2"/></svg>' +
+        '<p class="bk-empty-title">No schedules configured</p>' +
+        '<p class="bk-empty-sub">Add a schedule to automate recurring backups</p>' +
+        '</div>';
+      return;
+    }
+    var canAct = _canAct();
+    wrap.innerHTML = plans.map(function (p) {
+      var actions = canAct
+        ? '<button class="btn btn-sm btn-out" onclick="Backup.openScheduleForm(\'' + p.backupPlanId + '\')">Edit</button>' +
+          '<button class="btn btn-sm btn-danger-out" onclick="Backup.deleteSchedule(\'' + p.backupPlanId + '\',\'' + p.selectionId + '\')">Delete</button>'
+        : '<span class="bk-view-only">View only</span>';
+      return '<div class="bk-plan-card">' +
+        '<div class="bk-plan-freq-icon">' +
+        '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+        '</div>' +
+        '<div><div class="bk-plan-name">' + _friendlyCron(p.scheduleCron) + '</div>' +
+        '<div class="bk-plan-meta">' + (p.backupPlanName || '') + '</div></div>' +
+        '<span class="bk-plan-ret">' + (p.retentionDays ? p.retentionDays + ' days' : '—') + '</span>' +
+        '<span class="bk-plan-last">Last run: ' + _fmtDate(p.lastExecutionDate) + '</span>' +
+        '<div class="bk-plan-actions">' + actions + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function _canAct() {
+    var role = Auth.getRole();
+    return role === 'admin' || role === 'operator';
+  }
+
+  // ─── Internal helpers to collapse inline forms
+
+  function _closeRestoreInline() {
+    restoreArn = null;
+    var el = document.getElementById('bk-restore-inline');
+    if (el) el.style.display = 'none';
+    document.querySelectorAll('.bk-rp-row').forEach(function (r) { r.classList.remove('bk-rp-row--active'); });
+  }
+
+  function _closeSchedInline() {
+    editPlan = null;
+    var el = document.getElementById('bk-sched-inline');
+    if (el) el.style.display = 'none';
+  }
+
+  // ─── On-demand backup
+
+  async function backupNow() {
+    if (!selInstance) return App.toast('Select an instance first.', 'error');
+    var btn = document.getElementById('bk-btn-now');
+    if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+    try {
+      var res  = await API.postBackup({
+        action:      'createbackup',
+        instanceId:  selInstance.instanceId,
+        instanceArn: selInstance.instanceArn,
+        accountId:   selInstance.accountId,
+        region:      selInstance.region,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Backup failed.');
+      App.toast(data.message || 'Backup job started.', 'success');
+    } catch (e) {
+      App.toast(e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Back Up Now'; }
+    }
+  }
+
+  // ─── Restore inline form
+
+  function openRestoreModal(arn) {
+    restoreArn = arn;
+    var inline = document.getElementById('bk-restore-inline');
+    if (!inline) return;
+    // Highlight the selected recovery point row
+    document.querySelectorAll('.bk-rp-row').forEach(function (r) { r.classList.remove('bk-rp-row--active'); });
+    var activeRow = document.querySelector('.bk-rp-row[data-arn="' + arn + '"]');
+    if (activeRow) activeRow.classList.add('bk-rp-row--active');
+    // Reset to default option
+    var radio = inline.querySelector('input[name="bk-restore-type"][value="new_instance"]');
+    if (radio) radio.checked = true;
+    inline.style.display = '';
+    setTimeout(function () { inline.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 50);
+  }
+
+  function closeRestoreModal() {
+    _closeRestoreInline();
+  }
+
+  async function confirmRestore() {
+    if (!selInstance || !restoreArn) return;
+    var arnToRestore = restoreArn;  // capture before _closeRestoreInline clears it
+    var radio = document.querySelector('input[name="bk-restore-type"]:checked');
+    var restoreType = radio ? radio.value : 'new_instance';
+    var msg = restoreType === 'replace'
+      ? 'This will create a new instance and STOP the original. Continue?'
+      : 'This will create a new instance. The original keeps running. Continue?';
+    if (!confirm(msg)) return;
+    _closeRestoreInline();
+    try {
+      var res  = await API.postBackup({
+        action:           'restore',
+        recoveryPointArn: arnToRestore,
+        restoreType:      restoreType,
+        instanceId:       selInstance.instanceId,
+        accountId:        selInstance.accountId,
+        region:           selInstance.region,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Restore failed.');
+      App.toast(data.message || 'Restore job started.', 'success');
+    } catch (e) {
+      App.toast(e.message, 'error');
+    }
+  }
+
+  // ─── Schedule inline form
+
+  function openScheduleForm(planId) {
+    editPlan = planId
+      ? (plans.find(function (p) { return p.backupPlanId === planId; }) || null)
+      : null;
+
+    var inline  = document.getElementById('bk-sched-inline');
+    var title   = document.getElementById('bk-sched-inline-title');
+    var preset  = document.getElementById('bk-sched-preset');
+    var cronInp = document.getElementById('bk-sched-cron');
+    var retInp  = document.getElementById('bk-sched-retention');
+    var custRow = document.getElementById('bk-sched-custom-row');
+    var timeRow = document.getElementById('bk-sched-time-row');
+    var hourSel = document.getElementById('bk-sched-hour');
+    var minSel  = document.getElementById('bk-sched-minute');
+    if (!inline) return;
+
+    if (title) title.textContent = editPlan ? 'Edit Backup Schedule' : 'Add Backup Schedule';
+
+    var cronDisplay = document.getElementById('bk-sched-cron-display');
+    if (editPlan) {
+      var matched = _matchPreset(editPlan.scheduleCron);
+      if (preset)      preset.value      = matched;
+      if (cronInp)     cronInp.value     = editPlan.scheduleCron || '';
+      if (cronDisplay) cronDisplay.value = editPlan.scheduleCron || '';
+      if (retInp)  retInp.value  = editPlan.retentionDays || 30;
+      var t = _parseCronTime(editPlan.scheduleCron);
+      if (hourSel) hourSel.value = t.h;
+      if (minSel)  minSel.value  = t.m;
+      var isCustom = matched === 'custom';
+      if (custRow) custRow.style.display = isCustom ? '' : 'none';
+      if (timeRow) timeRow.style.display = isCustom ? 'none' : '';
+    } else {
+      if (preset)      preset.value      = 'daily';
+      if (cronInp)     cronInp.value     = 'cron(0 2 * * ? *)';
+      if (cronDisplay) cronDisplay.value = '';
+      if (retInp)  retInp.value  = 30;
+      if (hourSel) hourSel.value = 2;
+      if (minSel)  minSel.value  = 0;
+      if (custRow) custRow.style.display = 'none';
+      if (timeRow) timeRow.style.display = '';
+    }
+
+    inline.style.display = '';
+    setTimeout(function () { inline.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 50);
+  }
+
+  function onPresetChange() {
+    var preset      = document.getElementById('bk-sched-preset');
+    var cronInp     = document.getElementById('bk-sched-cron');
+    var cronDisplay = document.getElementById('bk-sched-cron-display');
+    var retInp      = document.getElementById('bk-sched-retention');
+    var custRow     = document.getElementById('bk-sched-custom-row');
+    var timeRow     = document.getElementById('bk-sched-time-row');
+    var hourSel     = document.getElementById('bk-sched-hour');
+    var minSel      = document.getElementById('bk-sched-minute');
+    var val         = preset ? preset.value : 'daily';
+    var isCustom    = val === 'custom';
+    if (custRow) custRow.style.display = isCustom ? '' : 'none';
+    if (timeRow) timeRow.style.display = isCustom ? 'none' : '';
+    if (!isCustom) {
+      var h = hourSel ? parseInt(hourSel.value, 10) : 2;
+      var m = minSel  ? parseInt(minSel.value,  10) : 0;
+      var cron = _buildCron(val, h, m);
+      if (cronInp) cronInp.value = cron;
+      if (retInp && !editPlan) retInp.value = (CRON_PRESETS[val] || CRON_PRESETS.daily).days;
+    } else {
+      // Switching to custom: seed display with current hidden value
+      if (cronDisplay && cronInp) cronDisplay.value = cronInp.value;
+    }
+  }
+
+  function onTimeChange() {
+    var preset  = document.getElementById('bk-sched-preset');
+    var cronInp = document.getElementById('bk-sched-cron');
+    var hourSel = document.getElementById('bk-sched-hour');
+    var minSel  = document.getElementById('bk-sched-minute');
+    var val = preset ? preset.value : 'daily';
+    if (val === 'custom') return;  // custom cron: user edits directly
+    var h = hourSel ? parseInt(hourSel.value, 10) : 2;
+    var m = minSel  ? parseInt(minSel.value,  10) : 0;
+    if (cronInp) cronInp.value = _buildCron(val, h, m);
+  }
+
+  function closeScheduleModal() {
+    _closeSchedInline();
+  }
+
+  async function saveSchedule() {
+    if (!selInstance) return;
+    var cronInp = document.getElementById('bk-sched-cron');
+    var retInp  = document.getElementById('bk-sched-retention');
+    var preset  = document.getElementById('bk-sched-preset');
+    var presetVal = preset ? preset.value : 'daily';
+
+    var scheduleCron;
+    if (presetVal === 'custom') {
+      scheduleCron = cronInp ? cronInp.value.trim() : '';
+    } else {
+      // For non-custom: read the programmatically-built cron value
+      scheduleCron = cronInp ? cronInp.value.trim() : '';
+    }
+    var retentionDays = retInp ? parseInt(retInp.value, 10) : 30;
+
+    if (!scheduleCron)                                                  return App.toast('Cron expression is required.', 'error');
+    if (isNaN(retentionDays) || retentionDays < 1 || retentionDays > 365) return App.toast('Retention must be 1–365 days.', 'error');
+
+    var action   = editPlan ? 'updateschedule' : 'createschedule';
+    var planName = editPlan
+      ? editPlan.backupPlanName
+      : ('ec2ctrl-' + selInstance.instanceId + '-' + Date.now());
+    var payload = {
+      action:        action,
+      scheduleCron:  scheduleCron,
+      retentionDays: retentionDays,
+      instanceId:    selInstance.instanceId,
+      instanceArn:   selInstance.instanceArn,
+      accountId:     selInstance.accountId,
+      region:        selInstance.region,
+      backupPlanName: planName,
+    };
+    if (editPlan) payload.backupPlanId = editPlan.backupPlanId;
+    _closeSchedInline();
+    try {
+      var res  = await API.postBackup(payload);
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to save schedule.');
+      App.toast(data.message || 'Schedule saved.', 'success');
+      load(selInstance.instanceId, selInstance.accountId, selInstance.region);
+    } catch (e) {
+      App.toast(e.message, 'error');
+    }
+  }
+
+  // ─── Delete schedule
+
+  async function deleteSchedule(planId, selId) {
+    if (!selInstance) return;
+    if (!confirm('Delete this backup schedule? Existing recovery points are not affected.')) return;
+    try {
+      var res  = await API.postBackup({
+        action:       'deleteschedule',
+        backupPlanId: planId,
+        selectionId:  selId,
+        accountId:    selInstance.accountId,
+        region:       selInstance.region,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to delete schedule.');
+      App.toast('Schedule deleted.', 'success');
+      load(selInstance.instanceId, selInstance.accountId, selInstance.region);
+    } catch (e) {
+      App.toast(e.message, 'error');
+    }
+  }
+
+  // ─── Delete recovery point
+
+  async function deleteRecovery(arn) {
+    if (!selInstance) return;
+    if (!confirm('Permanently delete this recovery point? This cannot be undone.')) return;
+    try {
+      var res  = await API.postBackup({
+        action:           'deleterecovery',
+        recoveryPointArn: arn,
+        accountId:        selInstance.accountId,
+        region:           selInstance.region,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to delete recovery point.');
+      App.toast('Recovery point deleted.', 'success');
+      load(selInstance.instanceId, selInstance.accountId, selInstance.region);
+    } catch (e) {
+      App.toast(e.message, 'error');
+    }
+  }
+
+  function refresh() {
+    if (selInstance) load(selInstance.instanceId, selInstance.accountId, selInstance.region);
+  }
+
+  // ─── Public API
+  return {
+    init:               init,
+    onTabActivated:     onTabActivated,
+    load:               load,
+    refresh:            refresh,
+    backupNow:          backupNow,
+    openRestoreModal:   openRestoreModal,
+    closeRestoreModal:  closeRestoreModal,
+    confirmRestore:     confirmRestore,
+    openScheduleForm:   openScheduleForm,
+    onPresetChange:     onPresetChange,
+    onTimeChange:       onTimeChange,
+    closeScheduleModal: closeScheduleModal,
+    saveSchedule:       saveSchedule,
+    deleteSchedule:     deleteSchedule,
+    deleteRecovery:     deleteRecovery,
+  };
+})();

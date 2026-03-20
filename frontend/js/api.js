@@ -123,6 +123,25 @@ const API = (function () {
     return call('/users', 'POST', body);
   }
 
+  /**
+   * GET /backup — list backups for an instance
+   * @param {string} instanceId
+   * @param {string} accountId
+   * @param {string} region
+   */
+  async function getBackups(instanceId, accountId, region) {
+    return call('/backup?instanceId=' + encodeURIComponent(instanceId) +
+      '&accountId=' + encodeURIComponent(accountId) +
+      '&region=' + encodeURIComponent(region), 'GET', null);
+  }
+
+  /**
+   * POST /backup — backup mutations (create, delete, restore)
+   */
+  async function postBackup(body) {
+    return call('/backup', 'POST', body);
+  }
+
   return {
     call,
     ec2Action,
@@ -133,6 +152,8 @@ const API = (function () {
     getPricing,
     getUsers,
     postUsers,
+    getBackups,
+    postBackup,
   };
 
 })();

@@ -485,6 +485,46 @@ Resources:
           Value: !Ref Environment
 
   # =============================================
+  # BACKUP VAULT (M9)
+  # =============================================
+  BackupVault:
+    Type: AWS::Backup::BackupVault
+    DeletionPolicy: Retain
+    Properties:
+      BackupVaultName: !Sub 'ec2-control-vault-${Environment}'
+      AccessPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowMemberAccountBackups
+            Effect: Allow
+            Principal:
+              AWS:
+                - 'arn:aws:iam::196750375951:root'
+            Action:
+              - backup:CopyIntoBackupVault
+            Resource: '*'
+
+  BackupServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ec2-control-backup-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
   # LAMBDA EXECUTION ROLE
   # =============================================
   LambdaExecutionRole:
@@ -551,6 +591,30 @@ Resources:
                   - cognito-idp:AdminRemoveUserFromGroup
                   - cognito-idp:ListUsersInGroup
                 Resource: !GetAtt CognitoUserPool.Arn
+              - Sid: AWSBackupControl
+                Effect: Allow
+                Action:
+                  - backup:CreateBackupPlan
+                  - backup:UpdateBackupPlan
+                  - backup:DeleteBackupPlan
+                  - backup:CreateBackupSelection
+                  - backup:DeleteBackupSelection
+                  - backup:StartBackupJob
+                  - backup:StartRestoreJob
+                  - backup:ListBackupPlans
+                  - backup:ListBackupSelections
+                  - backup:GetBackupPlan
+                  - backup:GetBackupSelection
+                  - backup:ListRecoveryPointsByResource
+                  - backup:DeleteRecoveryPoint
+                  - backup:DescribeBackupJob
+                  - backup:DescribeRestoreJob
+                Resource: '*'
+              - Sid: BackupPassRole
+                Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt BackupServiceRole.Arn
               - Sid: CloudWatchLogs
                 Effect: Allow
                 Action:
@@ -587,6 +651,8 @@ Resources:
           ENVIRONMENT: !Ref Environment
           ALLOWED_ORIGIN: '*'
           CENTRAL_ACCOUNT_ID: !Ref 'AWS::AccountId'
+          BACKUP_ROLE_ARN: !GetAtt BackupServiceRole.Arn
+          BACKUP_VAULT_NAME: !Sub 'ec2-control-vault-${Environment}'
       Tags:
         - Key: Project
           Value: EC2Control
@@ -758,6 +824,13 @@ Resources:
       RestApiId: !Ref RestApi
       ParentId: !GetAtt RestApi.RootResourceId
       PathPart: users
+
+  ResourceBackup:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: backup
 
   # =============================================
   # REST API - CORS Gateway Responses
@@ -1059,6 +1132,58 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
 
+  MethodGetBackup:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceBackup
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodPostBackup:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceBackup
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsBackup:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceBackup
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   # =============================================
   # REST API - Deployment + Stage
   # =============================================
@@ -1079,9 +1204,12 @@ Resources:
       - MethodGetUsers
       - MethodPostUsers
       - MethodOptionsUsers
+      - MethodGetBackup
+      - MethodPostBackup
+      - MethodOptionsBackup
     Properties:
       RestApiId: !Ref RestApi
-      Description: !Sub 'Deployment ${LambdaCodeVersion}'
+      Description: !Sub 'Deployment ${LambdaCodeVersion}-backup'
 
   RestApiStage:
     Type: AWS::ApiGateway::Stage
@@ -1320,6 +1448,14 @@ Outputs:
   UserAccountsTable:
     Description: DynamoDB user-account assignments table (RBAC). M8.
     Value: !Ref UserAccountsTable
+
+  BackupVaultArn:
+    Description: AWS Backup Vault ARN for EC2 recovery points. M9.
+    Value: !GetAtt BackupVault.BackupVaultArn
+
+  BackupServiceRoleArn:
+    Description: IAM role used by AWS Backup service. M9.
+    Value: !GetAtt BackupServiceRole.Arn
 
   NotificationTopicArn:
     Description: SNS topic ARN for idle auto-stop alerts. M4.
