@@ -22,6 +22,7 @@ from accounts import (get_accounts, get_all_accounts, get_ec2_client, get_all_re
                       get_user_accounts, get_allowed_account_ids, grant_account, revoke_account)
 import audit
 import pricing
+import backup
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -49,6 +50,10 @@ def lambda_handler(event, context):
         return handle_users_list(event)
     elif path == '/users' and method == 'POST':
         return handle_users_mutation(event)
+    elif path == '/backup' and method == 'GET':
+        return backup.handle_backup_list(event)
+    elif path == '/backup' and method == 'POST':
+        return backup.handle_backup_mutation(event)
     else:
         return error_response(404, 'Not found')
 
