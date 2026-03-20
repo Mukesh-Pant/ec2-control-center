@@ -972,6 +972,62 @@
 <!-- Toast -->
 <div id="toast"><span class="toast-ico" id="toast-ico">✓</span><span id="toast-msg"></span></div>
 
+<!-- Backup: Restore modal -->
+        <div id="bk-restore-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)Backup.closeRestoreModal()">
+          <div class="modal-box">
+            <h3 class="modal-title">Restore Recovery Point</h3>
+            <p class="modal-sub">AWS Backup always creates a new instance. Choose what happens to the original:</p>
+            <div class="bk-restore-options">
+              <label class="bk-radio-label">
+                <input type="radio" name="bk-restore-type" value="new_instance" checked>
+                <div>
+                  <strong>New Instance</strong>
+                  <p>Create a new instance. Original keeps running. You verify, then terminate manually.</p>
+                </div>
+              </label>
+              <label class="bk-radio-label">
+                <input type="radio" name="bk-restore-type" value="replace">
+                <div>
+                  <strong>Replace (Stop Original)</strong>
+                  <p>Create a new instance and stop the original. You terminate the original after verifying.</p>
+                </div>
+              </label>
+            </div>
+            <div class="modal-actions">
+              <button class="btn btn-out" onclick="Backup.closeRestoreModal()">Cancel</button>
+              <button class="btn btn-primary" onclick="Backup.confirmRestore()">Start Restore</button>
+            </div>
+          </div>
+        </div>
+
+<!-- Backup: Schedule form modal -->
+        <div id="bk-sched-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)Backup.closeScheduleModal()">
+          <div class="modal-box">
+            <h3 class="modal-title" id="bk-sched-modal-title">Add Backup Schedule</h3>
+            <div class="form-group">
+              <label class="bk-label">Schedule Preset</label>
+              <select id="bk-sched-preset" class="bk-select" onchange="Backup.onPresetChange()">
+                <option value="daily">Daily (02:00 UTC)</option>
+                <option value="weekly">Weekly — Sunday (02:00 UTC)</option>
+                <option value="monthly">Monthly — 1st (02:00 UTC)</option>
+                <option value="custom">Custom cron…</option>
+              </select>
+            </div>
+            <div id="bk-sched-custom-row" class="form-group" style="display:none">
+              <label class="bk-label">Custom Cron Expression</label>
+              <input id="bk-sched-cron" type="text" class="inp" placeholder="cron(0 2 * * ? *)">
+            </div>
+            <div class="form-group">
+              <label class="bk-label">Retention (days)</label>
+              <input id="bk-sched-retention" type="number" class="inp" min="1" max="365" value="30">
+            </div>
+            <div class="modal-actions">
+              <button class="btn btn-out" onclick="Backup.closeScheduleModal()">Cancel</button>
+              <button class="btn btn-primary" onclick="Backup.saveSchedule()">Save Schedule</button>
+            </div>
+          </div>
+        </div>
+
 <!-- CONFIG — Injected by Config Injector Lambda during deployment -->
 <script>
   const CONFIG = { /*__INJECT__*/ };
@@ -1005,62 +1061,6 @@
   // Bootstrap — start auth flow once all modules are loaded
   Auth.init().catch(function(e) { window.onerror(e.message || String(e), 'auth.js', 0); });
 </script>
-
-        <!-- Backup: Restore modal -->
-        <div id="bk-restore-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)Backup.closeRestoreModal()">
-          <div class="modal-box">
-            <h3 class="modal-title">Restore Recovery Point</h3>
-            <p class="modal-sub">AWS Backup always creates a new instance. Choose what happens to the original:</p>
-            <div class="bk-restore-options">
-              <label class="bk-radio-label">
-                <input type="radio" name="bk-restore-type" value="new_instance" checked>
-                <div>
-                  <strong>New Instance</strong>
-                  <p>Create a new instance. Original keeps running. You verify, then terminate manually.</p>
-                </div>
-              </label>
-              <label class="bk-radio-label">
-                <input type="radio" name="bk-restore-type" value="replace">
-                <div>
-                  <strong>Replace (Stop Original)</strong>
-                  <p>Create a new instance and stop the original. You terminate the original after verifying.</p>
-                </div>
-              </label>
-            </div>
-            <div class="modal-actions">
-              <button class="btn btn-out" onclick="Backup.closeRestoreModal()">Cancel</button>
-              <button class="btn btn-primary" onclick="Backup.confirmRestore()">Start Restore</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Backup: Schedule form modal -->
-        <div id="bk-sched-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)Backup.closeScheduleModal()">
-          <div class="modal-box">
-            <h3 class="modal-title" id="bk-sched-modal-title">Add Backup Schedule</h3>
-            <div class="form-group">
-              <label class="bk-label">Schedule Preset</label>
-              <select id="bk-sched-preset" class="bk-select" onchange="Backup.onPresetChange()">
-                <option value="daily">Daily (02:00 UTC)</option>
-                <option value="weekly">Weekly — Sunday (02:00 UTC)</option>
-                <option value="monthly">Monthly — 1st (02:00 UTC)</option>
-                <option value="custom">Custom cron…</option>
-              </select>
-            </div>
-            <div id="bk-sched-custom-row" class="form-group" style="display:none">
-              <label class="bk-label">Custom Cron Expression</label>
-              <input id="bk-sched-cron" type="text" class="inp" placeholder="cron(0 2 * * ? *)">
-            </div>
-            <div class="form-group">
-              <label class="bk-label">Retention (days)</label>
-              <input id="bk-sched-retention" type="number" class="inp" min="1" max="365" value="30">
-            </div>
-            <div class="modal-actions">
-              <button class="btn btn-out" onclick="Backup.closeScheduleModal()">Cancel</button>
-              <button class="btn btn-primary" onclick="Backup.saveSchedule()">Save Schedule</button>
-            </div>
-          </div>
-        </div>
 
 </body>
 </html>
