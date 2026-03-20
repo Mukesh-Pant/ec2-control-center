@@ -17,6 +17,8 @@ A **production SaaS web portal** for managing EC2 instances across multiple AWS 
 | **Billing Insights** | Per-instance daily cost estimates using AWS Cost Explorer + EC2 pricing |
 | **Analytics** | Usage trends and activity summaries across accounts |
 | **Account Management** | Add, enable, disable, test, and remove member AWS accounts directly from the portal UI |
+| **RBAC** | Role-based access control via Cognito groups — admins, operators, viewers with per-account grants |
+| **Backup & Restore** | On-demand and scheduled EC2 backups via AWS Backup; restore to new instance or replace in place |
 | **Custom Domain** | Serve on your own domain with apex redirect via CloudFront + ACM + Route 53 |
 | **Zero Infrastructure** | Fully serverless — API Gateway + Lambda + DynamoDB + S3 + CloudFront |
 
@@ -42,8 +44,10 @@ REST API Gateway (v1, REGIONAL, COGNITO_USER_POOLS authorizer)
 Lambda: ec2-controller (Python 3.12)
   ├── STS AssumeRole → member accounts
   ├── ThreadPoolExecutor → parallel multi-account/region queries
-  ├── DynamoDB → account registry + audit logs
-  └── Cost Explorer → billing data
+  ├── DynamoDB → account registry + audit logs + user-account RBAC
+  ├── Cognito IdP → group management (admins/operators/viewers)
+  ├── Cost Explorer → billing data
+  └── AWS Backup → ec2-control-vault-production (backup, schedule, restore)
 
 Domain: solobil.com (primary) ← www.solobil.com redirects via CloudFront Function
 
@@ -62,11 +66,12 @@ EC2-control-center/
 │   └── member-role-stack.yaml    ← Cross-account IAM role (deploy in each member account)
 ├── lambda/
 │   ├── ec2_controller/
-│   │   ├── index.py              ← Main handler: /ec2, /accounts, /audit, /pricing routes
+│   │   ├── index.py              ← Main handler: /ec2, /accounts, /audit, /pricing, /users, /backup
 │   │   ├── accounts.py           ← Account registry (DynamoDB + STS AssumeRole)
 │   │   ├── audit.py              ← Audit log read/write
+│   │   ├── backup.py             ← AWS Backup: on-demand, schedules, restore, delete
 │   │   ├── pricing.py            ← EC2 on-demand pricing lookup
-│   │   └── utils.py              ← CORS helpers, JWT claims, error mapping
+│   │   └── utils.py              ← CORS helpers, JWT claims, error mapping, RBAC helpers
 │   ├── config_injector/
 │   │   └── index.py              ← Custom resource: injects CONFIG, uploads frontend, invalidates CDN
 │   └── idle_checker/
@@ -79,12 +84,14 @@ EC2-control-center/
 │       ├── auth.js               ← Cognito SDK SRP auth, token management
 │       ├── authui.js             ← Auth page UI controller (forms, validation, loading)
 │       ├── api.js                ← Fetch wrapper with auto-refresh
-│       ├── instances.js          ← Instance list + controls
+│       ├── instances.js          ← Instance list + controls (RBAC-aware)
 │       ├── audit.js              ← Audit log + daily cost view
 │       ├── billing.js            ← Billing dashboard
 │       ├── analytics.js          ← Usage analytics
 │       ├── accounts.js           ← Multi-account management
-│       ├── app.js                ← App init, tabs, toast, session timer
+│       ├── users.js              ← User management: roles, account grants (admin only)
+│       ├── backup.js             ← Backup dashboard: on-demand, schedules, restore
+│       ├── app.js                ← App init, tabs, toast, session timer, role badge
 │       └── vendor/
 │           └── amazon-cognito-identity.min.js  ← Cognito SDK v6.3.12 (CDN fallback)
 ├── deploy.sh                     ← One-command deploy
@@ -169,6 +176,21 @@ aws cloudformation deploy \
 
 ---
 
+## Backup & Restore
+
+The Backup tab lets you create and manage EC2 backups powered by **AWS Backup**:
+
+- **On-demand backup** — snapshot any instance immediately
+- **Scheduled backups** — daily, weekly, monthly (or custom cron), any time you choose, with configurable retention (7 / 30 / 90 / 365 days)
+- **Restore** — restore a recovery point to a **new instance** (original keeps running) or **replace** (original is stopped after restore starts)
+- **RBAC-aware** — admins full access; operators can backup/restore assigned accounts; viewers see history only
+
+Recovery points are stored in the central vault `ec2-control-vault-production`.
+
+> **Adding a new member account:** after onboarding via the Accounts tab, also add the account ARN to the vault `AccessPolicy` in `cloudformation/central-stack.yaml` and redeploy.
+
+---
+
 ## Idle Auto-Stop
 
 - Checks all running instances every **15 minutes** via EventBridge
@@ -189,6 +211,7 @@ aws cloudformation deploy \
 | Scheduling | EventBridge |
 | Notifications | SNS |
 | Billing | AWS Cost Explorer |
+| Backup | AWS Backup (vault, plans, restore jobs) |
 | IaC | CloudFormation |
 
 ---
