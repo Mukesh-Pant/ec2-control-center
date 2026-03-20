@@ -18,6 +18,7 @@ const App = (function () {
     audit:     'Audit Log',
     accounts:  'Accounts',
     users:     'Users',
+    backup:    'Backups',
   };
 
   // ─── Navigation ────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ const App = (function () {
     if (page === 'billing')   Billing.onTabActivated();
     if (page === 'accounts')  Accounts.onTabActivated();
     if (page === 'users')     Users.onTabActivated();
+    if (page === 'backup')    Backup.onTabActivated();
   }
 
   // ─── Sidebar ───────────────────────────────────────────────────────────────
@@ -237,6 +239,7 @@ const App = (function () {
     Billing.init();
     Accounts.init();
     Users.init();
+    Backup.init();
     startClock();
     go('dashboard');
     log('Portal ready', 'sys');
