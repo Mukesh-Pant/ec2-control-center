@@ -603,6 +603,8 @@ Resources:
                   - backup:StartRestoreJob
                   - backup:ListBackupPlans
                   - backup:ListBackupSelections
+                  - backup:GetBackupPlan
+                  - backup:GetBackupSelection
                   - backup:ListRecoveryPointsByResource
                   - backup:DeleteRecoveryPoint
                   - backup:DescribeBackupJob
