@@ -59,6 +59,13 @@ Resources:
                 Action:
                   - ce:GetCostAndUsage
                 Resource: '*'
+              - Sid: BackupReadAndStart
+                Effect: Allow
+                Action:
+                  - backup:StartBackupJob
+                  - backup:StartRestoreJob
+                  - backup:ListRecoveryPointsByResource
+                Resource: '*'
       Tags:
         - Key: Project
           Value: EC2Control
