@@ -2003,3 +2003,37 @@ code {
   color: var(--ink3);
   margin: 4px 0 16px;
 }
+
+/* ═══════════════════════════════════════════════════
+   BACKUP TAB — M9
+═══════════════════════════════════════════════════ */
+.bk-selector-card { padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+.bk-label { display: block; font-size: .8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
+.bk-select { width: 100%; max-width: 480px; padding: .55rem .75rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: .9rem; }
+.bk-select:focus { outline: none; border-color: var(--accent); }
+
+.bk-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.bk-panel-title  { font-size: 1rem; font-weight: 600; margin: 0; }
+.bk-empty        { color: var(--text-muted); font-style: italic; text-align: center; padding: 1.5rem 0; }
+.bk-view-only    { font-size: .75rem; color: var(--text-muted); }
+.bk-actions      { white-space: nowrap; }
+
+/* Status badge */
+.bk-status { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .75rem; font-weight: 600; text-transform: uppercase; }
+.bk-status-completed { background: rgba(34,197,94,.15); color: #22c55e; }
+.bk-status-running   { background: rgba(59,130,246,.15); color: #3b82f6; }
+.bk-status-failed    { background: rgba(239,68,68,.15);  color: #ef4444; }
+.bk-status-partial   { background: rgba(251,191,36,.15); color: #fbbf24; }
+.bk-status-          { color: var(--text-muted); }
+
+/* Restore modal radio options */
+.bk-restore-options  { display: flex; flex-direction: column; gap: .75rem; margin: 1rem 0; }
+.bk-radio-label      { display: flex; align-items: flex-start; gap: .75rem; padding: .85rem 1rem; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: border-color .15s, background .15s; }
+.bk-radio-label:has(input:checked) { border-color: var(--accent); background: rgba(99,102,241,.07); }
+.bk-radio-label input { margin-top: .2rem; accent-color: var(--accent); flex-shrink: 0; }
+.bk-radio-label strong { display: block; font-size: .9rem; margin-bottom: .2rem; }
+.bk-radio-label p    { font-size: .8rem; color: var(--text-muted); margin: 0; }
+
+/* Schedule form */
+.form-group          { margin-bottom: 1rem; }
+.form-group .inp     { width: 100%; }
