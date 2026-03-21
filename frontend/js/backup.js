@@ -6,8 +6,12 @@ const Backup = (function () {
   var selInstance    = null;   // { instanceId, accountId, region, instanceArn }
   var recoveryPoints = [];
   var plans          = [];
-  var editPlan       = null;   // plan being edited (null = add mode)
-  var restoreArn     = null;   // recoveryPointArn for current restore form
+  var editPlan           = null;   // plan being edited (null = add mode)
+  var restoreArn         = null;   // recoveryPointArn for current restore form
+  var _confirmCallback   = null;   // pending in-page confirm callback
+  var _bannerTimer       = null;   // auto-dismiss timer for action banner
+  var _lastRestoreJobId  = null;   // restoreJobId from most recent restore call
+  var _lastRestoreInst   = null;   // {accountId, region} snapshot for status check
 
   // ─── Schedule preset retention defaults (no hardcoded time — user picks it)
   var CRON_PRESETS = {
@@ -76,6 +80,7 @@ const Backup = (function () {
     // Close any open inline forms when switching instance
     _closeRestoreInline();
     _closeSchedInline();
+    _hideActionBanner();
     if (!val) {
       selInstance = null;
       if (wrap) wrap.style.display = 'none';
@@ -101,7 +106,7 @@ const Backup = (function () {
       var vaultEl = document.getElementById('bk-stat-vault');
       if (vaultEl) vaultEl.textContent = 'ec2-control-vault-production';
     } catch (e) {
-      App.toast(e.message, 'error');
+      App.showToast(e.message, 'err');
     } finally {
       _setLoading(false);
     }
@@ -187,6 +192,33 @@ const Backup = (function () {
     return cron;
   }
 
+  function _nextCronRun(cron) {
+    var match = cron && cron.match(/^cron\(\s*(\d+)\s+(\d+)\s+(.+)\)$/);
+    if (!match) return '—';
+    var m    = parseInt(match[1], 10);
+    var h    = parseInt(match[2], 10);
+    var body = match[3].trim();
+    var now  = new Date();
+    var next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, m, 0, 0));
+    if (next <= now) {
+      if (body === '? * SUN *') {
+        // advance to next Sunday
+        var daysUntilSun = (7 - next.getUTCDay()) % 7 || 7;
+        next.setUTCDate(next.getUTCDate() + daysUntilSun);
+      } else if (body === '1 * ? *') {
+        // advance to 1st of next month
+        next.setUTCMonth(next.getUTCMonth() + 1, 1);
+      } else {
+        // daily (and custom)
+        next.setUTCDate(next.getUTCDate() + 1);
+      }
+    }
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var hh = String(next.getUTCHours()).padStart(2, '0');
+    var mm = String(next.getUTCMinutes()).padStart(2, '0');
+    return months[next.getUTCMonth()] + ' ' + next.getUTCDate() + ', ' + next.getUTCFullYear() + ' at ' + hh + ':' + mm + ' UTC';
+  }
+
   function _renderRecoveryPoints() {
     var wrap = document.getElementById('bk-rp-list');
     if (!wrap) return;
@@ -219,9 +251,9 @@ const Backup = (function () {
     wrap.innerHTML = recoveryPoints.map(function (rp) {
       var safeArn = rp.recoveryPointArn.replace(/'/g, '');
       var statusClass = 'bk-status-' + (rp.status || '').toLowerCase();
+      // Delete button is intentionally removed — use AWS Console to delete recovery points
       var actions = canAct
-        ? '<button class="btn btn-sm btn-out bk-restore-btn" onclick="Backup.openRestoreModal(\'' + safeArn + '\')">Restore</button>' +
-          '<button class="btn btn-sm btn-danger-out" onclick="Backup.deleteRecovery(\'' + safeArn + '\')">Delete</button>'
+        ? '<button class="btn btn-sm btn-out bk-restore-btn" onclick="Backup.openRestoreModal(\'' + safeArn + '\')">Restore</button>'
         : '<span class="bk-view-only">View only</span>';
       return '<div class="bk-rp-row" data-arn="' + safeArn + '">' +
         '<div><div class="bk-rp-date">' + _fmtDate(rp.creationDate) + '</div>' +
@@ -263,7 +295,9 @@ const Backup = (function () {
         '<div><div class="bk-plan-name">' + _friendlyCron(p.scheduleCron) + '</div>' +
         '<div class="bk-plan-meta">' + (p.backupPlanName || '') + '</div></div>' +
         '<span class="bk-plan-ret">' + (p.retentionDays ? p.retentionDays + ' days' : '—') + '</span>' +
-        '<span class="bk-plan-last">Last run: ' + _fmtDate(p.lastExecutionDate) + '</span>' +
+        (p.lastExecutionDate && p.lastExecutionDate !== 'None' && p.lastExecutionDate !== ''
+          ? '<span class="bk-plan-last">Last run: ' + _fmtDate(p.lastExecutionDate) + '</span>'
+          : '<span class="bk-plan-last bk-plan-last--next">Next run: ' + _nextCronRun(p.scheduleCron) + '</span>') +
         '<div class="bk-plan-actions">' + actions + '</div>' +
         '</div>';
     }).join('');
@@ -289,12 +323,148 @@ const Backup = (function () {
     if (el) el.style.display = 'none';
   }
 
+  // ─── In-page confirmation dialog (replaces browser confirm())
+
+  function _showConfirm(opts) {
+    // opts: { title, message, confirmLabel, confirmClass, iconClass, onConfirm }
+    var overlay    = document.getElementById('bk-confirm-overlay');
+    var titleEl    = document.getElementById('bk-confirm-title');
+    var msgEl      = document.getElementById('bk-confirm-msg');
+    var okBtn      = document.getElementById('bk-confirm-ok');
+    var iconWrap   = document.getElementById('bk-confirm-icon-wrap');
+    if (!overlay) return;
+
+    if (titleEl)  titleEl.textContent  = opts.title   || 'Confirm Action';
+    if (msgEl)    msgEl.textContent    = opts.message  || '';
+    if (okBtn) {
+      okBtn.textContent = opts.confirmLabel || 'Confirm';
+      okBtn.className   = 'btn ' + (opts.confirmClass || 'btn-danger');
+    }
+    if (iconWrap) {
+      iconWrap.className = 'bk-confirm-icon-wrap ' + (opts.iconClass || 'bk-confirm-icon-danger');
+    }
+    _confirmCallback = opts.onConfirm || null;
+    overlay.style.display = 'flex';
+  }
+
+  function confirmOk() {
+    var overlay = document.getElementById('bk-confirm-overlay');
+    if (overlay) overlay.style.display = 'none';
+    var cb = _confirmCallback;
+    _confirmCallback = null;
+    if (cb) cb();
+  }
+
+  function confirmCancel() {
+    var overlay = document.getElementById('bk-confirm-overlay');
+    if (overlay) overlay.style.display = 'none';
+    _confirmCallback = null;
+  }
+
+  // ─── Action feedback banner (inline result message)
+
+  function _showActionBanner(msg, type) {
+    var el = document.getElementById('bk-action-banner');
+    if (!el) return;
+    clearTimeout(_bannerTimer);
+    var icons = {
+      ok:  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>',
+      err: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+      info:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+    };
+    var t = type || 'info';
+    el.className = 'bk-action-banner bk-action-banner-' + t;
+    el.innerHTML = (icons[t] || icons.info) +
+      '<span>' + msg + '</span>' +
+      '<button class="bk-banner-close" onclick="Backup.dismissBanner()" title="Dismiss">' +
+      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+      '</button>';
+    el.style.display = 'flex';
+    _bannerTimer = setTimeout(function () { _hideActionBanner(); }, 6000);
+  }
+
+  function _hideActionBanner() {
+    clearTimeout(_bannerTimer);
+    var el = document.getElementById('bk-action-banner');
+    if (el) el.style.display = 'none';
+  }
+
+  function _showRestoreBanner(jobId) {
+    var el = document.getElementById('bk-action-banner');
+    if (!el) return;
+    clearTimeout(_bannerTimer);
+    var checkBtn = jobId
+      ? ' <button onclick="Backup.checkRestoreStatus()" style="margin-left:10px;padding:2px 10px;font-size:12px;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;cursor:pointer;">Check Status</button>'
+      : '';
+    var jobLabel = jobId ? ' Job: <code style="font-size:11px;">' + jobId + '</code>' : '';
+    el.className = 'bk-action-banner bk-action-banner-ok';
+    el.innerHTML =
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>' +
+      '<span>Restore started. New instance will appear in Instances tab in 15\u201330 min.' + jobLabel + checkBtn + '</span>' +
+      '<button class="bk-banner-close" onclick="Backup.dismissBanner()" title="Dismiss">' +
+      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+      '</button>';
+    el.style.display = 'flex';
+    // Don't auto-dismiss — user needs time to click Check Status
+  }
+
+  async function checkRestoreStatus() {
+    if (!_lastRestoreJobId || !_lastRestoreInst) {
+      return App.showToast('No recent restore job to check.', 'err');
+    }
+    var el = document.getElementById('bk-action-banner');
+    if (el) {
+      var span = el.querySelector('span');
+      if (span) span.textContent = 'Checking restore status\u2026';
+    }
+    try {
+      var res  = await API.postBackup({
+        action:       'describerestorejob',
+        restoreJobId: _lastRestoreJobId,
+        accountId:    _lastRestoreInst.accountId,
+        region:       _lastRestoreInst.region,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Status check failed.');
+      var status  = data.status || 'UNKNOWN';
+      var pct     = data.percentDone ? ' (' + data.percentDone + '%)' : '';
+      var newArn  = data.createdResourceArn || '';
+      var errMsg  = data.statusMessage || '';
+      var msg, type;
+      if (status === 'COMPLETED') {
+        msg  = '\u2713 Restore complete.' + (newArn ? ' New instance: ' + newArn.split('/').pop() : '');
+        type = 'ok';
+      } else if (status === 'FAILED' || status === 'ABORTED') {
+        msg  = '\u2717 Restore ' + status.toLowerCase() + (errMsg ? ': ' + errMsg : '.');
+        type = 'err';
+      } else {
+        msg  = 'Restore ' + status + pct + '. Check again in a few minutes.';
+        type = 'info';
+      }
+      _showActionBanner(msg, type);
+      if (status !== 'COMPLETED' && status !== 'FAILED' && status !== 'ABORTED') {
+        // Keep banner visible for in-progress states; re-add Check Status
+        clearTimeout(_bannerTimer);
+        var elAfter = document.getElementById('bk-action-banner');
+        if (elAfter) {
+          var sp = elAfter.querySelector('span');
+          if (sp) sp.innerHTML = msg +
+            ' <button onclick="Backup.checkRestoreStatus()" style="margin-left:10px;padding:2px 10px;font-size:12px;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;cursor:pointer;">Check Again</button>';
+        }
+      }
+    } catch (e) {
+      _showActionBanner(e.message, 'err');
+    }
+  }
+
   // ─── On-demand backup
 
   async function backupNow() {
-    if (!selInstance) return App.toast('Select an instance first.', 'error');
+    if (!selInstance) return App.showToast('Select an instance first.', 'err');
     var btn = document.getElementById('bk-btn-now');
-    if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+    var origHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Starting\u2026'; }
+    _hideActionBanner();
     try {
       var res  = await API.postBackup({
         action:      'createbackup',
@@ -305,11 +475,17 @@ const Backup = (function () {
       });
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Backup failed.');
-      App.toast(data.message || 'Backup job started.', 'success');
+      _showActionBanner(
+        (data.message || 'Backup job started successfully.') +
+        ' The snapshot will appear in Recovery Points once complete (usually 5\u201315 minutes).',
+        'ok'
+      );
+      App.showToast(data.message || 'Backup job started.', 'ok');
     } catch (e) {
-      App.toast(e.message, 'error');
+      _showActionBanner(e.message, 'err');
+      App.showToast(e.message, 'err');
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'Back Up Now'; }
+      if (btn) { btn.disabled = false; if (origHtml) btn.innerHTML = origHtml; }
     }
   }
 
@@ -334,31 +510,43 @@ const Backup = (function () {
     _closeRestoreInline();
   }
 
-  async function confirmRestore() {
+  function confirmRestore() {
     if (!selInstance || !restoreArn) return;
     var arnToRestore = restoreArn;  // capture before _closeRestoreInline clears it
     var radio = document.querySelector('input[name="bk-restore-type"]:checked');
     var restoreType = radio ? radio.value : 'new_instance';
     var msg = restoreType === 'replace'
-      ? 'This will create a new instance and STOP the original. Continue?'
-      : 'This will create a new instance. The original keeps running. Continue?';
-    if (!confirm(msg)) return;
-    _closeRestoreInline();
-    try {
-      var res  = await API.postBackup({
-        action:           'restore',
-        recoveryPointArn: arnToRestore,
-        restoreType:      restoreType,
-        instanceId:       selInstance.instanceId,
-        accountId:        selInstance.accountId,
-        region:           selInstance.region,
-      });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Restore failed.');
-      App.toast(data.message || 'Restore job started.', 'success');
-    } catch (e) {
-      App.toast(e.message, 'error');
-    }
+      ? 'This will launch a new EC2 instance and immediately STOP your original instance. Manually terminate the original after verifying the new one.'
+      : 'This will launch a new EC2 instance from this snapshot. Your original instance keeps running — verify the new one before terminating the old.';
+    _showConfirm({
+      title:        'Confirm Restore',
+      message:      msg,
+      confirmLabel: 'Start Restore',
+      confirmClass: 'btn-primary',
+      iconClass:    'bk-confirm-icon-info',
+      onConfirm: async function () {
+        _closeRestoreInline();
+        try {
+          var res  = await API.postBackup({
+            action:           'restore',
+            recoveryPointArn: arnToRestore,
+            restoreType:      restoreType,
+            instanceId:       selInstance.instanceId,
+            accountId:        selInstance.accountId,
+            region:           selInstance.region,
+          });
+          var data = await res.json();
+          if (!res.ok) throw new Error(data.message || 'Restore failed.');
+          _lastRestoreJobId = data.restoreJobId || null;
+          _lastRestoreInst  = { accountId: selInstance.accountId, region: selInstance.region };
+          _showRestoreBanner(data.restoreJobId);
+          App.showToast('Restore job started.', 'ok');
+        } catch (e) {
+          _showActionBanner(e.message, 'err');
+          App.showToast(e.message, 'err');
+        }
+      },
+    });
   }
 
   // ─── Schedule inline form
@@ -457,17 +645,11 @@ const Backup = (function () {
     var preset  = document.getElementById('bk-sched-preset');
     var presetVal = preset ? preset.value : 'daily';
 
-    var scheduleCron;
-    if (presetVal === 'custom') {
-      scheduleCron = cronInp ? cronInp.value.trim() : '';
-    } else {
-      // For non-custom: read the programmatically-built cron value
-      scheduleCron = cronInp ? cronInp.value.trim() : '';
-    }
+    var scheduleCron = cronInp ? cronInp.value.trim() : '';
     var retentionDays = retInp ? parseInt(retInp.value, 10) : 30;
 
-    if (!scheduleCron)                                                  return App.toast('Cron expression is required.', 'error');
-    if (isNaN(retentionDays) || retentionDays < 1 || retentionDays > 365) return App.toast('Retention must be 1–365 days.', 'error');
+    if (!scheduleCron)                                                     return App.showToast('Cron expression is required.', 'err');
+    if (isNaN(retentionDays) || retentionDays < 1 || retentionDays > 365) return App.showToast('Retention must be 1\u2013365 days.', 'err');
 
     var action   = editPlan ? 'updateschedule' : 'createschedule';
     var planName = editPlan
@@ -484,59 +666,53 @@ const Backup = (function () {
       backupPlanName: planName,
     };
     if (editPlan) payload.backupPlanId = editPlan.backupPlanId;
+    var verb = editPlan ? 'updated' : 'created';
     _closeSchedInline();
+    _hideActionBanner();
     try {
       var res  = await API.postBackup(payload);
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to save schedule.');
-      App.toast(data.message || 'Schedule saved.', 'success');
+      _showActionBanner(data.message || ('Backup schedule ' + verb + ' successfully.'), 'ok');
+      App.showToast(data.message || 'Schedule saved.', 'ok');
       load(selInstance.instanceId, selInstance.accountId, selInstance.region);
     } catch (e) {
-      App.toast(e.message, 'error');
+      _showActionBanner(e.message, 'err');
+      App.showToast(e.message, 'err');
     }
   }
 
   // ─── Delete schedule
 
-  async function deleteSchedule(planId, selId) {
+  function deleteSchedule(planId, selId) {
     if (!selInstance) return;
-    if (!confirm('Delete this backup schedule? Existing recovery points are not affected.')) return;
-    try {
-      var res  = await API.postBackup({
-        action:       'deleteschedule',
-        backupPlanId: planId,
-        selectionId:  selId,
-        accountId:    selInstance.accountId,
-        region:       selInstance.region,
-      });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to delete schedule.');
-      App.toast('Schedule deleted.', 'success');
-      load(selInstance.instanceId, selInstance.accountId, selInstance.region);
-    } catch (e) {
-      App.toast(e.message, 'error');
-    }
-  }
-
-  // ─── Delete recovery point
-
-  async function deleteRecovery(arn) {
-    if (!selInstance) return;
-    if (!confirm('Permanently delete this recovery point? This cannot be undone.')) return;
-    try {
-      var res  = await API.postBackup({
-        action:           'deleterecovery',
-        recoveryPointArn: arn,
-        accountId:        selInstance.accountId,
-        region:           selInstance.region,
-      });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to delete recovery point.');
-      App.toast('Recovery point deleted.', 'success');
-      load(selInstance.instanceId, selInstance.accountId, selInstance.region);
-    } catch (e) {
-      App.toast(e.message, 'error');
-    }
+    _showConfirm({
+      title:        'Delete Schedule',
+      message:      'Delete this backup schedule? Existing recovery points are not affected and will remain in the vault.',
+      confirmLabel: 'Delete',
+      confirmClass: 'btn-danger',
+      iconClass:    'bk-confirm-icon-danger',
+      onConfirm: async function () {
+        _hideActionBanner();
+        try {
+          var res  = await API.postBackup({
+            action:       'deleteschedule',
+            backupPlanId: planId,
+            selectionId:  selId,
+            accountId:    selInstance.accountId,
+            region:       selInstance.region,
+          });
+          var data = await res.json();
+          if (!res.ok) throw new Error(data.message || 'Failed to delete schedule.');
+          _showActionBanner('Backup schedule deleted successfully. Existing recovery points are unaffected.', 'ok');
+          App.showToast('Schedule deleted.', 'ok');
+          load(selInstance.instanceId, selInstance.accountId, selInstance.region);
+        } catch (e) {
+          _showActionBanner(e.message, 'err');
+          App.showToast(e.message, 'err');
+        }
+      },
+    });
   }
 
   function refresh() {
@@ -559,6 +735,9 @@ const Backup = (function () {
     closeScheduleModal: closeScheduleModal,
     saveSchedule:       saveSchedule,
     deleteSchedule:     deleteSchedule,
-    deleteRecovery:     deleteRecovery,
+    confirmOk:           confirmOk,
+    confirmCancel:       confirmCancel,
+    dismissBanner:       _hideActionBanner,
+    checkRestoreStatus:  checkRestoreStatus,
   };
 })();

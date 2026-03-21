@@ -2161,6 +2161,7 @@ code {
 .bk-plan-meta  { font-size: .75rem; color: var(--ink3); margin-top: .15rem; }
 .bk-plan-ret   { font-size: .78rem; color: var(--ink2); background: var(--bg2); border-radius: 5px; padding: .2rem .5rem; white-space: nowrap; }
 .bk-plan-last  { font-size: .75rem; color: var(--ink3); white-space: nowrap; }
+.bk-plan-last--next { color: var(--blue); }
 .bk-plan-actions { display: flex; gap: .4rem; }
 
 /* Empty states */
@@ -2242,6 +2243,64 @@ code {
 /* Schedule form */
 .form-group          { margin-bottom: 1rem; }
 .form-group .inp     { width: 100%; }
+
+/* ── Backup: In-page confirmation dialog ── */
+.bk-confirm-overlay {
+  position: fixed; inset: 0;
+  background: rgba(13,27,62,.48);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999;
+  animation: bk-fade-in .15s ease-out;
+}
+@keyframes bk-fade-in { from{opacity:0} to{opacity:1} }
+.bk-confirm-card {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 2rem 2rem 1.6rem;
+  box-shadow: 0 24px 64px rgba(13,27,62,.22), 0 4px 16px rgba(13,27,62,.08);
+  max-width: 420px; width: calc(100% - 2.5rem);
+  animation: bk-scale-in .18s cubic-bezier(.34,1.4,.64,1);
+}
+@keyframes bk-scale-in { from{transform:scale(.9);opacity:0} to{transform:scale(1);opacity:1} }
+.bk-confirm-icon-wrap {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 1.1rem;
+}
+.bk-confirm-icon-danger { background: var(--rdim); color: var(--red); }
+.bk-confirm-icon-warn   { background: var(--adim); color: var(--amber); }
+.bk-confirm-icon-info   { background: var(--bdim); color: var(--blue); }
+.bk-confirm-title {
+  font-size: 1.05rem; font-weight: 700; color: var(--ink);
+  margin: 0 0 .5rem; text-align: center;
+}
+.bk-confirm-msg {
+  font-size: .875rem; color: var(--ink2); line-height: 1.6;
+  margin: 0 0 1.6rem; text-align: center;
+}
+.bk-confirm-actions {
+  display: flex; gap: .75rem; justify-content: center;
+}
+.bk-confirm-actions .btn { min-width: 100px; }
+
+/* ── Backup: Action feedback banner ── */
+.bk-action-banner {
+  display: flex; align-items: flex-start; gap: .65rem;
+  padding: .85rem 1rem; border-radius: 9px;
+  font-size: .86rem; line-height: 1.55; margin-bottom: 1rem;
+  animation: bk-slide-in .18s ease-out;
+}
+.bk-action-banner span { flex: 1; }
+.bk-action-banner-ok  { background: rgba(5,150,105,.1); color: #065f46; border: 1px solid rgba(5,150,105,.25); }
+.bk-action-banner-err { background: rgba(220,38,38,.08); color: var(--red); border: 1px solid rgba(220,38,38,.2); }
+.bk-action-banner-info{ background: var(--bdim); color: var(--blue2); border: 1px solid rgba(37,99,235,.2); }
+.bk-banner-close {
+  flex-shrink: 0; background: none; border: none; cursor: pointer;
+  padding: .1rem; color: inherit; opacity: .6; line-height: 1;
+  border-radius: 4px; display: flex; align-items: center; justify-content: center;
+}
+.bk-banner-close:hover { opacity: 1; }
 
 /* Responsive */
 @media (max-width: 1024px) {

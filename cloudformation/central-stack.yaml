@@ -594,6 +594,9 @@ Resources:
               - Sid: AWSBackupControl
                 Effect: Allow
                 Action:
+                  - backup:CreateBackupVault
+                  - backup:DescribeBackupVault
+                  - backup:UpdateRegionSettings
                   - backup:CreateBackupPlan
                   - backup:UpdateBackupPlan
                   - backup:DeleteBackupPlan
@@ -609,6 +612,20 @@ Resources:
                   - backup:DeleteRecoveryPoint
                   - backup:DescribeBackupJob
                   - backup:DescribeRestoreJob
+                Resource: '*'
+              - Sid: BackupStorage
+                Effect: Allow
+                Action:
+                  - backup-storage:MountCapsule
+                Resource: '*'
+              - Sid: KMSForBackup
+                Effect: Allow
+                Action:
+                  - kms:CreateKey
+                  - kms:DescribeKey
+                  - kms:CreateGrant
+                  - kms:GenerateDataKey
+                  - kms:Decrypt
                 Resource: '*'
               - Sid: BackupPassRole
                 Effect: Allow

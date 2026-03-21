@@ -5,6 +5,7 @@ import json
 import logging
 import uuid
 import boto3
+from botocore.exceptions import ClientError
 
 from utils import get_caller, is_admin, response, error_response
 
@@ -17,6 +18,39 @@ CENTRAL_ACCOUNT_ID = os.environ.get('CENTRAL_ACCOUNT_ID', '')
 ENVIRONMENT        = os.environ.get('ENVIRONMENT', 'production')
 
 _sts_client = None
+
+
+def _enable_backup_region(backup_client):
+    """Opt-in EC2 resource type for AWS Backup in the client's region (idempotent)."""
+    try:
+        backup_client.update_region_settings(
+            ResourceTypeOptInPreference={'EC2': True}
+        )
+    except Exception as e:
+        logger.warning('update_region_settings failed (non-fatal): %s', e)
+
+
+def _ensure_vault(backup_client):
+    """Create the backup vault in the target account/region if it does not exist yet.
+    Uses create-first (not describe-first) so that the call also initializes
+    AWS Backup in regions where it has never been used — in cold regions,
+    describe_backup_vault returns AccessDeniedException instead of
+    ResourceNotFoundException, but create_backup_vault succeeds and bootstraps
+    the service.
+    """
+    try:
+        backup_client.create_backup_vault(BackupVaultName=BACKUP_VAULT_NAME)
+    except backup_client.exceptions.AlreadyExistsException:
+        pass  # vault already exists — nothing to do
+
+
+def _backup_role_arn(account_id):
+    """Return the IAM role ARN that AWS Backup assumes to access EC2 in account_id.
+    Must be a role in the same account as the resource being backed up.
+    """
+    if account_id == CENTRAL_ACCOUNT_ID:
+        return BACKUP_ROLE_ARN
+    return f'arn:aws:iam::{account_id}:role/EC2ControlBackupRole-{ENVIRONMENT}'
 
 
 def _get_sts():
@@ -38,7 +72,9 @@ def _get_clients(account_id, region):
     role_arn = f'arn:aws:iam::{account_id}:role/EC2ControlCrossAccountRole-{ENVIRONMENT}'
     creds = _get_sts().assume_role(
         RoleArn=role_arn,
-        RoleSessionName='ec2ctrl-backup',
+        RoleSessionName=f'ec2ctrl-backup-{account_id}',
+        ExternalId=f'ec2-control-{CENTRAL_ACCOUNT_ID}',
+        DurationSeconds=900,
     )['Credentials']
     kwargs = dict(
         aws_access_key_id=creds['AccessKeyId'],
@@ -159,13 +195,14 @@ def handle_backup_mutation(event):
 
     action = body.get('action', '').strip().lower()
     dispatch = {
-        'createbackup':   _create_backup,
-        'createschedule': _create_schedule,
-        'updateschedule': _update_schedule,
-        'deleteschedule': _delete_schedule,
-        'listschedules':  _list_schedules,
-        'restore':        _restore,
-        'deleterecovery': _delete_recovery,
+        'createbackup':      _create_backup,
+        'createschedule':    _create_schedule,
+        'updateschedule':    _update_schedule,
+        'deleteschedule':    _delete_schedule,
+        'listschedules':     _list_schedules,
+        'restore':           _restore,
+        'deleterecovery':    _delete_recovery,
+        'describerestorejob': _describe_restore_job,
     }
     handler = dispatch.get(action)
     if not handler:
@@ -192,10 +229,12 @@ def _create_backup(event, body):
 
     try:
         backup_client, _ = _get_clients(account_id, region)
+        _enable_backup_region(backup_client)
+        _ensure_vault(backup_client)
         job = backup_client.start_backup_job(
             BackupVaultName=BACKUP_VAULT_NAME,
             ResourceArn=instance_arn,
-            IamRoleArn=BACKUP_ROLE_ARN,
+            IamRoleArn=_backup_role_arn(account_id),
             IdempotencyToken=str(uuid.uuid4()),
             Lifecycle={'DeleteAfterDays': 30},
         )
@@ -225,6 +264,8 @@ def _create_schedule(event, body):
 
     try:
         backup_client, _ = _get_clients(account_id, region)
+        _enable_backup_region(backup_client)
+        _ensure_vault(backup_client)
         plan_resp = backup_client.create_backup_plan(
             BackupPlan={
                 'BackupPlanName': plan_name,
@@ -241,7 +282,7 @@ def _create_schedule(event, body):
             BackupPlanId=plan_id,
             BackupSelection={
                 'SelectionName': 'instance-selection',
-                'IamRoleArn':    BACKUP_ROLE_ARN,
+                'IamRoleArn':    _backup_role_arn(account_id),
                 'Resources':     [instance_arn],
             }
         )
@@ -403,7 +444,7 @@ def _restore(event, body):
         restore_resp = backup_client.start_restore_job(
             RecoveryPointArn=recovery_point_arn,
             Metadata=metadata,
-            IamRoleArn=BACKUP_ROLE_ARN,
+            IamRoleArn=_backup_role_arn(account_id),
             IdempotencyToken=str(uuid.uuid4()),
             ResourceType='EC2',
         )
@@ -423,6 +464,34 @@ def _restore(event, body):
 
     except Exception as e:
         logger.exception('_restore error')
+        return error_response(500, str(e))
+
+
+def _describe_restore_job(event, body):
+    """Get the current status of a restore job by ID."""
+    account_id = body.get('accountId', '')
+    region     = body.get('region', 'ap-south-1')
+    job_id     = body.get('restoreJobId', '')
+
+    if not account_id or not job_id:
+        return error_response(400, 'accountId and restoreJobId are required.')
+
+    guard = _check_account_access(event, account_id)
+    if guard:
+        return guard
+
+    try:
+        backup_client, _ = _get_clients(account_id, region)
+        resp = backup_client.describe_restore_job(RestoreJobId=job_id)
+        return response(200, {
+            'restoreJobId':       job_id,
+            'status':             resp.get('Status', ''),
+            'statusMessage':      resp.get('StatusMessage', ''),
+            'createdResourceArn': resp.get('CreatedResourceArn', ''),
+            'percentDone':        resp.get('PercentDone', ''),
+        })
+    except Exception as e:
+        logger.exception('_describe_restore_job error')
         return error_response(500, str(e))
 
 

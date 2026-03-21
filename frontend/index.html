@@ -938,6 +938,9 @@
           <!-- Stats strip + main panels (shown after instance selected) -->
           <div id="bk-content" style="display:none">
 
+            <!-- Action feedback banner -->
+            <div id="bk-action-banner" class="bk-action-banner" style="display:none"></div>
+
             <!-- Stat cards -->
             <div class="bk-stats">
               <div class="bk-stat-card">
@@ -1054,7 +1057,7 @@
                     <p class="bk-panel-sub">Automated backup plans managed by AWS Backup</p>
                   </div>
                 </div>
-                <button class="btn btn-out btn-sm" onclick="Backup.openScheduleForm(null)">
+                <button class="btn bk-btn-backup" onclick="Backup.openScheduleForm(null)">
                   <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   Add Schedule
                 </button>
@@ -1135,6 +1138,22 @@
             </div>
 
           </div><!-- /#bk-content -->
+
+          <!-- In-page confirmation dialog (replaces browser confirm()) -->
+          <div id="bk-confirm-overlay" class="bk-confirm-overlay" style="display:none" role="dialog" aria-modal="true">
+            <div class="bk-confirm-card">
+              <div class="bk-confirm-icon-wrap bk-confirm-icon-danger" id="bk-confirm-icon-wrap">
+                <svg id="bk-confirm-icon-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </div>
+              <h3 class="bk-confirm-title" id="bk-confirm-title">Confirm Action</h3>
+              <p class="bk-confirm-msg" id="bk-confirm-msg"></p>
+              <div class="bk-confirm-actions">
+                <button class="btn btn-out" onclick="Backup.confirmCancel()">Cancel</button>
+                <button class="btn btn-danger" id="bk-confirm-ok" onclick="Backup.confirmOk()">Confirm</button>
+              </div>
+            </div>
+          </div>
+
         </div><!-- /#pv-backup -->
 
     </main><!-- /content -->

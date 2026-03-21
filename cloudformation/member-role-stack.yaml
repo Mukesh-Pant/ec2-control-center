@@ -59,13 +59,59 @@ Resources:
                 Action:
                   - ce:GetCostAndUsage
                 Resource: '*'
-              - Sid: BackupReadAndStart
+              - Sid: BackupFullControl
                 Effect: Allow
                 Action:
+                  - backup:CreateBackupVault
+                  - backup:DescribeBackupVault
+                  - backup:UpdateRegionSettings
+                  - backup-storage:MountCapsule
+                  - kms:CreateKey
+                  - kms:DescribeKey
+                  - kms:CreateGrant
+                  - kms:GenerateDataKey
+                  - kms:Decrypt
+                  - backup:CreateBackupPlan
+                  - backup:UpdateBackupPlan
+                  - backup:DeleteBackupPlan
+                  - backup:CreateBackupSelection
+                  - backup:DeleteBackupSelection
                   - backup:StartBackupJob
                   - backup:StartRestoreJob
+                  - backup:ListBackupPlans
+                  - backup:ListBackupSelections
+                  - backup:GetBackupPlan
+                  - backup:GetBackupSelection
                   - backup:ListRecoveryPointsByResource
+                  - backup:DeleteRecoveryPoint
+                  - backup:DescribeBackupJob
+                  - backup:DescribeRestoreJob
                 Resource: '*'
+              - Sid: BackupPassRole
+                Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/EC2ControlBackupRole-${Environment}'
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: ManagedBy
+          Value: CentralPortal
+
+  BackupServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'EC2ControlBackupRole-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
       Tags:
         - Key: Project
           Value: EC2Control
@@ -79,6 +125,10 @@ Outputs:
       ARN of the cross-account role. Register this account in the central portal
       by adding it to the DynamoDB AccountRegistry table.
     Value: !GetAtt CrossAccountRole.Arn
+
+  BackupRoleArn:
+    Description: ARN of the backup service role (assumed by AWS Backup to access EC2 in this account).
+    Value: !GetAtt BackupServiceRole.Arn
 
   RegisterCommand:
     Description: Run this command to register this account in the central portal.
