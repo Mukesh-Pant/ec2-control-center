@@ -5,10 +5,11 @@
 const App = (function () {
 
   // ─── State ───
-  var currentPage = 'dashboard';
-  var sessionEnd  = 0;
-  var clockTick   = null;
-  var isAdmin     = false;
+  var currentPage      = 'dashboard';
+  var sessionEnd       = 0;
+  var clockTick        = null;
+  var isAdmin          = false;
+  var _extensionPresent = false;
 
   var PAGE_TITLES = {
     dashboard: 'Dashboard',
@@ -234,7 +235,34 @@ const App = (function () {
 
   // ─── Init ──────────────────────────────────────────────────────────────────
 
+  // ─── Extension Detection ───────────────────────────────────────────────────
+
+  function _initExtensionDetection() {
+    // content.js sets this flag synchronously at document_start
+    _extensionPresent = !!window.EC2CTRL_EXTENSION;
+
+    // Also listen in case the content script fires after this runs
+    window.addEventListener('EC2CTRL_EXTENSION_READY', function () {
+      _extensionPresent = true;
+      var banner = document.getElementById('ext-install-banner');
+      if (banner) banner.classList.add('hidden');
+    });
+
+    // Show banner after a short delay if extension is still absent
+    setTimeout(function () {
+      if (!_extensionPresent) {
+        var banner = document.getElementById('ext-install-banner');
+        if (banner) banner.classList.remove('hidden');
+      }
+    }, 800);
+  }
+
+  function isExtensionPresent() { return _extensionPresent; }
+
+  // ─── Init ──────────────────────────────────────────────────────────────────
+
   function init() {
+    _initExtensionDetection();
     Audit.init();
     Billing.init();
     Accounts.init();
@@ -259,11 +287,12 @@ const App = (function () {
     setWidth:         setWidth,
     esc:              esc,
     updateDashStats:  updateDashStats,
-    setAdmin:         setAdmin,
-    setUserInfo:      setUserInfo,
-    setSessionExpiry: setSessionExpiry,
-    init:             init,
-    prices:           _PRICES,
+    setAdmin:           setAdmin,
+    setUserInfo:        setUserInfo,
+    setSessionExpiry:   setSessionExpiry,
+    isExtensionPresent: isExtensionPresent,
+    init:               init,
+    prices:             _PRICES,
   };
 
 })();

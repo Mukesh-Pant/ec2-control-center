@@ -26,6 +26,7 @@ Fully serverless, zero infrastructure to manage.
 | M7 | Custom auth page + self-signup + domain migration to solobil.com | ✅ LIVE |
 | M8 | RBAC — Cognito groups, user-account assignments, /users admin panel | ✅ LIVE |
 | M9 | Backup — AWS Backup service, on-demand + scheduled backups, restore, /backup endpoint | ✅ LIVE |
+| M10 | Console Login — one-click AWS Console via STS federation + Firefox container tabs extension | ✅ LIVE |
 
 **API:** REST API v1 (migrated from HTTP API v2) with COGNITO_USER_POOLS authorizer.
 
@@ -65,21 +66,27 @@ EC2-control-center/
 ├── example-deploy-config.env   ← Template for deploy-config.env
 ├── oculogo.png                 ← One Cloud Utopia logo (source)
 ├── cloudformation/
-│   ├── central-stack.yaml      ← All AWS resources (M1-M9 + custom domain + auth + RBAC + Backup)
+│   ├── central-stack.yaml      ← All AWS resources (M1-M10 + custom domain + auth + RBAC + Backup + Console Login)
 │   ├── acm-cert-stack.yaml     ← ACM cert for custom domain (us-east-1, deploy ONCE)
 │   └── member-role-stack.yaml  ← Cross-account IAM role (deploy in each member account)
 ├── lambda/
 │   ├── ec2_controller/
-│   │   ├── index.py            ← Main handler: /ec2, /accounts, /audit, /pricing, /users, /backup routes
+│   │   ├── index.py            ← Main handler: /ec2, /accounts, /audit, /pricing, /users, /backup, /console-login routes
 │   │   ├── accounts.py         ← Account registry + user-account assignment CRUD
 │   │   ├── audit.py            ← Audit log read/write
 │   │   ├── backup.py           ← AWS Backup: on-demand, schedule, restore, delete (M9)
+│   │   ├── console_login.py    ← Console login: STS AssumeRole → Federation API → SigninToken URL (M10)
 │   │   ├── pricing.py          ← EC2 on-demand pricing lookup
 │   │   └── utils.py            ← CORS helpers, JWT claims, error mapping, RBAC helpers
 │   ├── config_injector/
 │   │   └── index.py            ← Custom resource: injects CONFIG, uploads frontend, invalidates CDN
 │   └── idle_checker/
 │       └── index.py            ← CPU check, auto-stop, SNS alert
+├── firefox-extension/
+│   ├── manifest.json           ← MV3; matches solobil.com + www.solobil.com; permissions: contextualIdentities, cookies, tabs, storage
+│   ├── background.js           ← Container tab manager: one named Firefox container per AWS account
+│   ├── content.js              ← Sets window.wrappedJSObject.EC2CTRL_EXTENSION=true; bridges postMessage → background
+│   └── icons/                  ← icon-48.png + icon-96.png
 └── frontend/
     ├── index.html              ← SPA shell (CONFIG auto-injected at deploy) + auth page HTML
     ├── oculogo.png             ← Logo (deployed to S3 with frontend)
@@ -95,7 +102,7 @@ EC2-control-center/
         ├── accounts.js         ← Multi-account management
         ├── users.js            ← User management: roles, account grants (admin only)
         ├── backup.js           ← Backup dashboard: on-demand backup, schedules, restore (M9)
-        ├── app.js              ← App init, tabs, toast, session timer, role badge
+        ├── app.js              ← App init, tabs, toast, session timer, role badge, extension detection (M10)
         └── vendor/
             └── amazon-cognito-identity.min.js  ← Cognito SDK v6.3.12 (CDN fallback)
 ```
@@ -121,7 +128,15 @@ Browser → CloudFront → S3 (private — frontend files)
          ├── DynamoDB → account registry + audit logs + user-account assignments
          ├── Cognito IdP → group management (admins/operators/viewers)
          ├── Cost Explorer → billing data
-         └── AWS Backup → ec2-control-vault-production (on-demand, scheduled, restore)
+         ├── AWS Backup → ec2-control-vault-production (on-demand, scheduled, restore)
+         └── AWS Federation API → console login (STS AssumeRole → signin.aws.amazon.com → SigninToken)
+
+Console Login flow (M10):
+  accounts.js "Console Login" button
+    → POST /console-login → Lambda STS AssumeRole → Federation SigninToken URL
+    → window.postMessage('EC2CTRL_OPEN_CONSOLE', loginUrl)
+    → content.js bridges to background.js
+    → Firefox container tab opened (one named container per AWS account)
 
 Domain: solobil.com (primary) → CloudFront
         www.solobil.com → CloudFront Function → 301 → solobil.com
@@ -284,6 +299,35 @@ After onboarding via Accounts tab, also add account ARN to vault `AccessPolicy` 
 
 ---
 
+## Console Login System (M10)
+
+### Lambda (console_login.py)
+- `handle_console_login(event)` — POST /console-login
+- RBAC: admins + operators only; viewers → 403; LOCAL (central account roleArn) → 400
+- Flow: parse body → RBAC → account lookup → STS `assume_role(DurationSeconds=3600, ExternalId=f'ec2-control-{CENTRAL_ACCOUNT_ID}')` → build Session JSON → call Federation API → return `loginUrl`
+- Federation endpoint: `https://signin.aws.amazon.com/federation?Action=getSigninToken&SessionDuration=3540&Session=<url-encoded-json>`
+- **`SessionDuration=3540` (59 min)** — must be strictly less than the 3600s credential lifetime; using 3600 causes HTTP 400 from the federation endpoint due to the credential expiry boundary check
+- `urllib.parse.quote(session_json, safe='')` — encode ALL chars including `/` (AWS session tokens contain `/`)
+- Role chaining cap: Lambda role → member role = role chaining → DurationSeconds hard-capped at 3600s regardless of `MaxSessionDuration` on target role
+- Returns: `{ loginUrl, accountId, accountName }`
+
+### Firefox Extension (firefox-extension/)
+- **manifest.json** (MV3): matches `https://solobil.com/*` AND `https://www.solobil.com/*` (portal serves on www subdomain without redirect)
+- **content.js**: uses `window.wrappedJSObject.EC2CTRL_EXTENSION = true` — Firefox XRay isolation requires `wrappedJSObject` to write to the underlying page window (direct `window.X = true` is invisible to page scripts)
+- **background.js**: one named Firefox container per AWS account (`EC2Ctrl — <accountName>`); if account tab is already open → focus it; containerId persisted across restarts; tabId cleared on tab close
+- Extension detection: page checks `window.EC2CTRL_EXTENSION`; content.js also dispatches `EC2CTRL_EXTENSION_READY` CustomEvent; install banner shown after 800ms if absent
+
+### Frontend (accounts.js + app.js)
+- `App.isExtensionPresent()` — checks `window.EC2CTRL_EXTENSION` flag
+- `App.consoleLogin(accountId, accountName)` — calls `api.consoleLogin(accountId, region)`, then `window.postMessage({type:'EC2CTRL_OPEN_CONSOLE', ...})`
+- Console Login button visible on each enabled non-LOCAL account card (admins + operators only)
+- Install banner shown if extension not detected after 800ms delay
+
+### api.js addition
+- `consoleLogin(accountId, region)` — POST /console-login
+
+---
+
 ## Key Architecture Decisions
 
 | Decision | Choice | Why |
@@ -298,6 +342,8 @@ After onboarding via Accounts tab, also add account ARN to vault `AccessPolicy` 
 | Multi-account | STS AssumeRole + DynamoDB | Central creds; cross-account via role |
 | Idle auto-stop | Default ON, opt-out via tag | Aggressive cost savings |
 | Custom domain | CloudFront Alias + ACM (us-east-1) + Route 53 A ALIAS | Standard CDN HTTPS pattern |
+| Console login | STS AssumeRole → AWS Federation API → SigninToken | No credential exposure; single-use URL; browser handles session |
+| Firefox containers | One named container per AWS account | Isolated cookies per account; no cross-account session bleed |
 
 ---
 
@@ -315,6 +361,7 @@ After onboarding via Accounts tab, also add account ARN to vault `AccessPolicy` 
 | POST | /users | `action: setRole/grantAccount/revokeAccount/getPermissions` (admin only) |
 | GET | /backup | `?instanceId&accountId&region` — recovery points + backup plans |
 | POST | /backup | `action: createbackup/createschedule/updateschedule/deleteschedule/listschedules/restore/deleterecovery` |
+| POST | /console-login | `{accountId, region}` — returns `{loginUrl, accountId, accountName}` (admins + operators only) |
 
 ---
 

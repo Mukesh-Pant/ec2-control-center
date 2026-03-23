@@ -64,12 +64,39 @@ def get_mime_type(filename):
     return MIME_TYPES.get(ext, 'application/octet-stream')
 
 
+def _empty_bucket(bucket_name):
+    """Delete all object versions and delete markers so CF can remove the bucket."""
+    paginator = s3.get_paginator('list_object_versions')
+    try:
+        delete_list = []
+        for page in paginator.paginate(Bucket=bucket_name):
+            for v in page.get('Versions', []):
+                delete_list.append({'Key': v['Key'], 'VersionId': v['VersionId']})
+            for m in page.get('DeleteMarkers', []):
+                delete_list.append({'Key': m['Key'], 'VersionId': m['VersionId']})
+        for i in range(0, len(delete_list), 1000):
+            s3.delete_objects(
+                Bucket=bucket_name,
+                Delete={'Objects': delete_list[i:i+1000], 'Quiet': True}
+            )
+        logger.info("Emptied %d object versions from %s", len(delete_list), bucket_name)
+    except s3.exceptions.NoSuchBucket:
+        logger.info("Bucket %s already gone — skipping", bucket_name)
+    except Exception as e:
+        logger.warning("Failed to empty bucket %s: %s", bucket_name, e)
+        raise
+
+
 def handler(event, context):
     logger.info("Event: %s", json.dumps(event))
 
     try:
         if event['RequestType'] == 'Delete':
-            logger.info("Delete request — nothing to clean up")
+            props = event.get('ResourceProperties', {})
+            portal_bucket = props.get('PortalBucket', '')
+            if portal_bucket:
+                logger.info("Delete — emptying bucket: %s", portal_bucket)
+                _empty_bucket(portal_bucket)
             send_response(event, 'SUCCESS')
             return
 

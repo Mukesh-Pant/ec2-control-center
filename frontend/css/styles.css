@@ -2327,3 +2327,58 @@ code {
 @media (max-width: 480px) {
   .bk-stats { grid-template-columns: 1fr; }
 }
+
+/* ════════ CONSOLE LOGIN ════════ */
+
+/* Console Login button — accounts card */
+.act-btn-console:not(:disabled) {
+  background: rgba(26,115,232,.12);
+  color: #4d9eff;
+  border-color: rgba(26,115,232,.25);
+}
+.act-btn-console:hover:not(:disabled) { background: #1a73e8; color: #fff; }
+
+/* Console button — instance group header */
+.btn-console-sm {
+  background: transparent;
+  color: #7eb3ff;
+  border: 1px solid rgba(126,179,255,.45);
+  border-radius: 4px;
+  padding: 2px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  margin-left: 8px;
+  white-space: nowrap;
+  line-height: 1.6;
+  transition: background .15s, border-color .15s;
+}
+.btn-console-sm:hover { background: rgba(126,179,255,.12); border-color: #7eb3ff; }
+
+/* Extension install banner */
+.ext-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #112240;
+  color: #cfe2ff;
+  padding: 9px 20px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(126,179,255,.15);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.ext-banner.hidden { display: none; }
+.ext-banner a { color: #7eb3ff; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.ext-banner a:hover { text-decoration: underline; }
+.ext-banner button {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #7eb3ff;
+  font-size: 17px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
+}
+.ext-banner button:hover { color: #fff; }

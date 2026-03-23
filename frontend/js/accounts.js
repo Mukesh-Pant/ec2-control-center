@@ -73,6 +73,11 @@ const Accounts = (function () {
     var removeBtn = isCentral ? '' :
       '<button class="act-btn act-btn-remove" onclick="Accounts.removeAccount(\'' + _esc(acct.accountId) + '\', \'' + _esc(acct.accountName) + '\')">Remove</button>';
 
+    var role = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : 'admin';
+    var consoleBtn = (!isCentral && acct.enabled && role !== 'viewer')
+      ? '<button class="act-btn act-btn-console" id="console-btn-' + _esc(acct.accountId) + '" onclick="Accounts.consoleLogin(\'' + _esc(acct.accountId) + '\')">Console Login</button>'
+      : '';
+
     return (
       '<div class="act-card-hd">' +
         '<div>' +
@@ -89,7 +94,7 @@ const Accounts = (function () {
         '<div class="act-role-arn">' + roleDisplay + '</div>' +
       '</div>' +
       '<div class="act-actions">' +
-        testBtn + toggleBtn + removeBtn +
+        testBtn + toggleBtn + removeBtn + consoleBtn +
       '</div>'
     );
   }
@@ -153,6 +158,36 @@ const Accounts = (function () {
       load();
     } catch (err) {
       App.showToast('Failed: ' + err.message, 'err');
+    }
+  }
+
+  // ─── Console Login ─────────────────────────────────────────────────────────
+
+  async function consoleLogin(accountId) {
+    if (!App.isExtensionPresent()) {
+      App.showToast('Firefox extension not installed. See the banner above to install.', 'warn');
+      return;
+    }
+    var btn = document.getElementById('console-btn-' + accountId);
+    if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+
+    try {
+      var res  = await API.postConsoleLogin(accountId, 'ap-south-1');
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Request failed');
+
+      window.postMessage({
+        type:        'EC2CTRL_OPEN_CONSOLE',
+        accountId:   data.accountId,
+        accountName: data.accountName,
+        loginUrl:    data.loginUrl,
+      }, '*');
+      App.log('Console login initiated for ' + (data.accountName || accountId), 'ok');
+    } catch (err) {
+      App.showToast('Console login failed: ' + err.message, 'err');
+      App.log('Console login failed for ' + accountId + ': ' + err.message, 'err');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Console Login'; }
     }
   }
 
@@ -250,6 +285,7 @@ const Accounts = (function () {
     setEnabled:     setEnabled,
     testConnection: testConnection,
     removeAccount:  removeAccount,
+    consoleLogin:   consoleLogin,
     openModal:      openModal,
     closeModal:     closeModal,
     confirmAdd:     confirmAdd,

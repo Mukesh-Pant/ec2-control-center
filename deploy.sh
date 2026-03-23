@@ -129,6 +129,7 @@ fi
 
 aws cloudformation deploy \
   --template-file "$SCRIPT_DIR/cloudformation/central-stack.yaml" \
+  --s3-bucket "${CODE_BUCKET}" \
   --stack-name "$STACK_NAME" \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides "${PARAM_OVERRIDES[@]}" \

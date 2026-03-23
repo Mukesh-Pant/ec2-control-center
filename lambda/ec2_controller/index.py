@@ -54,6 +54,9 @@ def lambda_handler(event, context):
         return backup.handle_backup_list(event)
     elif path == '/backup' and method == 'POST':
         return backup.handle_backup_mutation(event)
+    elif path == '/console-login' and method == 'POST':
+        from console_login import handle_console_login
+        return handle_console_login(event)
     else:
         return error_response(404, 'Not found')
 

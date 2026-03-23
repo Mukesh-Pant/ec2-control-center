@@ -142,6 +142,15 @@ const API = (function () {
     return call('/backup', 'POST', body);
   }
 
+  /**
+   * POST /console-login — generate a federated AWS Console signin URL
+   * @param {string} accountId - target AWS account ID
+   * @param {string} region    - AWS region to open in console
+   */
+  async function postConsoleLogin(accountId, region) {
+    return call('/console-login', 'POST', { accountId: accountId, region: region });
+  }
+
   return {
     call,
     ec2Action,
@@ -154,6 +163,7 @@ const API = (function () {
     postUsers,
     getBackups,
     postBackup,
+    postConsoleLogin,
   };
 
 })();

@@ -705,7 +705,14 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:DeleteObject
+                  - s3:DeleteObjectVersion
                 Resource: !Sub 'arn:aws:s3:::ec2-control-portal-${AWS::AccountId}-${AWS::Region}/*'
+              - Sid: S3ListPortal
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                Resource: !Sub 'arn:aws:s3:::ec2-control-portal-${AWS::AccountId}-${AWS::Region}'
               - Sid: CloudFrontInvalidate
                 Effect: Allow
                 Action:
@@ -848,6 +855,13 @@ Resources:
       RestApiId: !Ref RestApi
       ParentId: !GetAtt RestApi.RootResourceId
       PathPart: backup
+
+  ResourceConsoleLogin:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: console-login
 
   # =============================================
   # REST API - CORS Gateway Responses
@@ -1201,6 +1215,45 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
 
+  MethodPostConsoleLogin:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceConsoleLogin
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsConsoleLogin:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceConsoleLogin
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   # =============================================
   # REST API - Deployment + Stage
   # =============================================
@@ -1224,9 +1277,11 @@ Resources:
       - MethodGetBackup
       - MethodPostBackup
       - MethodOptionsBackup
+      - MethodPostConsoleLogin
+      - MethodOptionsConsoleLogin
     Properties:
       RestApiId: !Ref RestApi
-      Description: !Sub 'Deployment ${LambdaCodeVersion}-backup'
+      Description: !Sub 'Deployment ${LambdaCodeVersion}-console-login'
 
   RestApiStage:
     Type: AWS::ApiGateway::Stage

@@ -76,10 +76,18 @@ const Instances = (function () {
       groups[i.accountId].instances.push(i);
     });
 
+    var role = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : 'admin';
+    var canConsole = (role === 'admin' || role === 'operator');
+
     var html = '';
     order.forEach(function (acctId) {
       var g   = groups[acctId];
       var gid = 'ag-' + acctId;
+      // Use the region of the first instance in this group as the console region
+      var firstRegion = g.instances.length ? App.esc(g.instances[0].region) : 'ap-south-1';
+      var consoleBtn = canConsole
+        ? '<button class="btn-console-sm" onclick="event.stopPropagation();Accounts.consoleLogin(\'' + App.esc(acctId) + '\')" title="Open AWS Console for this account">Console &#x2197;</button>'
+        : '';
       html +=
         '<div class="ag" id="' + gid + '">' +
           '<div class="ag-hd" onclick="Instances._toggleAg(\'' + gid + '\')">' +
@@ -87,6 +95,7 @@ const Instances = (function () {
             '<span class="ag-name">' + App.esc(g.name) + '</span>' +
             '<span class="ag-id">' + App.esc(acctId) + '</span>' +
             '<span class="ag-count">' + g.instances.length + '</span>' +
+            consoleBtn +
           '</div>' +
           '<div class="ag-body" id="' + gid + '-body">' +
             '<table class="itbl">' +
