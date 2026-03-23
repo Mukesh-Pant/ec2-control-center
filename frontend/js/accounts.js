@@ -165,7 +165,13 @@ const Accounts = (function () {
 
   async function consoleLogin(accountId) {
     if (!App.isExtensionPresent()) {
-      App.showToast('Firefox extension not installed. See the banner above to install.', 'warn');
+      var isFirefox = /Firefox\//.test(navigator.userAgent);
+      App.showToast(
+        isFirefox
+          ? 'Firefox extension not installed. See the banner above to install.'
+          : 'Console Login requires Firefox with the EC2 Control Extension installed.',
+        'warn'
+      );
       return;
     }
     var btn = document.getElementById('console-btn-' + accountId);

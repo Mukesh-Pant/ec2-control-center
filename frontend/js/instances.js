@@ -44,6 +44,9 @@ const Instances = (function () {
       _renderDashList();
       App.updateDashStats(allInstances);
       App.log('Loaded ' + allInstances.length + ' instance(s)', 'ok');
+      if (typeof Backup !== 'undefined' && Backup.onInstancesRefreshed) {
+        Backup.onInstancesRefreshed();
+      }
 
     } catch (err) {
       if (err.message === 'Session expired' || err.message === 'Unauthorized') return;

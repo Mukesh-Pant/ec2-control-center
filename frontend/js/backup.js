@@ -719,10 +719,29 @@ const Backup = (function () {
     if (selInstance) load(selInstance.instanceId, selInstance.accountId, selInstance.region);
   }
 
+  // ─── Called by Instances.refresh() after instance data is loaded ─────────────
+  // Repopulates the instance selector while preserving the current selection.
+  // Fixes the race condition where the user visits Backup before instances load.
+  function onInstancesRefreshed() {
+    var sel = document.getElementById('bk-instance-select');
+    if (!sel) return;
+    var prev = sel.value;
+    _populateInstanceSelector();
+    if (prev) {
+      sel.value = prev;
+      if (!sel.value) {   // previous instance no longer in the list
+        selInstance = null;
+        var wrap = document.getElementById('bk-content');
+        if (wrap) wrap.style.display = 'none';
+      }
+    }
+  }
+
   // ─── Public API
   return {
-    init:               init,
-    onTabActivated:     onTabActivated,
+    init:                 init,
+    onTabActivated:       onTabActivated,
+    onInstancesRefreshed: onInstancesRefreshed,
     load:               load,
     refresh:            refresh,
     backupNow:          backupNow,

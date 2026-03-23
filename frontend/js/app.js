@@ -248,9 +248,11 @@ const App = (function () {
       if (banner) banner.classList.add('hidden');
     });
 
-    // Show banner after a short delay if extension is still absent
+    // Show banner after a short delay if extension is still absent — Firefox only
+    // (Non-Firefox users cannot install a Firefox extension, so the banner is irrelevant)
+    var isFirefox = /Firefox\//.test(navigator.userAgent);
     setTimeout(function () {
-      if (!_extensionPresent) {
+      if (!_extensionPresent && isFirefox) {
         var banner = document.getElementById('ext-install-banner');
         if (banner) banner.classList.remove('hidden');
       }
