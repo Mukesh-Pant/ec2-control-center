@@ -146,19 +146,51 @@ const Accounts = (function () {
   }
 
   async function removeAccount(accountId, accountName) {
-    if (!confirm('Remove account "' + accountName + '" (' + accountId + ') from the portal?\n\nInstances from this account will no longer be visible.')) {
-      return;
-    }
-    try {
-      var res  = await API.postAccounts({ action: 'remove', accountId: accountId });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Request failed');
-      App.showToast('Account removed.', 'ok');
-      App.log('Account ' + accountId + ' (' + accountName + ') removed.', 'sys');
-      load();
-    } catch (err) {
-      App.showToast('Failed: ' + err.message, 'err');
-    }
+    _showConfirm({
+      title:        'Remove Account',
+      message:      'Remove account "' + accountName + '" (' + accountId + ') from the portal? Instances from this account will no longer be visible.',
+      confirmLabel: 'Remove Account',
+      type:         'danger',
+    }, async function () {
+      try {
+        var res  = await API.postAccounts({ action: 'remove', accountId: accountId });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Request failed');
+        App.showToast('Account removed.', 'ok');
+        App.log('Account ' + accountId + ' (' + accountName + ') removed.', 'sys');
+        load();
+      } catch (err) {
+        App.showToast('Failed: ' + err.message, 'err');
+      }
+    });
+  }
+
+  function _showConfirm(opts, onConfirm) {
+    var type    = opts.type || 'danger';
+    var icons   = {
+      danger: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>',
+      warn:   '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    };
+    var btnCls  = { danger: 'btn-red', warn: 'btn-amber', info: 'btn-blue' };
+
+    var overlay = document.createElement('div');
+    overlay.className = 'bk-confirm-overlay';
+    overlay.innerHTML =
+      '<div class="bk-confirm-card">' +
+        '<div class="bk-confirm-icon-wrap bk-confirm-icon-' + type + '">' + (icons[type] || icons.danger) + '</div>' +
+        '<div class="bk-confirm-title">' + _esc(opts.title) + '</div>' +
+        '<div class="bk-confirm-msg">'   + _esc(opts.message) + '</div>' +
+        '<div class="bk-confirm-actions">' +
+          '<button class="btn btn-out"                         id="app-dlg-cancel">Cancel</button>' +
+          '<button class="btn ' + (btnCls[type] || 'btn-red') + '" id="app-dlg-ok">' + _esc(opts.confirmLabel || 'Confirm') + '</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    function _remove() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) _remove(); });
+    overlay.querySelector('#app-dlg-cancel').addEventListener('click', _remove);
+    overlay.querySelector('#app-dlg-ok').addEventListener('click', function () { _remove(); onConfirm(); });
   }
 
   // ─── Console Login ─────────────────────────────────────────────────────────
