@@ -11,6 +11,7 @@ venv/
 
 # AWS credentials / secrets
 deploy-config.env
+deploy-config-dev.env
 .env.local
 *.pem
 *.key
@@ -25,6 +26,7 @@ Thumbs.db
 
 # Claude session files (keep .claude/ project memory out of repo)
 .claude/
+docs/superpowers/
 
 # Git worktrees
 .worktrees/

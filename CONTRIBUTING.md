@@ -13,7 +13,7 @@
 
 | Environment | Branch | URL | Deploy trigger |
 |-------------|--------|-----|----------------|
-| Development | `develop` | CloudFront dev URL (see Mukesh) | Auto on merge to `develop` |
+| Development | `develop` | https://d1f7pmzpwdrl1i.cloudfront.net | Auto on merge to `develop` |
 | Production | `main` | https://solobil.com | Auto on merge to `main` (Mukesh approval required) |
 
 ## Before You Write Any Code
