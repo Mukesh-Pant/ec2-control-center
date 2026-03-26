@@ -48,4 +48,18 @@ jobs:
           } > deploy-config.env
 
       - name: Deploy to production
+        id: deploy
         run: bash deploy.sh
+
+      - name: Show CloudFormation failure events
+        if: failure() && steps.deploy.outcome == 'failure'
+        env:
+          AWS_REGION: ${{ secrets.PROD_AWS_REGION }}
+          ENVIRONMENT: ${{ secrets.PROD_ENVIRONMENT }}
+        run: |
+          echo "==> CloudFormation stack events (last 20, failures only):"
+          aws cloudformation describe-stack-events \
+            --stack-name "ec2-control-${ENVIRONMENT}" \
+            --region "$AWS_REGION" \
+            --query 'StackEvents[?contains(`["UPDATE_FAILED","CREATE_FAILED","DELETE_FAILED"]`, ResourceStatus)].[Timestamp,ResourceType,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+            --output table | head -80
