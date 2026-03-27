@@ -6,12 +6,15 @@ import logging
 import os
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
 
+import pricing
+from accounts import get_allowed_account_ids
 from utils import get_caller, get_caller_groups, is_admin, require_admin, response, error_response
 
 logger = logging.getLogger()
@@ -22,7 +25,8 @@ LABS_TABLE         = os.environ.get('LABS_TABLE', 'ec2-control-labs-development'
 LABS_KEYS_BUCKET   = os.environ.get('LABS_KEYS_BUCKET', '')
 LABS_PAYMENTS_BUCKET = os.environ.get('LABS_PAYMENTS_BUCKET', '')
 CENTRAL_ACCOUNT_ID = os.environ.get('CENTRAL_ACCOUNT_ID', '')
-ENVIRONMENT        = os.environ.get('ENVIRONMENT', 'development')
+ENVIRONMENT        = os.environ.get('ENVIRONMENT', 'production')
+MAX_DURATION_HOURS = 2160  # 90 days
 
 # ─── Lazy singletons ──────────────────────────────────────────────────────────
 _ddb = None
@@ -163,15 +167,14 @@ def _check_lab_ownership(lab, caller, groups):
 def _calculate_estimated_cost(platform, instance_type, region, storage_gb, elastic_ip, duration_hours):
     """Return total estimated cost as float. Returns 0.0 on any pricing error."""
     try:
-        from pricing import get_hourly_price, get_hourly_price_windows, get_ebs_price, get_eip_price
         if platform == 'windows':
-            ec2_hourly = get_hourly_price_windows(instance_type, region)
+            ec2_hourly = pricing.get_hourly_price_windows(instance_type, region)
         else:
-            ec2_hourly = get_hourly_price(instance_type, region)
+            ec2_hourly = pricing.get_hourly_price(instance_type, region)
         ec2_cost = round(ec2_hourly * duration_hours, 4)
-        ebs_per_gb_month = get_ebs_price(region, 'gp3')
+        ebs_per_gb_month = pricing.get_ebs_price(region, 'gp3')
         ebs_cost = round(ebs_per_gb_month * storage_gb * (duration_hours / 730), 4)
-        eip_hourly = get_eip_price(region) if elastic_ip else 0.0
+        eip_hourly = pricing.get_eip_price(region) if elastic_ip else 0.0
         eip_cost = round(eip_hourly * duration_hours, 4)
         return round(ec2_cost + ebs_cost + eip_cost, 4)
     except Exception as exc:
@@ -206,10 +209,19 @@ def handle_labs_payment(event):
     if not LABS_PAYMENTS_BUCKET:
         return error_response(500, 'LABS_PAYMENTS_BUCKET is not configured.')
 
+    ALLOWED_MIME_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'application/pdf'}
+    MAX_PAYMENT_BYTES = 5 * 1024 * 1024  # 5 MB
+
+    if mime_type not in ALLOWED_MIME_TYPES:
+        return error_response(400, f'Unsupported file type. Allowed: jpeg, png, webp, pdf')
+
     try:
         decoded_bytes = base64.b64decode(file_data)
     except Exception:
         return error_response(400, 'fileData is not valid base64.')
+
+    if len(decoded_bytes) > MAX_PAYMENT_BYTES:
+        return error_response(400, 'File exceeds 5 MB limit.')
 
     file_id = str(uuid.uuid4())
     s3_key  = f'payments/{file_id}.jpg'
@@ -264,39 +276,37 @@ def handle_labs_pricing(event):
         return error_response(400, 'storageGb must be between 8 and 16384.')
     if duration_hours <= 0:
         return error_response(400, 'durationHours must be positive.')
+    if duration_hours > MAX_DURATION_HOURS:
+        return error_response(400, f'durationHours cannot exceed {MAX_DURATION_HOURS} (90 days).')
 
     try:
-        from pricing import get_hourly_price, get_hourly_price_windows, get_ebs_price, get_eip_price
-
         if os_param == 'windows':
-            ec2_hourly = get_hourly_price_windows(instance_type, region)
+            ec2_hourly = pricing.get_hourly_price_windows(instance_type, region)
         else:
-            ec2_hourly = get_hourly_price(instance_type, region)
+            ec2_hourly = pricing.get_hourly_price(instance_type, region)
 
         ec2_cost         = round(ec2_hourly * duration_hours, 4)
-        ebs_per_gb_month = get_ebs_price(region, 'gp3')
+        ebs_per_gb_month = pricing.get_ebs_price(region, 'gp3')
         ebs_cost         = round(ebs_per_gb_month * storage_gb * (duration_hours / 730), 4)
-        eip_hourly       = get_eip_price(region) if elastic_ip else 0.0
+        eip_hourly       = pricing.get_eip_price(region) if elastic_ip else 0.0
         eip_cost         = round(eip_hourly * duration_hours, 4)
         total            = round(ec2_cost + ebs_cost + eip_cost, 4)
-
+        return response(200, {
+            'breakdown': {
+                'ec2Hourly':    ec2_hourly,
+                'ec2Cost':      ec2_cost,
+                'ebsPerGbMonth': ebs_per_gb_month,
+                'ebsCost':      ebs_cost,
+                'eipHourly':    eip_hourly,
+                'eipCost':      eip_cost,
+                'totalUsd':     total,
+            },
+            'durationHours': duration_hours,
+            'pricingSource':  'AWS Price List API',
+        })
     except Exception as exc:
         logger.exception('handle_labs_pricing error')
         return error_response(500, str(exc))
-
-    return response(200, {
-        'breakdown': {
-            'ec2Hourly':    ec2_hourly,
-            'ec2Cost':      ec2_cost,
-            'ebsPerGbMonth': ebs_per_gb_month,
-            'ebsCost':      ebs_cost,
-            'eipHourly':    eip_hourly,
-            'eipCost':      eip_cost,
-            'totalUsd':     total,
-        },
-        'durationHours': duration_hours,
-        'pricingSource':  'AWS Price List API',
-    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -319,6 +329,12 @@ def handle_labs_network_options(event):
     if not account_id:
         return error_response(400, 'accountId is required.')
 
+    caller_email = get_caller(event)
+    if not is_admin(event):
+        allowed = get_allowed_account_ids(caller_email)
+        if account_id not in allowed:
+            return error_response(403, 'You do not have access to this account.')
+
     try:
         creds = _get_member_creds(account_id)
         ec2   = _boto3_client('ec2', region, creds)
@@ -338,12 +354,21 @@ def handle_labs_network_options(event):
                 'cidrBlock': v.get('CidrBlock', ''),
             })
 
-        # Subnets
+        # Subnets (with pagination)
         subnets_resp = ec2.describe_subnets(
-            Filters=[{'Name': 'state', 'Values': ['available']}]
+            Filters=[{'Name': 'state', 'Values': ['available']}],
+            MaxResults=1000,
         )
+        all_subnets = subnets_resp.get('Subnets', [])
+        while subnets_resp.get('NextToken'):
+            subnets_resp = ec2.describe_subnets(
+                Filters=[{'Name': 'state', 'Values': ['available']}],
+                NextToken=subnets_resp['NextToken'],
+                MaxResults=1000,
+            )
+            all_subnets.extend(subnets_resp.get('Subnets', []))
         subnets = []
-        for s in subnets_resp.get('Subnets', []):
+        for s in all_subnets:
             name = next(
                 (t['Value'] for t in s.get('Tags', []) if t['Key'] == 'Name'), ''
             )
@@ -355,10 +380,17 @@ def handle_labs_network_options(event):
                 'vpcId':            s.get('VpcId', ''),
             })
 
-        # Security groups
-        sgs_resp = ec2.describe_security_groups()
+        # Security groups (with pagination)
+        sgs_resp = ec2.describe_security_groups(MaxResults=1000)
+        all_sgs = sgs_resp.get('SecurityGroups', [])
+        while sgs_resp.get('NextToken'):
+            sgs_resp = ec2.describe_security_groups(
+                NextToken=sgs_resp['NextToken'],
+                MaxResults=1000,
+            )
+            all_sgs.extend(sgs_resp.get('SecurityGroups', []))
         security_groups = []
-        for sg in sgs_resp.get('SecurityGroups', []):
+        for sg in all_sgs:
             security_groups.append({
                 'groupId':     sg['GroupId'],
                 'groupName':   sg.get('GroupName', ''),
@@ -399,7 +431,6 @@ def handle_labs_provision(event):
     instance_type    = body.get('instanceType', '').strip()
     storage_gb       = body.get('storageGb')
     elastic_ip       = bool(body.get('elasticIp', False))
-    vpc_id           = body.get('vpcId', '').strip()
     subnet_id        = body.get('subnetId', '').strip()
     security_group_ids = body.get('securityGroupIds', [])
     duration_hours   = body.get('durationHours')
@@ -431,10 +462,25 @@ def handle_labs_provision(event):
         return error_response(400, 'storageGb must be between 8 and 16384.')
     if duration_hours <= 0:
         return error_response(400, 'durationHours must be positive.')
+    if duration_hours > MAX_DURATION_HOURS:
+        return error_response(400, f'durationHours cannot exceed {MAX_DURATION_HOURS} (90 days).')
     if not isinstance(security_group_ids, list) or len(security_group_ids) == 0:
         return error_response(400, 'securityGroupIds must be a non-empty list.')
 
     caller_email = get_caller(event)
+
+    # Account access check for operators
+    if not is_admin(event):
+        allowed = get_allowed_account_ids(caller_email)
+        if account_id not in allowed:
+            return error_response(403, 'You do not have access to this account.')
+
+    # Verify payment screenshot exists in S3 before accepting
+    if payment_key:
+        try:
+            _get_s3().head_object(Bucket=LABS_PAYMENTS_BUCKET, Key=payment_key)
+        except Exception:
+            return error_response(400, 'Payment screenshot not found. Please upload your payment screenshot first.')
 
     # Estimated cost — use frontend-provided value if present; else calculate
     if 'estimatedCost' in body:
@@ -505,10 +551,23 @@ def handle_labs_provision(event):
         # Optionally allocate and associate an Elastic IP
         allocation_id = ''
         if elastic_ip:
-            eip_resp      = ec2.allocate_address(Domain='vpc')
-            allocation_id = eip_resp['AllocationId']
-            ec2.associate_address(InstanceId=instance_id, AllocationId=allocation_id)
-            logger.info('labs_provision: allocated EIP %s for instance %s', allocation_id, instance_id)
+            try:
+                eip_resp      = ec2.allocate_address(Domain='vpc')
+                allocation_id = eip_resp['AllocationId']
+                ec2.associate_address(InstanceId=instance_id, AllocationId=allocation_id)
+                logger.info('labs_provision: allocated EIP %s for instance %s', allocation_id, instance_id)
+            except Exception as e:
+                logger.error("EIP allocation/association failed: %s", e)
+                # Cleanup: delete key pair and .pem
+                try:
+                    ec2.delete_key_pair(KeyName=key_name)
+                except Exception:
+                    pass
+                try:
+                    _get_s3().delete_object(Bucket=LABS_KEYS_BUCKET, Key=f'keys/{lab_id}.pem')
+                except Exception:
+                    pass
+                return error_response(500, 'Failed to allocate Elastic IP.')
 
         # Compute expiry timestamp
         expires_at = (datetime.utcnow() + timedelta(hours=duration_hours)).isoformat()
@@ -597,10 +656,13 @@ def handle_labs_list(event):
         return error_response(500, str(e))
 
     # For labs still in provisioning state, poll EC2 and update if running
-    updated_labs = []
-    for lab in labs:
-        lab = _maybe_update_provisioning_status(lab)
-        updated_labs.append(lab)
+    provisioning_labs = [lab for lab in labs if lab.get('status') == 'provisioning']
+    if provisioning_labs:
+        with ThreadPoolExecutor(max_workers=min(10, len(provisioning_labs))) as pool:
+            futures = {pool.submit(_maybe_update_provisioning_status, lab): lab for lab in provisioning_labs}
+            for f in as_completed(futures):
+                pass  # results written back to DynamoDB inside the helper
+    updated_labs = labs
 
     # Serialise Decimal values for JSON
     serialised = [_serialise_lab(lab) for lab in updated_labs]
@@ -625,6 +687,9 @@ def _maybe_update_provisioning_status(lab):
         creds = _get_member_creds(account_id)
         ec2   = _boto3_client('ec2', region, creds)
         desc  = ec2.describe_instances(InstanceIds=[instance_id])
+        if not desc.get('Reservations'):
+            logger.warning("No Reservations for instance %s — possibly terminated", lab.get('instanceId'))
+            return lab
         inst  = desc['Reservations'][0]['Instances'][0]
         state = inst.get('State', {}).get('Name', '')
         if state == 'running':
@@ -749,6 +814,11 @@ def handle_labs_windows_password(event):
 
     account_id  = lab.get('accountId', '')
     region      = lab.get('region', 'ap-south-1')
+
+    if not is_admin(event):
+        allowed = get_allowed_account_ids(caller_email)
+        if account_id not in allowed:
+            return error_response(403, 'You do not have access to this account.')
     instance_id = lab.get('instanceId', '')
     key_s3_key  = lab.get('keyS3Key', '')
 
@@ -846,6 +916,18 @@ def handle_labs_delete(event):
         if allocation_id:
             ec2.release_address(AllocationId=allocation_id)
             logger.info('handle_labs_delete: released EIP %s', allocation_id)
+
+        # Delete EC2 key pair in member account
+        try:
+            ec2.delete_key_pair(KeyName=lab['keyName'])
+        except Exception as e:
+            logger.warning("Could not delete key pair %s: %s", lab['keyName'], e)
+
+        # Delete .pem from S3
+        try:
+            _get_s3().delete_object(Bucket=LABS_KEYS_BUCKET, Key=lab['keyS3Key'])
+        except Exception as e:
+            logger.warning("Could not delete .pem from S3 %s: %s", lab['keyS3Key'], e)
 
     except ClientError as e:
         logger.exception('handle_labs_delete EC2 error')
