@@ -173,7 +173,7 @@ const Labs = (function () {
     try {
       var res  = await API.getLabsList();
       var data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load labs');
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to load labs');
       activeLabs = data.labs || [];
       _renderLabsList();
     } catch (e) {
@@ -245,7 +245,7 @@ const Labs = (function () {
         try {
           var res  = await API.deleteLabInstance({ labId: labId });
           var data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Delete failed');
+          if (!res.ok) throw new Error(data.message || data.error || 'Delete failed');
           App.showToast('Lab terminated', 'ok');
           await _loadActiveLabs();
         } catch (e) {
@@ -475,7 +475,7 @@ const Labs = (function () {
     try {
       var res  = await API.getLabNetworkOptions(accountId, region);
       var data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load network options');
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to load network options');
 
       var vpcs    = data.vpcs            || [];
       var subnets = data.subnets         || [];
@@ -577,7 +577,7 @@ const Labs = (function () {
       elasticIp:       elasticIp,
       vpcId:           vpcId,
       subnetId:        subnetId,
-      securityGroupId: securityGroupId,
+      securityGroupIds: [securityGroupId],
       durationHours:   durationHours,
       _durVal:         durVal,   // remember for re-render on Back
     };
@@ -624,7 +624,7 @@ const Labs = (function () {
       };
       var res  = await API.getLabPricing(params);
       var data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Pricing fetch failed');
+      if (!res.ok) throw new Error(data.message || data.error || 'Pricing fetch failed');
 
       var b = data.breakdown;
       wizardConfig.estimatedCost = b.totalUsd;
@@ -748,7 +748,7 @@ const Labs = (function () {
       var base64 = await _fileToBase64(file);
       var res    = await API.uploadLabPayment({ fileData: base64, contentType: file.type });
       var data   = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      if (!res.ok) throw new Error(data.message || data.error || 'Upload failed');
 
       wizardConfig.paymentKey = data.paymentKey;
       if (statusEl)  statusEl.textContent    = 'Screenshot uploaded successfully.';
@@ -819,7 +819,7 @@ const Labs = (function () {
         elasticIp:       wizardConfig.elasticIp,
         vpcId:           wizardConfig.vpcId,
         subnetId:        wizardConfig.subnetId,
-        securityGroupId: wizardConfig.securityGroupId,
+        securityGroupIds: wizardConfig.securityGroupIds,
         durationHours:   wizardConfig.durationHours,
         paymentKey:      wizardConfig.paymentKey,
       };
@@ -827,7 +827,7 @@ const Labs = (function () {
       _setProvisionStep(2);
       var res  = await API.provisionLab(body);
       var data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Provisioning failed');
+      if (!res.ok) throw new Error(data.message || data.error || 'Provisioning failed');
 
       currentLabId = data.labId;
       if (data.estimatedCost != null) wizardConfig.estimatedCost = data.estimatedCost;
@@ -940,7 +940,7 @@ const Labs = (function () {
     try {
       var res  = await API.getLabKeypair(labId);
       var data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to get keypair URL');
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to get keypair URL');
       window.open(data.url, '_blank');
     } catch (e) {
       App.showToast('Keypair download error: ' + e.message, 'err');
@@ -968,7 +968,7 @@ const Labs = (function () {
     try {
       var res  = await API.getLabWindowsPassword(labId);
       var data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to get Windows password');
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to get Windows password');
       if (passEl) {
         passEl.innerHTML = '<b>Password:</b> <code style="user-select:all; font-size:15px;">' + _esc(data.password) + '</code>';
       }
