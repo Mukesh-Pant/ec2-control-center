@@ -485,6 +485,36 @@ Resources:
           Value: !Ref Environment
 
   # =============================================
+  # DYNAMODB - Labs (M11)
+  # PK: labId   GSI user-index: PK: userEmail
+  # =============================================
+  LabsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ec2-control-labs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: labId
+          AttributeType: S
+        - AttributeName: userEmail
+          AttributeType: S
+      KeySchema:
+        - AttributeName: labId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: user-index
+          KeySchema:
+            - AttributeName: userEmail
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
   # BACKUP VAULT (M9)
   # =============================================
   BackupVault:
@@ -518,6 +548,39 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
         - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
+  # S3 - Labs Key Pairs Bucket (M11)
+  # =============================================
+  LabsKeysBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'ec2-control-labs-keys-${AWS::AccountId}-${AWS::Region}'
+      AccessControl: Private
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldKeys
+            Status: Enabled
+            ExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =============================================
+  # S3 - Labs Payment Screenshots Bucket (M11)
+  # =============================================
+  LabsPaymentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'ec2-control-labs-payments-${AWS::AccountId}-${AWS::Region}'
+      AccessControl: Private
       Tags:
         - Key: Project
           Value: EC2Control
@@ -627,6 +690,39 @@ Resources:
                   - kms:GenerateDataKey
                   - kms:Decrypt
                 Resource: '*'
+              - Sid: LabsS3
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::ec2-control-labs-keys-${AWS::AccountId}-${AWS::Region}/*'
+                  - !Sub 'arn:aws:s3:::ec2-control-labs-payments-${AWS::AccountId}-${AWS::Region}/*'
+              - Sid: LabsEC2
+                Effect: Allow
+                Action:
+                  - ec2:RunInstances
+                  - ec2:CreateKeyPair
+                  - ec2:DeleteKeyPair
+                  - ec2:DescribeKeyPairs
+                  - ec2:TerminateInstances
+                  - ec2:AllocateAddress
+                  - ec2:AssociateAddress
+                  - ec2:ReleaseAddress
+                  - ec2:DescribeAddresses
+                  - ec2:GetPasswordData
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeImages
+                  - ec2:CreateTags
+                Resource: '*'
+              - Sid: LabsSSM
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: '*'
               - Sid: BackupPassRole
                 Effect: Allow
                 Action:
@@ -670,6 +766,9 @@ Resources:
           CENTRAL_ACCOUNT_ID: !Ref 'AWS::AccountId'
           BACKUP_ROLE_ARN: !GetAtt BackupServiceRole.Arn
           BACKUP_VAULT_NAME: !Sub 'ec2-control-vault-${Environment}'
+          LABS_TABLE: !Ref LabsTable
+          LABS_KEYS_BUCKET: !Ref LabsKeysBucket
+          LABS_PAYMENTS_BUCKET: !Ref LabsPaymentsBucket
       Tags:
         - Key: Project
           Value: EC2Control
@@ -862,6 +961,48 @@ Resources:
       RestApiId: !Ref RestApi
       ParentId: !GetAtt RestApi.RootResourceId
       PathPart: console-login
+
+  ResourceLabs:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: labs
+
+  ResourceLabsPayment:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResourceLabs
+      PathPart: payment
+
+  ResourceLabsKeypair:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResourceLabs
+      PathPart: keypair
+
+  ResourceLabsWindowsPassword:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResourceLabs
+      PathPart: windows-password
+
+  ResourceLabsPricing:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResourceLabs
+      PathPart: pricing
+
+  ResourceLabsNetworkOptions:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResourceLabs
+      PathPart: network-options
 
   # =============================================
   # REST API - CORS Gateway Responses
@@ -1255,6 +1396,284 @@ Resources:
             method.response.header.Access-Control-Allow-Origin: true
 
   # =============================================
+  # REST API - /labs (M11)
+  # =============================================
+  MethodGetLabs:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabs
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodPostLabs:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabs
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodDeleteLabs:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabs
+      HttpMethod: DELETE
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsLabs:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabs
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
+  # REST API - /labs/payment (M11)
+  # =============================================
+  MethodPostLabsPayment:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsPayment
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsLabsPayment:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsPayment
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
+  # REST API - /labs/keypair (M11)
+  # =============================================
+  MethodGetLabsKeypair:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsKeypair
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsLabsKeypair:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsKeypair
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
+  # REST API - /labs/windows-password (M11)
+  # =============================================
+  MethodGetLabsWindowsPassword:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsWindowsPassword
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsLabsWindowsPassword:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsWindowsPassword
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
+  # REST API - /labs/pricing (M11)
+  # =============================================
+  MethodGetLabsPricing:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsPricing
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsLabsPricing:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsPricing
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
+  # REST API - /labs/network-options (M11)
+  # =============================================
+  MethodGetLabsNetworkOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsNetworkOptions
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsLabsNetworkOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsNetworkOptions
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
   # REST API - Deployment + Stage
   # =============================================
   RestApiDeployment:
@@ -1279,9 +1698,23 @@ Resources:
       - MethodOptionsBackup
       - MethodPostConsoleLogin
       - MethodOptionsConsoleLogin
+      - MethodGetLabs
+      - MethodPostLabs
+      - MethodDeleteLabs
+      - MethodOptionsLabs
+      - MethodPostLabsPayment
+      - MethodOptionsLabsPayment
+      - MethodGetLabsKeypair
+      - MethodOptionsLabsKeypair
+      - MethodGetLabsWindowsPassword
+      - MethodOptionsLabsWindowsPassword
+      - MethodGetLabsPricing
+      - MethodOptionsLabsPricing
+      - MethodGetLabsNetworkOptions
+      - MethodOptionsLabsNetworkOptions
     Properties:
       RestApiId: !Ref RestApi
-      Description: !Sub 'Deployment ${LambdaCodeVersion}-console-login'
+      Description: !Sub 'Deployment ${LambdaCodeVersion}-m11-labs'
 
   RestApiStage:
     Type: AWS::ApiGateway::Stage
@@ -1441,6 +1874,53 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt IdleCheckerSchedule.Arn
 
+  # =============================================
+  # LABS EXPIRY CHECKER LAMBDA (M11)
+  # =============================================
+  LabsExpiryCheckerLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaExecutionRole
+    Properties:
+      FunctionName: !Sub 'ec2-labs-expiry-checker-${Environment}'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 128
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Sub 'lambda/labs-expiry-checker-${Environment}-${LambdaCodeVersion}.zip'
+      Environment:
+        Variables:
+          LABS_TABLE: !Ref LabsTable
+          SNS_TOPIC_ARN: !Ref NotificationTopic
+          ENVIRONMENT: !Ref Environment
+          CENTRAL_ACCOUNT_ID: !Ref 'AWS::AccountId'
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  LabsExpiryCheckerSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'ec2-labs-expiry-checker-schedule-${Environment}'
+      Description: Triggers labs expiry checker Lambda every 15 minutes
+      ScheduleExpression: rate(15 minutes)
+      State: ENABLED
+      Targets:
+        - Id: LabsExpiryCheckerTarget
+          Arn: !GetAtt LabsExpiryCheckerLambda.Arn
+
+  LabsExpiryCheckerSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt LabsExpiryCheckerLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LabsExpiryCheckerSchedule.Arn
+
 # =============================================
 # ROUTE 53 - Custom domain A ALIAS record
 # Created only when CustomDomain + HostedZoneId are set
@@ -1536,3 +2016,11 @@ Outputs:
   IdleCheckerFunction:
     Description: Idle checker Lambda function name. M4.
     Value: !Ref IdleCheckerLambda
+
+  LabsTable:
+    Description: DynamoDB table for EC2 labs (M11).
+    Value: !Ref LabsTable
+
+  LabsExpiryCheckerFunction:
+    Description: Labs expiry checker Lambda function name. M11.
+    Value: !Ref LabsExpiryCheckerLambda
