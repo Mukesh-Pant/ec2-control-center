@@ -32,9 +32,37 @@ SNS_TOPIC_ARN    = os.environ.get('SNS_TOPIC_ARN', '')
 CENTRAL_ACCOUNT_ID = os.environ.get('CENTRAL_ACCOUNT_ID', '')
 ENVIRONMENT      = os.environ.get('ENVIRONMENT', 'production')
 
+# Module-level lazy-loading singletons
+_ddb = None
+_sns = None
+
+
+def _get_ddb():
+    """Lazy-load DynamoDB resource (module-level singleton)."""
+    global _ddb
+    if _ddb is None:
+        _ddb = boto3.resource('dynamodb')
+    return _ddb
+
+
+def _get_sns():
+    """Lazy-load SNS client (module-level singleton)."""
+    global _sns
+    if _sns is None:
+        _sns = boto3.client('sns')
+    return _sns
+
 
 def lambda_handler(event, context):
     """Main handler — runs both warning and stop jobs."""
+    # Guard: ensure LABS_TABLE is configured
+    if not LABS_TABLE:
+        logger.error("LABS_TABLE env var not set; aborting")
+        return {
+            'statusCode': 500,
+            'error': 'LABS_TABLE not configured',
+        }
+
     logger.info("Labs expiry checker triggered")
 
     now = datetime.now(timezone.utc)
@@ -64,39 +92,48 @@ def _send_warning_emails(now):
     one_hour_from_now = now + timedelta(hours=1)
 
     try:
-        ddb = boto3.resource('dynamodb')
+        ddb = _get_ddb()
         table = ddb.Table(LABS_TABLE)
 
         # Scan for labs where:
-        #   expiresAt <= (now + 1 hour)
+        #   expiresAt is between now and (now + 1 hour) [i.e., expiring soon but not yet expired]
         #   AND warningSent = False
         #   AND status = 'running'
-        paginator = table.scan(
-            FilterExpression=Attr('expiresAt').lte(one_hour_from_now.isoformat())
-                             & Attr('warningSent').eq(False)
-                             & Attr('status').eq('running')
-        )
+        scan_kwargs = {
+            'FilterExpression': (
+                Attr('expiresAt').between(now.isoformat(), one_hour_from_now.isoformat())
+                & Attr('warningSent').eq(False)
+                & Attr('status').eq('running')
+            )
+        }
 
-        for page in paginator:
-            for lab in page.get('Items', []):
-                try:
-                    # Send warning email
-                    _send_warning_email(lab)
+        # Manual pagination (table.scan() returns a dict, not a paginator)
+        resp = table.scan(**scan_kwargs)
+        warning_labs = resp.get('Items', [])
 
-                    # Update DynamoDB: set warningSent = True
-                    table.update_item(
-                        Key={'labId': lab['labId']},
-                        UpdateExpression='SET warningSent = :v',
-                        ExpressionAttributeValues={':v': True}
-                    )
-                    warning_count += 1
-                    logger.info("Warning sent for lab %s (expires %s)",
-                                lab['labId'], lab['expiresAt'])
+        while 'LastEvaluatedKey' in resp:
+            resp = table.scan(ExclusiveStartKey=resp['LastEvaluatedKey'], **scan_kwargs)
+            warning_labs.extend(resp.get('Items', []))
 
-                except Exception as e:
-                    logger.error("Failed to send warning for lab %s: %s",
-                                 lab.get('labId', '?'), e)
-                    # Continue to next lab
+        for lab in warning_labs:
+            try:
+                # Send warning email
+                _send_warning_email(lab)
+
+                # Update DynamoDB: set warningSent = True
+                table.update_item(
+                    Key={'labId': lab['labId']},
+                    UpdateExpression='SET warningSent = :v',
+                    ExpressionAttributeValues={':v': True}
+                )
+                warning_count += 1
+                logger.info("Warning sent for lab %s (expires %s)",
+                            lab['labId'], lab['expiresAt'])
+
+            except Exception as e:
+                logger.warning("Failed to send warning for lab %s: %s",
+                               lab.get('labId', '?'), e)
+                # Continue to next lab
 
     except Exception as e:
         logger.error("Failed to scan for warning labs: %s", e)
@@ -117,7 +154,7 @@ def _send_warning_email(lab):
         f'will auto-stop in 1 hour at {expires_at}. Extend it via the portal if needed.'
     )
 
-    sns = boto3.client('sns')
+    sns = _get_sns()
     sns.publish(
         TopicArn=SNS_TOPIC_ARN,
         Subject=subject,
@@ -131,52 +168,61 @@ def _stop_expired_labs(now):
     stopped_count = 0
 
     try:
-        ddb = boto3.resource('dynamodb')
+        ddb = _get_ddb()
         table = ddb.Table(LABS_TABLE)
 
         # Scan for labs where:
-        #   expiresAt <= now
+        #   expiresAt <= now (already expired)
         #   AND status = 'running'
-        paginator = table.scan(
-            FilterExpression=Attr('expiresAt').lte(now.isoformat())
-                             & Attr('status').eq('running')
-        )
+        scan_kwargs = {
+            'FilterExpression': (
+                Attr('expiresAt').lte(now.isoformat())
+                & Attr('status').eq('running')
+            )
+        }
 
-        for page in paginator:
-            for lab in page.get('Items', []):
-                try:
-                    # Stop the instance
-                    account_id = lab.get('accountId')
-                    region = lab.get('region')
-                    instance_id = lab.get('instanceId')
+        # Manual pagination (table.scan() returns a dict, not a paginator)
+        resp = table.scan(**scan_kwargs)
+        expired_labs = resp.get('Items', [])
 
-                    if not account_id or not region or not instance_id:
-                        logger.warning("Lab %s missing accountId/region/instanceId; skipping",
-                                      lab.get('labId', '?'))
-                        continue
+        while 'LastEvaluatedKey' in resp:
+            resp = table.scan(ExclusiveStartKey=resp['LastEvaluatedKey'], **scan_kwargs)
+            expired_labs.extend(resp.get('Items', []))
 
-                    # Get EC2 client (with STS assume-role if needed)
-                    ec2 = _get_ec2_client(account_id, region)
+        for lab in expired_labs:
+            try:
+                # Stop the instance
+                account_id = lab.get('accountId')
+                region = lab.get('region')
+                instance_id = lab.get('instanceId')
 
-                    # Stop the instance
-                    ec2.stop_instances(InstanceIds=[instance_id])
-                    logger.info("Stopped instance %s (lab %s)",
-                                instance_id, lab.get('labId', '?'))
+                if not account_id or not region or not instance_id:
+                    logger.warning("Lab %s missing accountId/region/instanceId; skipping",
+                                  lab.get('labId', '?'))
+                    continue
 
-                    # Update DynamoDB: set status = 'stopped'
-                    table.update_item(
-                        Key={'labId': lab['labId']},
-                        UpdateExpression='SET #s = :v',
-                        ExpressionAttributeNames={'#s': 'status'},
-                        ExpressionAttributeValues={':v': 'stopped'}
-                    )
+                # Get EC2 client (with STS assume-role if needed)
+                ec2 = _get_ec2_client(account_id, region)
 
-                    stopped_count += 1
+                # Stop the instance
+                ec2.stop_instances(InstanceIds=[instance_id])
+                logger.info("Stopped instance %s (lab %s)",
+                            instance_id, lab.get('labId', '?'))
 
-                except Exception as e:
-                    logger.error("Failed to stop lab %s: %s",
-                                 lab.get('labId', '?'), e)
-                    # Continue to next lab
+                # Update DynamoDB: set status = 'stopped'
+                table.update_item(
+                    Key={'labId': lab['labId']},
+                    UpdateExpression='SET #s = :v',
+                    ExpressionAttributeNames={'#s': 'status'},
+                    ExpressionAttributeValues={':v': 'stopped'}
+                )
+
+                stopped_count += 1
+
+            except Exception as e:
+                logger.warning("Failed to stop lab %s: %s",
+                               lab.get('labId', '?'), e)
+                # Continue to next lab
 
     except Exception as e:
         logger.error("Failed to scan for expired labs: %s", e)
@@ -186,7 +232,7 @@ def _stop_expired_labs(now):
 
 def _get_ec2_client(account_id, region):
     """Get EC2 client (with STS AssumeRole for member accounts)."""
-    if account_id == CENTRAL_ACCOUNT_ID:
+    if account_id == CENTRAL_ACCOUNT_ID or account_id == 'LOCAL':
         return boto3.client('ec2', region_name=region)
 
     # Member account — assume role
