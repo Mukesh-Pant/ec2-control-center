@@ -151,6 +151,62 @@ const API = (function () {
     return call('/console-login', 'POST', { accountId: accountId, region: region });
   }
 
+  /**
+   * GET /labs — list all labs
+   */
+  function getLabsList() {
+    return call('/labs', 'GET', null);
+  }
+
+  /**
+   * POST /labs — provision a new lab
+   */
+  function provisionLab(body) {
+    return call('/labs', 'POST', body);
+  }
+
+  /**
+   * DELETE /labs — delete a lab instance
+   */
+  function deleteLabInstance(body) {
+    return call('/labs', 'DELETE', body);
+  }
+
+  /**
+   * POST /labs/payment — upload/manage lab payment
+   */
+  function uploadLabPayment(body) {
+    return call('/labs/payment', 'POST', body);
+  }
+
+  /**
+   * GET /labs/keypair — get lab EC2 keypair
+   */
+  function getLabKeypair(labId) {
+    return call('/labs/keypair?labId=' + encodeURIComponent(labId), 'GET', null);
+  }
+
+  /**
+   * GET /labs/windows-password — get Windows RDP password
+   */
+  function getLabWindowsPassword(labId) {
+    return call('/labs/windows-password?labId=' + encodeURIComponent(labId), 'GET', null);
+  }
+
+  /**
+   * GET /labs/pricing — get lab pricing
+   */
+  function getLabPricing(params) {
+    return call('/labs/pricing?' + new URLSearchParams(params).toString(), 'GET', null);
+  }
+
+  /**
+   * GET /labs/network-options — get network options for a lab
+   */
+  function getLabNetworkOptions(accountId, region) {
+    return call('/labs/network-options?accountId=' + encodeURIComponent(accountId) + '&region=' + encodeURIComponent(region), 'GET', null);
+  }
+
   return {
     call,
     ec2Action,
@@ -164,6 +220,14 @@ const API = (function () {
     getBackups,
     postBackup,
     postConsoleLogin,
+    getLabsList,
+    provisionLab,
+    deleteLabInstance,
+    uploadLabPayment,
+    getLabKeypair,
+    getLabWindowsPassword,
+    getLabPricing,
+    getLabNetworkOptions,
   };
 
 })();

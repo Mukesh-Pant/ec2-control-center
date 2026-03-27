@@ -55,6 +55,7 @@ trap "rm -rf $TEMP_DIR" EXIT
 
 # EC2 Controller
 echo "    Zipping ec2_controller..."
+pip install cryptography -t "$SCRIPT_DIR/lambda/ec2_controller/" -q
 (cd "$SCRIPT_DIR/lambda/ec2_controller" && zip -qr "$TEMP_DIR/ec2-controller.zip" .)
 
 # Idle Checker (M4) — includes ec2_controller modules for accounts.py + audit.py
@@ -65,6 +66,10 @@ echo "    Zipping idle_checker..."
   cp "$SCRIPT_DIR/lambda/ec2_controller/utils.py" . && \
   zip -qr "$TEMP_DIR/idle-checker.zip" . && \
   rm -f accounts.py audit.py utils.py)
+
+# Labs Expiry Checker (M11)
+echo "    Zipping labs_expiry_checker..."
+(cd "$SCRIPT_DIR/lambda/labs_expiry_checker" && zip -qr "$TEMP_DIR/labs-expiry-checker.zip" .)
 
 # Config Injector
 echo "    Zipping config_injector..."
@@ -87,6 +92,10 @@ aws s3 cp "$TEMP_DIR/idle-checker.zip" \
   "s3://${CODE_BUCKET}/lambda/idle-checker-${ENVIRONMENT}-${LAMBDA_VERSION}.zip" \
   --region "$AWS_REGION" --quiet
 
+aws s3 cp "$TEMP_DIR/labs-expiry-checker.zip" \
+  "s3://${CODE_BUCKET}/lambda/labs-expiry-checker-${ENVIRONMENT}-${LAMBDA_VERSION}.zip" \
+  --region "$AWS_REGION" --quiet
+
 aws s3 cp "$TEMP_DIR/config-injector.zip" \
   "s3://${CODE_BUCKET}/lambda/config-injector-${ENVIRONMENT}.zip" \
   --region "$AWS_REGION" --quiet
@@ -95,7 +104,7 @@ aws s3 cp "$TEMP_DIR/frontend.zip" \
   "s3://${CODE_BUCKET}/frontend/frontend-${ENVIRONMENT}.zip" \
   --region "$AWS_REGION" --quiet
 
-echo "    Uploaded 4 artifacts."
+echo "    Uploaded 5 artifacts."
 
 # ─── Step 5: Deploy CloudFormation stack ───
 echo ""

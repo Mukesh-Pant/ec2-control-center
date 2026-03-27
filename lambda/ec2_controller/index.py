@@ -9,6 +9,14 @@ Routes:
   GET  /pricing       — live on-demand hourly rates (query: region, types)
   GET  /users         — list all Cognito users with roles and assignments (admin only)
   POST /users         — setRole, grantAccount, revokeAccount, getPermissions (admin only)
+  GET  /labs                — list labs (admin=all, operator=own)
+  POST /labs                — provision new lab instance
+  DELETE /labs              — terminate lab (admin only)
+  POST /labs/payment        — upload payment screenshot
+  GET  /labs/keypair        — get pre-signed .pem download URL
+  GET  /labs/windows-password — decrypt Windows RDP password
+  GET  /labs/pricing        — cost breakdown from AWS Price List API
+  GET  /labs/network-options  — VPCs, subnets, security groups for account
 """
 
 import json
@@ -23,6 +31,7 @@ from accounts import (get_accounts, get_all_accounts, get_ec2_client, get_all_re
 import audit
 import pricing
 import backup
+import labs
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -57,6 +66,22 @@ def lambda_handler(event, context):
     elif path == '/console-login' and method == 'POST':
         from console_login import handle_console_login
         return handle_console_login(event)
+    elif path == '/labs' and method == 'GET':
+        return labs.handle_labs_list(event)
+    elif path == '/labs' and method == 'POST':
+        return labs.handle_labs_provision(event)
+    elif path == '/labs' and method == 'DELETE':
+        return labs.handle_labs_delete(event)
+    elif path == '/labs/payment' and method == 'POST':
+        return labs.handle_labs_payment(event)
+    elif path == '/labs/keypair' and method == 'GET':
+        return labs.handle_labs_keypair(event)
+    elif path == '/labs/windows-password' and method == 'GET':
+        return labs.handle_labs_windows_password(event)
+    elif path == '/labs/pricing' and method == 'GET':
+        return labs.handle_labs_pricing(event)
+    elif path == '/labs/network-options' and method == 'GET':
+        return labs.handle_labs_network_options(event)
     else:
         return error_response(404, 'Not found')
 
