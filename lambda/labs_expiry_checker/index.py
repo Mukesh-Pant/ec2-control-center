@@ -20,10 +20,8 @@ Environment variables (set by CloudFormation):
 
 import os
 import logging
-import json
 import boto3
 from datetime import datetime, timezone, timedelta
-from decimal import Decimal
 from botocore.dynamodb.conditions import Attr
 
 logger = logging.getLogger()
