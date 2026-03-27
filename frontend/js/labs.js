@@ -82,7 +82,13 @@ const Labs = (function () {
   function _formatExpiry(isoTs) {
     var exp    = new Date(isoTs);
     var diffMs = exp - Date.now();
-    if (diffMs <= 0) return 'Expired';
+    if (diffMs <= 0) {
+      var mo  = exp.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' });
+      var day = exp.getUTCDate();
+      var hr  = String(exp.getUTCHours()).padStart(2, '0');
+      var min = String(exp.getUTCMinutes()).padStart(2, '0');
+      return 'Expired ' + day + ' ' + mo + ' ' + hr + ':' + min + ' UTC';
+    }
     var h = Math.floor(diffMs / 3600000);
     var m = Math.floor((diffMs % 3600000) / 60000);
     if (h >= 24) {
@@ -212,6 +218,9 @@ const Labs = (function () {
       html +=     '<span class="lbs-badge ' + statusClass + '">' + _esc(statusLabel) + '</span>';
       html +=   '</div>';
       html +=   '<div class="lbs-card-body">';
+      if (lab.labName) {
+        html += '<div class="lbs-card-row"><b>Name:</b> '     + _esc(lab.labName)       + '</div>';
+      }
       html +=     '<div class="lbs-card-row"><b>Instance:</b> ' + _esc(lab.instanceType) + '</div>';
       html +=     '<div class="lbs-card-row"><b>Region:</b> '   + _esc(lab.region)        + '</div>';
       if (lab.publicIp)   html += '<div class="lbs-card-row"><b>IP:</b> '   + _esc(lab.publicIp)   + '</div>';
@@ -351,6 +360,8 @@ const Labs = (function () {
         }).join('')
       : '<option value="">— No enabled accounts found —</option>';
 
+    var nameVal = wizardConfig.labName != null ? _esc(wizardConfig.labName) : '';
+
     var regionOptions = REGIONS.map(function (r) {
       var sel = (wizardConfig.region || 'ap-south-1') === r.value ? ' selected' : '';
       return '<option value="' + r.value + '"' + sel + '>' + r.label + '</option>';
@@ -397,6 +408,11 @@ const Labs = (function () {
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-body">',
+      '    <div class="lbs-form-row">',
+      '      <label class="lbs-label">Lab Name <span class="lbs-help-text">(optional — used as EC2 instance name)</span></label>',
+      '      <input type="text" id="lbs-s1-name" class="lbs-input" maxlength="100"',
+      '             placeholder="e.g. my-dev-server" value="' + nameVal + '">',
+      '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">AWS Account</label>',
       '      <select id="lbs-s1-account" class="lbs-select">' + accountOptions + '</select>',
@@ -528,6 +544,7 @@ const Labs = (function () {
   }
 
   function _collectStep1() {
+    var labName         = ((document.getElementById('lbs-s1-name')     || {}).value || '').trim();
     var accountId       = (document.getElementById('lbs-s1-account')  || {}).value || '';
     var region          = (document.getElementById('lbs-s1-region')    || {}).value || '';
     var instanceType    = (document.getElementById('lbs-s1-instance')  || {}).value || '';
@@ -569,17 +586,18 @@ const Labs = (function () {
     }
 
     wizardConfig = {
-      accountId:       accountId,
-      region:          region,
-      platform:        platform,
-      instanceType:    instanceType,
-      storageGb:       storageGb,
-      elasticIp:       elasticIp,
-      vpcId:           vpcId,
-      subnetId:        subnetId,
+      labName:          labName,
+      accountId:        accountId,
+      region:           region,
+      platform:         platform,
+      instanceType:     instanceType,
+      storageGb:        storageGb,
+      elasticIp:        elasticIp,
+      vpcId:            vpcId,
+      subnetId:         subnetId,
       securityGroupIds: [securityGroupId],
-      durationHours:   durationHours,
-      _durVal:         durVal,   // remember for re-render on Back
+      durationHours:    durationHours,
+      _durVal:          durVal,   // remember for re-render on Back
     };
     return true;
   }
@@ -811,17 +829,18 @@ const Labs = (function () {
 
     try {
       var body = {
-        accountId:       wizardConfig.accountId,
-        region:          wizardConfig.region,
-        platform:        wizardConfig.platform,
-        instanceType:    wizardConfig.instanceType,
-        storageGb:       wizardConfig.storageGb,
-        elasticIp:       wizardConfig.elasticIp,
-        vpcId:           wizardConfig.vpcId,
-        subnetId:        wizardConfig.subnetId,
+        labName:          wizardConfig.labName || '',
+        accountId:        wizardConfig.accountId,
+        region:           wizardConfig.region,
+        platform:         wizardConfig.platform,
+        instanceType:     wizardConfig.instanceType,
+        storageGb:        wizardConfig.storageGb,
+        elasticIp:        wizardConfig.elasticIp,
+        vpcId:            wizardConfig.vpcId,
+        subnetId:         wizardConfig.subnetId,
         securityGroupIds: wizardConfig.securityGroupIds,
-        durationHours:   wizardConfig.durationHours,
-        paymentKey:      wizardConfig.paymentKey,
+        durationHours:    wizardConfig.durationHours,
+        paymentKey:       wizardConfig.paymentKey,
       };
 
       _setProvisionStep(2);
@@ -889,6 +908,7 @@ const Labs = (function () {
       ? '$' + Number(lab.estimatedCost).toFixed(4) + ' USD' : '—';
     var expiry        = lab.expiresAt ? _formatExpiry(lab.expiresAt) : '—';
     var labIdEsc      = _esc(lab.labId);
+    var displayName   = lab.labName || ('ec2ctrl-lab-' + lab.labId);
 
     var connectionHtml = isWindows
       ? [
@@ -915,6 +935,8 @@ const Labs = (function () {
       '  <div class="lbs-wizard-body">',
       '    <div class="lbs-info-grid">',
       '      <div class="lbs-info-row"><b>Lab ID:</b> <code>' + labIdEsc + '</code></div>',
+      '      <div class="lbs-info-row"><b>Lab Name:</b> '      + _esc(displayName)          + '</div>',
+      '      <div class="lbs-info-row"><b>Instance ID:</b> <code>' + _esc(lab.instanceId || '—') + '</code></div>',
       '      <div class="lbs-info-row"><b>Platform:</b> '      + _esc(platformLabel)        + '</div>',
       '      <div class="lbs-info-row"><b>Instance:</b> '      + _esc(lab.instanceType)     + '</div>',
       '      <div class="lbs-info-row"><b>Region:</b> '        + _esc(lab.region)           + '</div>',
@@ -922,6 +944,7 @@ const Labs = (function () {
       '      <div class="lbs-info-row"><b>Estimated Cost:</b> '+ _esc(costStr)              + '</div>',
       '      <div class="lbs-info-row"><b>Expires:</b> '       + _esc(expiry)               + '</div>',
       '    </div>',
+      '    <p class="lbs-help-text" style="margin-top:8px;">This instance also appears in the <b>Instances</b> tab as <b>' + _esc(displayName) + '</b> — click Refresh All there to see it.</p>',
       '    ' + connectionHtml,
       '    <div style="margin-top:16px;">',
       '      <button class="btn btn-outline btn-sm" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Lab Info (.txt)</button>',
