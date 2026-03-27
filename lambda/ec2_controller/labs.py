@@ -44,7 +44,10 @@ def _get_ddb():
 def _get_s3():
     global _s3
     if _s3 is None:
-        _s3 = boto3.client('s3')
+        _s3 = boto3.client(
+            's3',
+            region_name=os.environ.get('AWS_REGION', 'ap-south-1'),
+        )
     return _s3
 
 
@@ -425,16 +428,17 @@ def handle_labs_provision(event):
         return error_response(400, 'Invalid JSON body.')
 
     # Required fields
-    account_id       = body.get('accountId', '').strip()
-    region           = body.get('region', '').strip()
-    platform         = body.get('platform', '').strip().lower()
-    instance_type    = body.get('instanceType', '').strip()
-    storage_gb       = body.get('storageGb')
-    elastic_ip       = bool(body.get('elasticIp', False))
-    subnet_id        = body.get('subnetId', '').strip()
+    account_id         = body.get('accountId', '').strip()
+    region             = body.get('region', '').strip()
+    platform           = body.get('platform', '').strip().lower()
+    instance_type      = body.get('instanceType', '').strip()
+    storage_gb         = body.get('storageGb')
+    elastic_ip         = bool(body.get('elasticIp', False))
+    subnet_id          = body.get('subnetId', '').strip()
     security_group_ids = body.get('securityGroupIds', [])
-    duration_hours   = body.get('durationHours')
-    payment_key      = body.get('paymentKey', '').strip()
+    duration_hours     = body.get('durationHours')
+    payment_key        = body.get('paymentKey', '').strip()
+    lab_name_input     = body.get('labName', '').strip()[:100]
 
     # Validate required fields
     missing = [f for f, v in [
@@ -502,8 +506,9 @@ def handle_labs_provision(event):
         logger.info('labs_provision: AMI %s for platform %s in %s', ami_id, platform, region)
 
         # Generate lab ID
-        lab_id   = str(uuid.uuid4())
-        key_name = f'ec2ctrl-lab-{lab_id}'
+        lab_id     = str(uuid.uuid4())
+        key_name   = f'ec2ctrl-lab-{lab_id}'
+        ec2_name   = lab_name_input if lab_name_input else f'ec2ctrl-lab-{lab_id}'
 
         # Create EC2 key pair and save .pem to S3
         key_resp = ec2.create_key_pair(KeyName=key_name)
@@ -539,7 +544,7 @@ def handle_labs_provision(event):
             TagSpecifications=[{
                 'ResourceType': 'instance',
                 'Tags': [
-                    {'Key': 'Name',               'Value': f'ec2ctrl-lab-{lab_id}'},
+                    {'Key': 'Name',               'Value': ec2_name},
                     {'Key': 'ec2ctrl:labId',       'Value': lab_id},
                     {'Key': 'ec2ctrl:managedBy',   'Value': 'ec2-control'},
                 ],
@@ -569,12 +574,13 @@ def handle_labs_provision(event):
                     pass
                 return error_response(500, 'Failed to allocate Elastic IP.')
 
-        # Compute expiry timestamp
-        expires_at = (datetime.utcnow() + timedelta(hours=duration_hours)).isoformat()
+        # Compute expiry timestamp (append Z so browsers parse as UTC)
+        expires_at = (datetime.utcnow() + timedelta(hours=duration_hours)).isoformat() + 'Z'
 
         # Write DynamoDB record
         item = {
             'labId':          lab_id,
+            'labName':        ec2_name,
             'userEmail':      caller_email,
             'accountId':      account_id,
             'region':         region,
