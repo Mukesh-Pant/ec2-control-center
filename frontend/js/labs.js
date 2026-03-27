@@ -158,7 +158,7 @@ const Labs = (function () {
     try {
       var res  = await API.getAccounts();
       var data = await res.json();
-      _accounts = (data.accounts || []).filter(function (a) { return a.status === 'enabled'; });
+      _accounts = (data.accounts || []).filter(function (a) { return a.enabled === true; });
     } catch (_) {
       _accounts = [];
     }
