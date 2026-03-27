@@ -125,6 +125,32 @@ _FALLBACK_PRICES = {
     'inf1.xlarge': 0.228, 'inf1.2xlarge': 0.362, 'inf1.6xlarge': 1.084,
 }
 
+# ─── Fallback static EBS prices (USD/GB-Month, ap-south-1) ────────────────
+_FALLBACK_EBS_PRICES = {
+    'gp3': {
+        'ap-south-1': 0.0832, 'us-east-1': 0.08, 'us-east-2': 0.08, 'us-west-2': 0.08,
+        'eu-west-1': 0.088, 'ap-southeast-1': 0.096,
+    },
+    'gp2': {
+        'ap-south-1': 0.0992, 'us-east-1': 0.10, 'us-east-2': 0.10, 'us-west-2': 0.10,
+        'eu-west-1': 0.110, 'ap-southeast-1': 0.118,
+    },
+}
+
+# ─── Fallback static EIP prices (USD/hr, ap-south-1) ──────────────────────
+_FALLBACK_EIP_PRICES = {
+    'ap-south-1': 0.005, 'us-east-1': 0.005, 'us-east-2': 0.005, 'us-west-2': 0.005,
+    'eu-west-1': 0.005, 'ap-southeast-1': 0.005,
+}
+
+# ─── Fallback static Windows prices (on-demand hourly, ap-south-1) ────────
+_FALLBACK_WINDOWS_PRICES = {
+    't3.micro': 0.0216, 't3.small': 0.0419, 't3.medium': 0.0700, 't3.large': 0.1283,
+    't3.xlarge': 0.2498, 't3.2xlarge': 0.4928,
+    'c5.large': 0.172, 'c5.xlarge': 0.344,
+    'r5.large': 0.232, 'r5.xlarge': 0.464,
+}
+
 
 # ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -138,6 +164,45 @@ def get_hourly_price(instance_type, region='ap-south-1'):
     Returns 0.0 if the instance type is unknown in all sources.
     """
     prices = _get_prices(region)
+    return prices.get(instance_type, 0.0)
+
+
+def get_ebs_price(region='ap-south-1', volume_type='gp3'):
+    """Return the EBS storage price (USD/GB-Month) for volume_type in region.
+
+    Sources (in priority order):
+      1. Module-level in-memory cache (refreshed every 24h per region)
+      2. AWS Price List API (pricing.us-east-1.amazonaws.com)
+      3. Built-in fallback table (_FALLBACK_EBS_PRICES) if API call fails
+    Returns 0.08 if the volume type is unknown in all sources.
+    """
+    cache_key = f'ebs-{volume_type}-{region}'
+    return _get_ebs_prices(region, volume_type, cache_key).get(volume_type, 0.08)
+
+
+def get_eip_price(region='ap-south-1'):
+    """Return the Elastic IP hourly price (USD/hr) for region.
+
+    Sources (in priority order):
+      1. Module-level in-memory cache (refreshed every 24h per region)
+      2. AWS Price List API (pricing.us-east-1.amazonaws.com)
+      3. Built-in fallback table (_FALLBACK_EIP_PRICES) if API call fails
+    Returns 0.005 if the region is unknown in all sources.
+    """
+    cache_key = f'eip-{region}'
+    return _get_eip_prices(region, cache_key).get(region, 0.005)
+
+
+def get_hourly_price_windows(instance_type, region='ap-south-1'):
+    """Return the on-demand Windows Server hourly price (USD) for instance_type in region.
+
+    Sources (in priority order):
+      1. Module-level in-memory cache (refreshed every 24h per region)
+      2. AWS Price List API (pricing.us-east-1.amazonaws.com)
+      3. Built-in fallback table (_FALLBACK_WINDOWS_PRICES) if API call fails
+    Returns 0.0 if the instance type is unknown in all sources.
+    """
+    prices = _get_windows_prices(region)
     return prices.get(instance_type, 0.0)
 
 
@@ -159,6 +224,64 @@ def _get_prices(region):
         # Cache the fallback so we don't hammer the API on every request
         fallback = dict(_FALLBACK_PRICES)
         _cache[region] = {'prices': fallback, 'ts': time.time()}
+        return fallback
+
+
+def _get_ebs_prices(region, volume_type, cache_key):
+    """Return cached EBS prices for region, fetching fresh if cache is stale."""
+    entry = _cache.get(cache_key)
+    if entry and (time.time() - entry['ts']) < CACHE_TTL:
+        return entry['prices']
+
+    try:
+        prices = _fetch_ebs_price_from_api(region, volume_type)
+        _cache[cache_key] = {'prices': prices, 'ts': time.time()}
+        logger.info("Pricing: fetched EBS price for %s in %s from Price List API", volume_type, region)
+        return prices
+    except Exception as exc:
+        logger.warning("Pricing: EBS Price List API failed for %s in %s (%s) — using fallback", volume_type, region, exc)
+        # Return fallback for this volume type and region
+        fallback = {volume_type: _FALLBACK_EBS_PRICES.get(volume_type, {}).get(region, 0.08)}
+        _cache[cache_key] = {'prices': fallback, 'ts': time.time()}
+        return fallback
+
+
+def _get_eip_prices(region, cache_key):
+    """Return cached EIP prices for region, fetching fresh if cache is stale."""
+    entry = _cache.get(cache_key)
+    if entry and (time.time() - entry['ts']) < CACHE_TTL:
+        return entry['prices']
+
+    try:
+        prices = _fetch_eip_price_from_api(region)
+        _cache[cache_key] = {'prices': prices, 'ts': time.time()}
+        logger.info("Pricing: fetched EIP price for %s from Price List API", region)
+        return prices
+    except Exception as exc:
+        logger.warning("Pricing: EIP Price List API failed for %s (%s) — using fallback", region, exc)
+        # Return fallback for this region
+        fallback = {region: _FALLBACK_EIP_PRICES.get(region, 0.005)}
+        _cache[cache_key] = {'prices': fallback, 'ts': time.time()}
+        return fallback
+
+
+def _get_windows_prices(region):
+    """Return cached Windows prices for region, fetching fresh if cache is stale."""
+    cache_key = f'windows-{region}'
+    entry = _cache.get(cache_key)
+    if entry and (time.time() - entry['ts']) < CACHE_TTL:
+        return entry['prices']
+
+    try:
+        prices = _fetch_windows_price_from_api(region)
+        _cache[cache_key] = {'prices': prices, 'ts': time.time()}
+        logger.info("Pricing: fetched %d Windows prices for %s from Price List API", len(prices), region)
+        return prices
+    except Exception as exc:
+        logger.warning("Pricing: Windows Price List API failed for %s (%s) — using fallback", region, exc)
+        # Cache the fallback so we don't hammer the API on every request
+        fallback = dict(_FALLBACK_WINDOWS_PRICES)
+        _cache[cache_key] = {'prices': fallback, 'ts': time.time()}
         return fallback
 
 
@@ -202,4 +325,122 @@ def _fetch_from_price_list_api(region):
 
     if not prices:
         raise RuntimeError(f"Price List API returned no results for region '{region}'")
+    return prices
+
+
+def _fetch_ebs_price_from_api(region, volume_type):
+    """Call the AWS Price List API and return {volumeType: usd_per_gb_month} for region."""
+    location = REGION_TO_LOCATION.get(region)
+    if not location:
+        raise ValueError(f"No Price List location mapping for region '{region}'")
+
+    client = boto3.client('pricing', region_name='us-east-1')
+    paginator = client.get_paginator('get_products')
+
+    pages = paginator.paginate(
+        ServiceCode='AmazonEC2',
+        Filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location',        'Value': location},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily',    'Value': 'Storage'},
+            {'Type': 'TERM_MATCH', 'Field': 'volumeApiName',    'Value': volume_type},
+        ],
+    )
+
+    prices = {}
+    for page in pages:
+        for price_str in page.get('PriceList', []):
+            try:
+                item = json.loads(price_str)
+                vol_type = item.get('product', {}).get('attributes', {}).get('volumeApiName')
+                if not vol_type:
+                    continue
+                on_demand = item.get('terms', {}).get('OnDemand', {})
+                term = next(iter(on_demand.values()))
+                dim  = next(iter(term['priceDimensions'].values()))
+                usd  = float(dim['pricePerUnit']['USD'])
+                if usd > 0:
+                    prices[vol_type] = usd
+            except (KeyError, StopIteration, ValueError, TypeError):
+                continue
+
+    if not prices:
+        raise RuntimeError(f"Price List API returned no results for EBS {volume_type} in region '{region}'")
+    return prices
+
+
+def _fetch_eip_price_from_api(region):
+    """Call the AWS Price List API and return {region: usd_per_hour} for Elastic IP."""
+    location = REGION_TO_LOCATION.get(region)
+    if not location:
+        raise ValueError(f"No Price List location mapping for region '{region}'")
+
+    client = boto3.client('pricing', region_name='us-east-1')
+    paginator = client.get_paginator('get_products')
+
+    pages = paginator.paginate(
+        ServiceCode='AmazonEC2',
+        Filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': location},
+            {'Type': 'TERM_MATCH', 'Field': 'group',    'Value': 'ElasticIP:AdditionalAddress'},
+        ],
+    )
+
+    prices = {}
+    for page in pages:
+        for price_str in page.get('PriceList', []):
+            try:
+                item = json.loads(price_str)
+                on_demand = item.get('terms', {}).get('OnDemand', {})
+                term = next(iter(on_demand.values()))
+                dim  = next(iter(term['priceDimensions'].values()))
+                usd  = float(dim['pricePerUnit']['USD'])
+                if usd > 0:
+                    prices[region] = usd
+                    break  # Only need one match
+            except (KeyError, StopIteration, ValueError, TypeError):
+                continue
+
+    if not prices:
+        raise RuntimeError(f"Price List API returned no results for EIP in region '{region}'")
+    return prices
+
+
+def _fetch_windows_price_from_api(region):
+    """Call the AWS Price List API and return {instanceType: usd_per_hour} for Windows Server."""
+    location = REGION_TO_LOCATION.get(region)
+    if not location:
+        raise ValueError(f"No Price List location mapping for region '{region}'")
+
+    client = boto3.client('pricing', region_name='us-east-1')
+    paginator = client.get_paginator('get_products')
+
+    pages = paginator.paginate(
+        ServiceCode='AmazonEC2',
+        Filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location',        'Value': location},
+            {'Type': 'TERM_MATCH', 'Field': 'operatingSystem', 'Value': 'Windows'},
+            {'Type': 'TERM_MATCH', 'Field': 'tenancy',         'Value': 'Shared'},
+            {'Type': 'TERM_MATCH', 'Field': 'capacitystatus',  'Value': 'Used'},
+        ],
+    )
+
+    prices = {}
+    for page in pages:
+        for price_str in page.get('PriceList', []):
+            try:
+                item = json.loads(price_str)
+                inst_type = item.get('product', {}).get('attributes', {}).get('instanceType')
+                if not inst_type:
+                    continue
+                on_demand = item.get('terms', {}).get('OnDemand', {})
+                term = next(iter(on_demand.values()))
+                dim  = next(iter(term['priceDimensions'].values()))
+                usd  = float(dim['pricePerUnit']['USD'])
+                if usd > 0:
+                    prices[inst_type] = usd
+            except (KeyError, StopIteration, ValueError, TypeError):
+                continue
+
+    if not prices:
+        raise RuntimeError(f"Price List API returned no results for Windows in region '{region}'")
     return prices
