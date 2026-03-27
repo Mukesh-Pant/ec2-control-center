@@ -2,9 +2,12 @@
 
 Provides:
   - get_hourly_price(instance_type, region) → float (USD/hr, Linux on-demand)
+  - get_ebs_price(region, volume_type) → float (USD/GB-Month, EBS on-demand)
+  - get_eip_price(region) → float (USD/hr, Elastic IP)
+  - get_hourly_price_windows(instance_type, region) → float (USD/hr, Windows on-demand)
 
 Caching:
-  - Module-level in-memory cache per region, TTL = 24 hours.
+  - Module-level in-memory cache per key (region or pricing-type+region), TTL = 24 hours.
   - On cold Lambda start the cache is empty; first call fetches from Price List API
     (us-east-1 only endpoint) and populates the cache.
   - If the Price List API is unreachable, falls back to a built-in static table
@@ -20,7 +23,8 @@ import boto3
 logger = logging.getLogger()
 
 # ─── In-memory cache ────────────────────────────────────────────────────────
-_cache = {}          # {region: {'prices': {inst_type: float}, 'ts': float}}
+_cache = {}   # keys: region | 'ebs-{vt}-{region}' | 'eip-{region}' | 'windows-{region}'
+              # values: {'prices': {...}, 'ts': float}
 CACHE_TTL = 86400    # 24 hours
 
 # ─── Region code → Price List API "location" name ───────────────────────────
@@ -356,10 +360,12 @@ def _fetch_ebs_price_from_api(region, volume_type):
                     continue
                 on_demand = item.get('terms', {}).get('OnDemand', {})
                 term = next(iter(on_demand.values()))
-                dim  = next(iter(term['priceDimensions'].values()))
-                usd  = float(dim['pricePerUnit']['USD'])
-                if usd > 0:
-                    prices[vol_type] = usd
+                for dim in term['priceDimensions'].values():
+                    if dim.get('unit') == 'GB-Mo':
+                        usd = float(dim['pricePerUnit']['USD'])
+                        if usd > 0:
+                            prices[vol_type] = usd
+                        break
             except (KeyError, StopIteration, ValueError, TypeError):
                 continue
 
@@ -386,6 +392,7 @@ def _fetch_eip_price_from_api(region):
     )
 
     prices = {}
+    found = False
     for page in pages:
         for price_str in page.get('PriceList', []):
             try:
@@ -396,9 +403,12 @@ def _fetch_eip_price_from_api(region):
                 usd  = float(dim['pricePerUnit']['USD'])
                 if usd > 0:
                     prices[region] = usd
-                    break  # Only need one match
+                    found = True
+                    break
             except (KeyError, StopIteration, ValueError, TypeError):
                 continue
+        if found:
+            break
 
     if not prices:
         raise RuntimeError(f"Price List API returned no results for EIP in region '{region}'")
@@ -420,6 +430,7 @@ def _fetch_windows_price_from_api(region):
             {'Type': 'TERM_MATCH', 'Field': 'location',        'Value': location},
             {'Type': 'TERM_MATCH', 'Field': 'operatingSystem', 'Value': 'Windows'},
             {'Type': 'TERM_MATCH', 'Field': 'tenancy',         'Value': 'Shared'},
+            {'Type': 'TERM_MATCH', 'Field': 'preInstalledSw',  'Value': 'NA'},
             {'Type': 'TERM_MATCH', 'Field': 'capacitystatus',  'Value': 'Used'},
         ],
     )
