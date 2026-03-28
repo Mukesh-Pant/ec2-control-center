@@ -98,12 +98,15 @@ def _send_warning_emails(now):
         # Scan for labs where:
         #   expiresAt is between now and (now + 1 hour) [i.e., expiring soon but not yet expired]
         #   AND warningSent = False
-        #   AND status = 'running'
+        #   AND status is running or provisioning (provisioning labs may never reach 'running'
+        #       if the user hasn't visited the Labs tab, so warn them regardless)
+        now_str          = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+        one_hour_str     = one_hour_from_now.strftime('%Y-%m-%dT%H:%M:%SZ')
         scan_kwargs = {
             'FilterExpression': (
-                Attr('expiresAt').between(now.isoformat(), one_hour_from_now.isoformat())
+                Attr('expiresAt').between(now_str, one_hour_str)
                 & Attr('warningSent').eq(False)
-                & Attr('status').eq('running')
+                & Attr('status').is_in(['running', 'provisioning'])
             )
         }
 
@@ -173,11 +176,13 @@ def _stop_expired_labs(now):
 
         # Scan for labs where:
         #   expiresAt <= now (already expired)
-        #   AND status = 'running'
+        #   AND status is running or provisioning (provisioning labs may never have
+        #       been transitioned by handle_labs_list if the user never visited Labs tab)
+        now_str = now.strftime('%Y-%m-%dT%H:%M:%SZ')
         scan_kwargs = {
             'FilterExpression': (
-                Attr('expiresAt').lte(now.isoformat())
-                & Attr('status').eq('running')
+                Attr('expiresAt').lte(now_str)
+                & Attr('status').is_in(['running', 'provisioning'])
             )
         }
 

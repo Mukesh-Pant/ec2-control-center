@@ -432,6 +432,7 @@ def _fetch_windows_price_from_api(region):
             {'Type': 'TERM_MATCH', 'Field': 'tenancy',         'Value': 'Shared'},
             {'Type': 'TERM_MATCH', 'Field': 'preInstalledSw',  'Value': 'NA'},
             {'Type': 'TERM_MATCH', 'Field': 'capacitystatus',  'Value': 'Used'},
+            {'Type': 'TERM_MATCH', 'Field': 'licenseModel',    'Value': 'License Included'},
         ],
     )
 

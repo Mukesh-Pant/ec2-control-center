@@ -290,12 +290,12 @@ code {
 }
 .btn-logout {
   background: none; border: none; cursor: pointer;
-  color: rgba(255,255,255,.3);
+  color: rgba(255,255,255,.65);
   padding: 5px;
   border-radius: var(--rsm);
   transition: color .15s;
 }
-.btn-logout:hover { color: rgba(255,255,255,.7); }
+.btn-logout:hover { color: rgba(255,255,255,.9); }
 .btn-logout svg { width: 14px; height: 14px; display: block; }
 
 /* ════════ MAIN CONTENT AREA ════════ */
@@ -2701,8 +2701,8 @@ code {
   background: #0d1117;
   padding: 10px 14px;
   border-radius: 5px;
-  color: #7eb3ff;
-  border: 1px solid rgba(126,179,255,.15);
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,.15);
   word-break: break-all;
   user-select: all;
 }

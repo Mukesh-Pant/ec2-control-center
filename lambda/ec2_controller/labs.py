@@ -574,8 +574,9 @@ def handle_labs_provision(event):
                     pass
                 return error_response(500, 'Failed to allocate Elastic IP.')
 
-        # Compute expiry timestamp (append Z so browsers parse as UTC)
-        expires_at = (datetime.utcnow() + timedelta(hours=duration_hours)).isoformat() + 'Z'
+        # Compute expiry timestamp — consistent ISO format without microseconds or +00:00 suffix
+        # so DynamoDB string comparisons in the expiry checker work reliably.
+        expires_at = (datetime.utcnow() + timedelta(hours=duration_hours)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
         # Write DynamoDB record
         item = {
