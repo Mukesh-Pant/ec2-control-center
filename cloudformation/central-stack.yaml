@@ -561,6 +561,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'ec2-control-labs-keys-${AWS::AccountId}-${AWS::Region}'
+      AccessControl: Private
       LifecycleConfiguration:
         Rules:
           - Id: DeleteOldKeys
@@ -579,6 +580,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'ec2-control-labs-payments-${AWS::AccountId}-${AWS::Region}'
+      AccessControl: Private
       Tags:
         - Key: Project
           Value: EC2Control
