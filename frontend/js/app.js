@@ -20,6 +20,7 @@ const App = (function () {
     accounts:  'Accounts',
     users:     'Users',
     backup:    'Backups',
+    labs:      'EC2 Labs',
   };
 
   // ─── Navigation ────────────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ const App = (function () {
     if (page === 'accounts')  Accounts.onTabActivated();
     if (page === 'users')     Users.onTabActivated();
     if (page === 'backup')    Backup.onTabActivated();
+    if (page === 'labs')      Labs.onTabActivated();
   }
 
   // ─── Sidebar ───────────────────────────────────────────────────────────────
@@ -270,6 +272,7 @@ const App = (function () {
     Accounts.init();
     Users.init();
     Backup.init();
+    Labs.init();
     startClock();
     go('dashboard');
     log('Portal ready', 'sys');

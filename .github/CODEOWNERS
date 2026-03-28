@@ -1,0 +1,4 @@
+# Mukesh is required reviewer for any PR targeting main.
+# This works in conjunction with the branch protection rule on main
+# that requires CODEOWNERS review.
+* @Mukesh-Pant

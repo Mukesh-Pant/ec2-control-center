@@ -173,6 +173,27 @@ First deploy: ~8-12 min (CloudFront). Updates: ~2-5 min.
 
 ---
 
+## Team Development
+
+This project uses a GitFlow-Lite workflow with two isolated AWS environments:
+
+| Branch | Environment | Deploy | Who can merge |
+|--------|-------------|--------|---------------|
+| `develop` | Dev (ocu_dev account) | Auto via GitHub Actions | 1 approval — any team member |
+| `main` | Production (solobil.com) | Auto via GitHub Actions | Mukesh approval required |
+
+**Workflow:**
+1. Create a feature branch from `develop`
+2. Open a PR targeting `develop` — any team member approves → auto-deploys to dev
+3. Verify on the dev environment URL
+4. Mukesh opens PR: `develop` → `main` → merge → auto-deploys to production
+
+**CI/CD:** GitHub Actions with AWS OIDC (no stored credentials). See `.github/workflows/`.
+
+For the full onboarding guide, branch naming, commit format, and code patterns: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
 ## Adding Member AWS Accounts
 
 1. Deploy the cross-account role in the target account:

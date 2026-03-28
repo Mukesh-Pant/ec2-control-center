@@ -44,16 +44,23 @@ Fully serverless, zero infrastructure to manage.
 - **Code S3 Bucket:** `ec2-control-code-976792586566-ap-south-1`
 - **AWS CLI Profile:** `solobil-prod`
 
-### Personal / Prototype — `196750375951`
-- **Stack:** `ec2-control-production` (ap-south-1) — UPDATE_COMPLETE
-- **Portal URL:** `https://d3v0ebskiqqkg7.cloudfront.net`
-- **API URL:** `https://op7ptqz36e.execute-api.ap-south-1.amazonaws.com/prod`
-- **Cognito User Pool:** `ap-south-1_qOtoGkjER` | **Client:** `2sa6co5jqct1fdumd0sr8v7jhr`
-- **Cognito Domain Prefix:** `ocu-ec2-ctrl-v2`
-- **CloudFront Distribution:** `E1XDECJP6ONGSM`
-- **AWS CLI Profile:** `default`
+### Dev / Staging — `172030246614` (ocu_dev)
+- **Stack:** `ec2-control-development` (ap-south-1)
+- **Portal URL:** `https://d1f7pmzpwdrl1i.cloudfront.net`
+- **API URL:** `https://u0bcgfkwec.execute-api.ap-south-1.amazonaws.com/prod`
+- **Cognito User Pool:** `ap-south-1_p43GSdwV0` | **Client:** `4nhrk7k1q76k1hkllkfj79123h`
+- **Cognito Domain Prefix:** `solobil-ec2-ctrl-dev`
+- **CloudFront Distribution:** `E3SX2BGVD0BKHU`
+- **AWS CLI Profile:** `solobil-dev`
+- **Deploy trigger:** GitHub Actions auto-deploys on every merge to `develop`
 
-**Shared table names:** `ec2-control-accounts-production`, `ec2-control-audit-production`, `ec2-control-user-accounts-production`
+### Personal / Prototype — `196750375951` (retired — superseded by ocu_dev)
+- **Portal URL:** `https://d3v0ebskiqqkg7.cloudfront.net`
+- **AWS CLI Profile:** `default`
+- No longer used for team dev; kept for reference only
+
+**Prod table names:** `ec2-control-accounts-production`, `ec2-control-audit-production`, `ec2-control-user-accounts-production`
+**Dev table names:** `ec2-control-accounts-development`, `ec2-control-audit-development`, `ec2-control-user-accounts-development`
 
 ---
 
@@ -443,7 +450,12 @@ aws cloudformation deploy \
 
 ## Git & GitHub
 
-- **Repo:** `https://github.com/Mukesh-Pant/ec2-control-center` (private) | **Branch:** `main`
+- **Primary repo (team):** `https://github.com/OneCloudUtopia/ec2-control-center` (private) | `origin` remote
+- **Portfolio repo (Mukesh):** `https://github.com/Mukesh-Pant/ec2-control-center` (private) | `personal` remote — manually synced after prod releases
+- **Branches:** `develop` (default, auto-deploys to dev) → `main` (auto-deploys to prod, Mukesh approval required)
+- **CI/CD:** GitHub Actions — `.github/workflows/deploy-dev.yml` + `.github/workflows/deploy-prod.yml` (OIDC auth, no stored AWS keys)
+- **Workflow:** `feat/branch` → PR to `develop` (1 approval, any member) → PR to `main` (Mukesh approval)
 - **Commit at milestone/feature completion only**
-- **Never commit:** `deploy-config.env`, `.zip` files, `__pycache__/`, secrets
+- **Never commit:** `deploy-config.env`, `deploy-config-dev.env`, `.zip` files, `__pycache__/`, secrets
 - **Commit types:** `feat`, `fix`, `chore`, `docs`, `refactor`
+- **Portfolio sync after prod release:** `git checkout main && git pull origin main && git push personal main`

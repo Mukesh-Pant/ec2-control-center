@@ -290,12 +290,12 @@ code {
 }
 .btn-logout {
   background: none; border: none; cursor: pointer;
-  color: rgba(255,255,255,.3);
+  color: #fff;
   padding: 5px;
   border-radius: var(--rsm);
   transition: color .15s;
 }
-.btn-logout:hover { color: rgba(255,255,255,.7); }
+.btn-logout:hover { color: rgba(255,255,255,.9); }
 .btn-logout svg { width: 14px; height: 14px; display: block; }
 
 /* ════════ MAIN CONTENT AREA ════════ */
@@ -2382,3 +2382,327 @@ code {
   padding: 0 2px;
 }
 .ext-banner button:hover { color: #fff; }
+
+/* ═══════════════════════════════════════
+   M11 — Labs Module
+   ═══════════════════════════════════════ */
+
+/* Active Labs Panel */
+.lbs-loading { color: #7eb3ff; padding: 24px 0; font-size: 14px; }
+.lbs-empty   { color: #8a9bb8; padding: 32px 0; font-size: 14px; text-align: center; }
+.lbs-err     { color: #ff6b6b; padding: 10px 0; font-size: 13px; }
+
+.lbs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.lbs-card {
+  background: #1e2430;
+  border: 1px solid rgba(126,179,255,.12);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.lbs-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(126,179,255,.06);
+  border-bottom: 1px solid rgba(126,179,255,.10);
+}
+
+.lbs-platform-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #c9d8f0;
+}
+
+.lbs-card-body {
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.lbs-card-row {
+  margin-bottom: 5px;
+  color: #c9d8f0;
+}
+
+.lbs-expiry {
+  color: #ffd166;
+  font-size: 12px;
+}
+
+.lbs-card-actions {
+  padding: 10px 14px;
+  border-top: 1px solid rgba(126,179,255,.10);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Status / payment badges */
+.lbs-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+.lbs-badge--green  { background: rgba(80,200,120,.15); color: #50c878; }
+.lbs-badge--yellow { background: rgba(255,209,102,.15); color: #ffd166; }
+.lbs-badge--gray   { background: rgba(138,155,184,.15); color: #8a9bb8; }
+.lbs-badge--red    { background: rgba(255,107,107,.15); color: #ff6b6b; }
+
+/* Wizard wrapper */
+.lbs-wizard-wrap {
+  max-width: 680px;
+  background: #1e2430;
+  border: 1px solid rgba(126,179,255,.14);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 8px 0 24px;
+}
+
+.lbs-wizard-header {
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid rgba(126,179,255,.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.lbs-wizard-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e0eaff;
+  margin: 0;
+}
+
+/* Step indicators */
+.lbs-steps {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.lbs-step {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(126,179,255,.1);
+  color: #5a7aa8;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(126,179,255,.2);
+}
+
+.lbs-step--active {
+  background: #3b5bdb;
+  color: #fff;
+  border-color: #3b5bdb;
+}
+
+.lbs-step--done {
+  background: rgba(80,200,120,.2);
+  color: #50c878;
+  border-color: rgba(80,200,120,.4);
+}
+
+/* Wizard body / footer */
+.lbs-wizard-body   { padding: 20px 24px; }
+.lbs-wizard-footer { padding: 14px 24px; border-top: 1px solid rgba(126,179,255,.12); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* Form elements inside wizard */
+.lbs-form-row { margin-bottom: 16px; }
+.lbs-form-row--inline { display: flex; align-items: center; gap: 10px; }
+
+.lbs-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8a9bb8;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 6px;
+}
+
+.lbs-select,
+.lbs-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: #141820;
+  border: 1px solid rgba(126,179,255,.2);
+  border-radius: 5px;
+  color: #e0eaff;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.lbs-select:focus,
+.lbs-input:focus {
+  outline: none;
+  border-color: #3b5bdb;
+}
+
+.lbs-help-text {
+  font-size: 12px;
+  color: #8a9bb8;
+  margin-top: 4px;
+  display: inline-block;
+  margin-left: 10px;
+}
+
+/* Platform radio cards */
+.lbs-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.lbs-platform-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #141820;
+  border: 1px solid rgba(126,179,255,.15);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #c9d8f0;
+  transition: border-color .15s;
+}
+
+.lbs-platform-card:hover { border-color: rgba(126,179,255,.4); }
+.lbs-platform-card input[type="radio"] { accent-color: #3b5bdb; }
+
+/* Pricing table */
+.lbs-price-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.lbs-price-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: rgba(126,179,255,.08);
+  color: #8a9bb8;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  border-bottom: 1px solid rgba(126,179,255,.12);
+}
+
+.lbs-price-table td {
+  padding: 9px 10px;
+  color: #c9d8f0;
+  border-bottom: 1px solid rgba(126,179,255,.07);
+}
+
+.lbs-price-total td {
+  font-size: 14px;
+  color: #e0eaff;
+  border-top: 1px solid rgba(126,179,255,.2);
+  border-bottom: none;
+  padding-top: 11px;
+}
+
+.lbs-pricing-source {
+  font-size: 11px;
+  color: #5a7aa8;
+  margin: 0 0 8px;
+}
+
+/* Payment step */
+.lbs-payment-amount {
+  font-size: 22px;
+  font-weight: 700;
+  color: #e0eaff;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.lbs-qr-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.lbs-qr-img {
+  width: 200px;
+  height: 200px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 2px solid rgba(126,179,255,.2);
+  background: #fff;
+  padding: 8px;
+}
+
+/* Provisioning step indicators */
+.lbs-provision-step {
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #5a7aa8;
+  background: rgba(126,179,255,.04);
+  border: 1px solid rgba(126,179,255,.08);
+}
+
+.lbs-provision-step--active {
+  color: #7eb3ff;
+  background: rgba(59,91,219,.12);
+  border-color: rgba(59,91,219,.3);
+  animation: lbs-pulse .8s ease-in-out infinite alternate;
+}
+
+.lbs-provision-step--done {
+  color: #50c878;
+  background: rgba(80,200,120,.08);
+  border-color: rgba(80,200,120,.2);
+}
+
+@keyframes lbs-pulse {
+  from { opacity: .7; }
+  to   { opacity: 1; }
+}
+
+/* Step 5: Connection Info */
+.lbs-success-banner {
+  font-size: 20px;
+  font-weight: 700;
+  color: #50c878;
+  text-align: center;
+  width: 100%;
+  padding: 4px 0;
+}
+
+.lbs-info-grid   { margin-bottom: 16px; }
+.lbs-info-row    { padding: 5px 0; font-size: 13px; color: #c9d8f0; }
+.lbs-info-section { margin-top: 16px; }
+.lbs-info-label  { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: #fff; margin-bottom: 8px; }
+
+.lbs-code-block {
+  font-family: monospace;
+  font-size: 13px;
+  background: #0d1117;
+  padding: 10px 14px;
+  border-radius: 5px;
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,.15);
+  word-break: break-all;
+  user-select: all;
+}

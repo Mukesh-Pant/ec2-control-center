@@ -1,0 +1,65 @@
+name: Deploy to Development
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  id-token: write   # required for OIDC token request
+  contents: read
+
+jobs:
+  deploy-dev:
+    name: Deploy (dev)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.DEV_AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.DEV_AWS_REGION }}
+
+      - name: Reconstruct deploy-config.env from secrets
+        env:
+          ADMIN_EMAIL: ${{ secrets.DEV_ADMIN_EMAIL }}
+          COGNITO_DOMAIN_PREFIX: ${{ secrets.DEV_COGNITO_DOMAIN_PREFIX }}
+          ENVIRONMENT: ${{ secrets.DEV_ENVIRONMENT }}
+          AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
+          NOTIFICATION_EMAIL: ${{ secrets.DEV_NOTIFICATION_EMAIL }}
+          CUSTOM_DOMAIN: ${{ secrets.DEV_CUSTOM_DOMAIN }}
+          APEX_DOMAIN: ${{ secrets.DEV_APEX_DOMAIN }}
+          ACM_CERT_ARN: ${{ secrets.DEV_ACM_CERT_ARN }}
+          HOSTED_ZONE_ID: ${{ secrets.DEV_HOSTED_ZONE_ID }}
+        run: |
+          {
+            echo "ADMIN_EMAIL=$ADMIN_EMAIL"
+            echo "COGNITO_DOMAIN_PREFIX=$COGNITO_DOMAIN_PREFIX"
+            echo "ENVIRONMENT=$ENVIRONMENT"
+            echo "AWS_REGION=$AWS_REGION"
+            echo "NOTIFICATION_EMAIL=$NOTIFICATION_EMAIL"
+            echo "CUSTOM_DOMAIN=$CUSTOM_DOMAIN"
+            echo "APEX_DOMAIN=$APEX_DOMAIN"
+            echo "ACM_CERT_ARN=$ACM_CERT_ARN"
+            echo "HOSTED_ZONE_ID=$HOSTED_ZONE_ID"
+          } > deploy-config.env
+
+      - name: Deploy to dev
+        id: deploy
+        run: bash deploy.sh
+
+      - name: Show CloudFormation failure events
+        if: failure() && steps.deploy.outcome == 'failure'
+        env:
+          AWS_REGION: ${{ secrets.DEV_AWS_REGION }}
+          ENVIRONMENT: ${{ secrets.DEV_ENVIRONMENT }}
+        run: |
+          echo "==> CloudFormation stack events (last 20, failures only):"
+          aws cloudformation describe-stack-events \
+            --stack-name "ec2-control-${ENVIRONMENT}" \
+            --region "$AWS_REGION" \
+            --query 'StackEvents[?contains(`["UPDATE_FAILED","CREATE_FAILED","DELETE_FAILED"]`, ResourceStatus)].[Timestamp,ResourceType,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+            --output table | head -80
