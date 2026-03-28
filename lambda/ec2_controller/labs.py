@@ -98,48 +98,29 @@ def _boto3_client(service, region, creds=None):
 # ─── AMI lookup ───────────────────────────────────────────────────────────────
 
 _AMI_SSM_PATHS = {
-    'amazon-linux': '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64',
-    'ubuntu':       '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id',
-    'windows':      '/aws/service/ami-windows-latest/Windows_Server-2022-English-Full-Base',
+    'ubuntu':  '/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id',
+    'windows': '/aws/service/ami-windows-latest/Windows_Server-2025-English-Full-Base',
 }
 
 _ROOT_DEVICE = {
-    'amazon-linux': '/dev/xvda',
-    'ubuntu':       '/dev/sda1',
-    'rhel':         '/dev/sda1',
-    'windows':      '/dev/sda1',
+    'ubuntu':  '/dev/sda1',
+    'windows': '/dev/sda1',
 }
 
 _SSH_USER = {
-    'amazon-linux': 'ec2-user',
-    'ubuntu':       'ubuntu',
-    'rhel':         'ec2-user',
-    'windows':      None,  # RDP
+    'ubuntu':  'ubuntu',
+    'windows': None,  # RDP
 }
 
 SUPPORTED_PLATFORMS = set(_ROOT_DEVICE.keys())
 
 
 def _get_latest_ami(platform, region, creds):
-    """Return the latest AMI ID for platform+region using SSM or describe_images."""
+    """Return the latest AMI ID for platform+region using SSM."""
     if platform in _AMI_SSM_PATHS:
         ssm = _boto3_client('ssm', region, creds)
         param = ssm.get_parameter(Name=_AMI_SSM_PATHS[platform])
         return param['Parameter']['Value']
-    elif platform == 'rhel':
-        ec2 = _boto3_client('ec2', region, creds)
-        resp = ec2.describe_images(
-            Owners=['309956199498'],  # Red Hat official
-            Filters=[
-                {'Name': 'name',         'Values': ['RHEL-9.*HVM*GP3*']},
-                {'Name': 'architecture', 'Values': ['x86_64']},
-                {'Name': 'state',        'Values': ['available']},
-            ]
-        )
-        images = sorted(resp['Images'], key=lambda x: x['CreationDate'], reverse=True)
-        if not images:
-            raise ValueError(f'No RHEL 9 AMI found in region {region}')
-        return images[0]['ImageId']
     else:
         raise ValueError(f'Unknown platform: {platform}')
 

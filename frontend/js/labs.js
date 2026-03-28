@@ -20,10 +20,8 @@ const Labs = (function () {
   // ─── Display maps
 
   var PLATFORM_LABELS = {
-    'amazon-linux': 'Amazon Linux 2023',
-    'ubuntu':       'Ubuntu 22.04',
-    'rhel':         'RHEL 9',
-    'windows':      'Windows Server 2022',
+    'ubuntu':  'Ubuntu Server 24.04 LTS',
+    'windows': 'Windows Server 2025',
   };
 
   var STATUS_LABELS = {
@@ -380,12 +378,10 @@ const Labs = (function () {
       return '<option value="' + d.value + '"' + sel + '>' + d.label + '</option>';
     }).join('');
 
-    var currentPlatform = wizardConfig.platform || 'amazon-linux';
+    var currentPlatform = wizardConfig.platform || 'ubuntu';
     var platformCards = [
-      { value: 'amazon-linux', label: 'Amazon Linux 2023' },
-      { value: 'ubuntu',       label: 'Ubuntu 22.04'      },
-      { value: 'rhel',         label: 'RHEL 9'            },
-      { value: 'windows',      label: 'Windows Server 2022' },
+      { value: 'ubuntu',  label: 'Ubuntu Server 24.04 LTS' },
+      { value: 'windows', label: 'Windows Server 2025'     },
     ].map(function (p) {
       var checked = currentPlatform === p.value ? ' checked' : '';
       return '<label class="lbs-platform-card"><input type="radio" name="lbs-platform" value="' + p.value + '"' + checked + '> ' + _esc(p.label) + '</label>';
@@ -993,7 +989,7 @@ const Labs = (function () {
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to get Windows password');
       if (passEl) {
-        passEl.innerHTML = '<b>Password:</b> <code style="user-select:all; font-size:15px;">' + _esc(data.password) + '</code>';
+        passEl.innerHTML = '<b style="color:#fff;">Password:</b> <code style="user-select:all; font-size:15px; color:#fff;">' + _esc(data.password) + '</code>';
       }
     } catch (e) {
       if (passEl) passEl.textContent = 'Error: ' + e.message + ' (password may not be ready — wait 4+ minutes after launch)';
