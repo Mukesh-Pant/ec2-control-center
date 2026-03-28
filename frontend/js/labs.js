@@ -983,16 +983,16 @@ const Labs = (function () {
 
   async function _getWindowsPassword(labId) {
     var passEl = document.getElementById('lbs-win-pass');
-    if (passEl) { passEl.style.display = ''; passEl.textContent = 'Retrieving password…'; }
+    if (passEl) { passEl.style.display = ''; passEl.innerHTML = '<span style="color:#fff;">Retrieving password\u2026</span>'; }
     try {
       var res  = await API.getLabWindowsPassword(labId);
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to get Windows password');
       if (passEl) {
-        passEl.innerHTML = '<b style="color:#fff;">Password:</b> <code style="user-select:all; font-size:15px; color:#fff;">' + _esc(data.password) + '</code>';
+        passEl.innerHTML = '<b style="color:#fff;">Password:</b> <code style="user-select:all; font-size:15px;">' + _esc(data.password) + '</code>';
       }
     } catch (e) {
-      if (passEl) passEl.textContent = 'Error: ' + e.message + ' (password may not be ready — wait 4+ minutes after launch)';
+      if (passEl) passEl.innerHTML = '<span style="color:#fff;">Error: ' + _esc(e.message) + ' (password may not be ready \u2014 wait 4+ minutes after launch)</span>';
       App.showToast('Password retrieval failed: ' + e.message, 'err');
     }
   }
