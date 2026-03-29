@@ -769,7 +769,7 @@ const Labs = (function () {
       '  <div class="lbs-wizard-body">',
       '    <div class="lbs-payment-amount">Please pay <strong>' + _esc(totalStr) + '</strong></div>',
       '    <div class="lbs-qr-wrap">',
-      '      <img src="myQR.jpeg" alt="Payment QR Code" class="lbs-qr-img">',
+      '      <img src="PaymentQR.jpeg" alt="Payment QR Code" class="lbs-qr-img">',
       '    </div>',
       '    <div class="lbs-form-row" style="margin-top:16px;">',
       '      <label class="lbs-label">Upload Payment Screenshot (JPG / PNG, max 5 MB)</label>',
@@ -1163,9 +1163,14 @@ const Labs = (function () {
 
   // ─── Public API
 
+  function refresh() {
+    _loadActiveLabs();
+  }
+
   return {
     init:            init,
     onTabActivated:  onTabActivated,
+    refresh:         refresh,
     startWizard:     startWizard,
     nextStep:        nextStep,
     prevStep:        prevStep,
