@@ -1158,7 +1158,6 @@ const Labs = (function () {
     prevStep:        prevStep,
     fetchPricing:    fetchPricing,
     submitPayment:   submitPayment,
-    provision:       provision,
     pollStatus:      pollStatus,
     downloadLabInfo: downloadLabInfo,
     downloadKeypair: downloadKeypair,
@@ -1168,7 +1167,8 @@ const Labs = (function () {
     confirmCancel:   confirmCancel,
     // Exposed for inline onclick handlers
     _exitWizard:         _exitWizard,
-    _onDurationChange:   _onDurationChange,
+    _onDurationInput:    _onDurationInput,
+    _onPlatformChange:   _onPlatformChange,
     _loadNetworkOptions: _loadNetworkOptions,
     _onVpcChange:        _onVpcChange,
     _onScreenshotChange: _onScreenshotChange,
