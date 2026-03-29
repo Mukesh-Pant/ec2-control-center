@@ -72,6 +72,8 @@ def lambda_handler(event, context):
         return labs.handle_labs_provision(event)
     elif path == '/labs' and method == 'DELETE':
         return labs.handle_labs_delete(event)
+    elif path == '/labs/payment' and method == 'GET':
+        return labs.handle_labs_payment_view(event)
     elif path == '/labs/payment' and method == 'POST':
         return labs.handle_labs_payment(event)
     elif path == '/labs/keypair' and method == 'GET':

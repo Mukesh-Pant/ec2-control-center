@@ -1466,6 +1466,19 @@ Resources:
   # =============================================
   # REST API - /labs/payment (M11)
   # =============================================
+  MethodGetLabsPayment:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsPayment
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
   MethodPostLabsPayment:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -1494,7 +1507,7 @@ Resources:
           - StatusCode: 200
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
               method.response.header.Access-Control-Allow-Origin: "'*'"
             ResponseTemplates:
               application/json: ''
@@ -1702,6 +1715,7 @@ Resources:
       - MethodPostLabs
       - MethodDeleteLabs
       - MethodOptionsLabs
+      - MethodGetLabsPayment
       - MethodPostLabsPayment
       - MethodOptionsLabsPayment
       - MethodGetLabsKeypair

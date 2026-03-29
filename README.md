@@ -20,6 +20,7 @@ A **production SaaS web portal** for managing EC2 instances across multiple AWS 
 | **RBAC** | Role-based access control via Cognito groups — admins, operators, viewers with per-account grants |
 | **Backup & Restore** | On-demand and scheduled EC2 backups via AWS Backup; restore to new instance or replace in place |
 | **Console Login** | One-click AWS Console access for any account — each account opens in an isolated Firefox container tab |
+| **Labs** | Self-service EC2 lab provisioning — 4-step wizard, payment upload, admin approval gate before EC2 launch |
 | **Custom Domain** | Serve on your own domain with apex redirect via CloudFront + ACM + Route 53 |
 | **Zero Infrastructure** | Fully serverless — API Gateway + Lambda + DynamoDB + S3 + CloudFront |
 
@@ -49,7 +50,8 @@ Lambda: ec2-controller (Python 3.12)
   ├── Cognito IdP → group management (admins/operators/viewers)
   ├── Cost Explorer → billing data
   ├── AWS Backup → ec2-control-vault-production (backup, schedule, restore)
-  └── AWS Federation API → console login URLs (STS AssumeRole → SigninToken)
+  ├── AWS Federation API → console login URLs (STS AssumeRole → SigninToken)
+  └── Labs EC2 provisioning (key pair + EIP, pending-approval gate)
 
 Console Login flow:
   Portal (Console Login button)
@@ -75,11 +77,12 @@ EC2-control-center/
 │   └── member-role-stack.yaml    ← Cross-account IAM role (deploy in each member account)
 ├── lambda/
 │   ├── ec2_controller/
-│   │   ├── index.py              ← Main handler: /ec2, /accounts, /audit, /pricing, /users, /backup, /console-login
+│   │   ├── index.py              ← Main handler: /ec2, /accounts, /audit, /pricing, /users, /backup, /console-login, /labs
 │   │   ├── accounts.py           ← Account registry (DynamoDB + STS AssumeRole)
 │   │   ├── audit.py              ← Audit log read/write
 │   │   ├── backup.py             ← AWS Backup: on-demand, schedules, restore, delete
 │   │   ├── console_login.py      ← Console login: STS AssumeRole → Federation API → SigninToken URL
+│   │   ├── labs.py               ← Labs: submit/approve/reject provisioning, EIP, payment view
 │   │   ├── pricing.py            ← EC2 on-demand pricing lookup
 │   │   └── utils.py              ← CORS helpers, JWT claims, error mapping, RBAC helpers
 │   ├── config_injector/
@@ -101,6 +104,7 @@ EC2-control-center/
 │       ├── accounts.js           ← Multi-account management + Console Login button
 │       ├── users.js              ← User management: roles, account grants (admin only)
 │       ├── backup.js             ← Backup dashboard: on-demand, schedules, restore
+│       ├── labs.js               ← Labs dashboard: 4-step wizard, pending-approval flow, admin controls
 │       ├── app.js                ← App init, tabs, toast, session timer, role badge, extension detection
 │       └── vendor/
 │           └── amazon-cognito-identity.min.js  ← Cognito SDK v6.3.12 (CDN fallback)
@@ -256,6 +260,29 @@ The Backup tab lets you create and manage EC2 backups powered by **AWS Backup**:
 Recovery points are stored in the central vault `ec2-control-vault-production`.
 
 > **Adding a new member account:** after onboarding via the Accounts tab, also add the account ARN to the vault `AccessPolicy` in `cloudformation/central-stack.yaml` and redeploy.
+
+---
+
+## Labs
+
+The **Labs** tab lets operators provision a dedicated EC2 instance for hands-on training, with an admin-gated approval workflow before any EC2 is launched.
+
+### How it works
+
+1. **Configure** — choose region, instance type (with vCPU/RAM specs shown), OS platform, storage, and usage duration (hours/day × months)
+2. **Pricing** — review the estimated cost breakdown and open the AWS Pricing Calculator for verification
+3. **Payment** — upload a payment screenshot as proof of funding
+4. **Submitted** — request is saved as `pending_approval`; no EC2 is launched yet
+
+An admin then reviews the payment and clicks **Approve** (or **Reject**) from the Labs tab:
+- **Approve** → EC2 is provisioned (key pair created, instance launched, Elastic IP allocated), lab moves to `Running`
+- **Reject** → lab marked `Rejected`, no EC2 created
+
+### Access & download
+
+- Once running, operators can download the **.pem key** for SSH access
+- Windows labs support one-click **RDP password retrieval**
+- RBAC: operators provision labs for assigned accounts; admins approve and see all labs
 
 ---
 

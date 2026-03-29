@@ -25,17 +25,23 @@ const Labs = (function () {
   };
 
   var STATUS_LABELS = {
-    'provisioning': 'Provisioning',
-    'running':      'Running',
-    'stopped':      'Stopped',
-    'error':        'Error',
+    'pending_approval': 'Pending Approval',
+    'provisioning':     'Provisioning',
+    'running':          'Running',
+    'stopped':          'Stopped',
+    'error':            'Error',
+    'rejected':         'Rejected',
+    'terminated':       'Terminated',
   };
 
   var STATUS_CLASSES = {
-    'provisioning': 'lbs-badge--yellow',
-    'running':      'lbs-badge--green',
-    'stopped':      'lbs-badge--gray',
-    'error':        'lbs-badge--red',
+    'pending_approval': 'lbs-badge--yellow',
+    'provisioning':     'lbs-badge--yellow',
+    'running':          'lbs-badge--green',
+    'stopped':          'lbs-badge--gray',
+    'error':            'lbs-badge--red',
+    'rejected':         'lbs-badge--red',
+    'terminated':       'lbs-badge--gray',
   };
 
   var REGIONS = [
@@ -52,9 +58,20 @@ const Labs = (function () {
   ];
 
   var INSTANCE_GROUPS = [
-    { label: 'General Purpose',    types: ['t3.micro', 't3.small', 't3.medium', 't3.large'] },
-    { label: 'Compute Optimized',  types: ['c5.large', 'c5.xlarge'] },
-    { label: 'Memory Optimized',   types: ['r5.large', 'r5.xlarge'] },
+    { label: 'General Purpose', types: [
+      { value: 't3.micro',  label: 't3.micro  — 2 vCPU \u00b7 1 GB RAM  \u00b7 Burstable'  },
+      { value: 't3.small',  label: 't3.small  — 2 vCPU \u00b7 2 GB RAM  \u00b7 Burstable'  },
+      { value: 't3.medium', label: 't3.medium — 2 vCPU \u00b7 4 GB RAM  \u00b7 Burstable'  },
+      { value: 't3.large',  label: 't3.large  — 2 vCPU \u00b7 8 GB RAM  \u00b7 Burstable'  },
+    ]},
+    { label: 'Compute Optimized', types: [
+      { value: 'c5.large',  label: 'c5.large  — 2 vCPU \u00b7 4 GB RAM  \u00b7 Intel Xeon' },
+      { value: 'c5.xlarge', label: 'c5.xlarge — 4 vCPU \u00b7 8 GB RAM  \u00b7 Intel Xeon' },
+    ]},
+    { label: 'Memory Optimized', types: [
+      { value: 'r5.large',  label: 'r5.large  — 2 vCPU \u00b7 16 GB RAM \u00b7 Intel Xeon' },
+      { value: 'r5.xlarge', label: 'r5.xlarge — 4 vCPU \u00b7 32 GB RAM \u00b7 Intel Xeon' },
+    ]},
   ];
 
   var DURATION_OPTIONS = [
@@ -233,7 +250,16 @@ const Labs = (function () {
           html += '<button class="btn btn-sm btn-outline" onclick="Labs.downloadKeypair(\'' + labIdEsc + '\')">Download .pem</button> ';
         }
       }
-      if (role === 'admin') {
+      if (lab.status === 'pending_approval') {
+        if (role === 'admin') {
+          html += '<button class="btn btn-sm btn-outline" onclick="Labs._viewPayment(\'' + labIdEsc + '\')">View Payment</button> ';
+          html += '<button class="btn btn-sm btn-blue" onclick="Labs._approveLab(\'' + labIdEsc + '\')">Approve</button> ';
+          html += '<button class="btn btn-sm btn-danger" onclick="Labs._rejectLab(\'' + labIdEsc + '\')">Reject</button> ';
+        } else {
+          html += '<span class="lbs-help-text">Awaiting admin approval…</span>';
+        }
+      }
+      if (role === 'admin' && lab.status !== 'pending_approval' && lab.status !== 'rejected' && lab.status !== 'terminated') {
         html += '<button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate</button>';
       }
       html +=   '</div>';
@@ -334,8 +360,7 @@ const Labs = (function () {
         App.showToast('Please submit your payment screenshot first', 'err');
         return;
       }
-      wizardStep = 4;
-      _renderWizard();
+      _handleLabsSubmit();
     }
   }
 
@@ -367,15 +392,10 @@ const Labs = (function () {
 
     var instanceGroupHtml = INSTANCE_GROUPS.map(function (g) {
       var opts = g.types.map(function (t) {
-        var sel = wizardConfig.instanceType === t ? ' selected' : '';
-        return '<option value="' + t + '"' + sel + '>' + t + '</option>';
+        var sel = wizardConfig.instanceType === t.value ? ' selected' : '';
+        return '<option value="' + _esc(t.value) + '"' + sel + '>' + _esc(t.label) + '</option>';
       }).join('');
       return '<optgroup label="' + _esc(g.label) + '">' + opts + '</optgroup>';
-    }).join('');
-
-    var durationHtml = DURATION_OPTIONS.map(function (d) {
-      var sel = wizardConfig._durVal === d.value ? ' selected' : '';
-      return '<option value="' + d.value + '"' + sel + '>' + d.label + '</option>';
     }).join('');
 
     var currentPlatform = wizardConfig.platform || 'ubuntu';
@@ -384,13 +404,11 @@ const Labs = (function () {
       { value: 'windows', label: 'Windows Server 2025'     },
     ].map(function (p) {
       var checked = currentPlatform === p.value ? ' checked' : '';
-      return '<label class="lbs-platform-card"><input type="radio" name="lbs-platform" value="' + p.value + '"' + checked + '> ' + _esc(p.label) + '</label>';
+      return '<label class="lbs-platform-card"><input type="radio" name="lbs-platform" value="' + p.value + '"' + checked + ' onchange="Labs._onPlatformChange()"> ' + _esc(p.label) + '</label>';
     }).join('');
 
-    var customHide = (wizardConfig._durVal === 'custom') ? '' : ' style="display:none"';
-    var storagVal  = wizardConfig.storageGb || 20;
+    var storagVal  = wizardConfig.storageGb || (currentPlatform === 'windows' ? 35 : 20);
     var eipChecked = wizardConfig.elasticIp ? ' checked' : '';
-    var customHrs  = wizardConfig.durationHours && wizardConfig._durVal === 'custom' ? wizardConfig.durationHours : '';
 
     container.innerHTML = [
       '<div class="lbs-wizard-wrap">',
@@ -435,9 +453,19 @@ const Labs = (function () {
       '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Duration</label>',
-      '      <select id="lbs-s1-duration" class="lbs-select" onchange="Labs._onDurationChange()">' + durationHtml + '</select>',
-      '      <input type="number" id="lbs-s1-custom-hours" class="lbs-input" min="1" max="2160"',
-      '             placeholder="Hours (1–2160)" value="' + customHrs + '"' + customHide + ' style="margin-top:6px;">',
+      '      <div class="lbs-duration-grid">',
+      '        <div>',
+      '          <span class="lbs-sublabel">Hours I use it per day</span>',
+      '          <input type="number" id="lbs-s1-hours-day" class="lbs-input" min="1" max="24"',
+      '                 value="' + (wizardConfig.hoursPerDay || 8) + '" oninput="Labs._onDurationInput()">',
+      '        </div>',
+      '        <div>',
+      '          <span class="lbs-sublabel">For how many months</span>',
+      '          <input type="number" id="lbs-s1-months" class="lbs-input" min="1" max="36"',
+      '                 value="' + (wizardConfig.months || 1) + '" oninput="Labs._onDurationInput()">',
+      '        </div>',
+      '      </div>',
+      '      <p id="lbs-s1-duration-preview" class="lbs-help-text" style="margin-top:4px;"></p>',
       '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Network Options</label>',
@@ -465,10 +493,29 @@ const Labs = (function () {
     ].join('\n');
   }
 
-  function _onDurationChange() {
-    var sel    = document.getElementById('lbs-s1-duration');
-    var custom = document.getElementById('lbs-s1-custom-hours');
-    if (sel && custom) custom.style.display = sel.value === 'custom' ? '' : 'none';
+  function _onDurationInput() {
+    var h = parseInt((document.getElementById('lbs-s1-hours-day') || {}).value, 10) || 0;
+    var m = parseInt((document.getElementById('lbs-s1-months')    || {}).value, 10) || 0;
+    var preview = document.getElementById('lbs-s1-duration-preview');
+    if (preview) {
+      if (h > 0 && m > 0) {
+        var total = h * 30 * m;
+        preview.textContent = 'Total: ' + h + ' hrs/day \u00d7 ' + m + ' month' + (m === 1 ? '' : 's') + ' = ' + total.toLocaleString() + ' hours';
+      } else {
+        preview.textContent = '';
+      }
+    }
+  }
+
+  function _onPlatformChange() {
+    var radios = document.querySelectorAll('input[name="lbs-platform"]');
+    var platform = '';
+    radios.forEach(function (r) { if (r.checked) platform = r.value; });
+    var storageEl = document.getElementById('lbs-s1-storage');
+    if (storageEl && platform === 'windows') {
+      var cur = parseInt(storageEl.value, 10) || 0;
+      if (cur < 35) storageEl.value = 35;
+    }
   }
 
   async function _loadNetworkOptions() {
@@ -550,29 +597,27 @@ const Labs = (function () {
     var subnetId        = (document.getElementById('lbs-s1-subnet')    || {}).value || '';
     var securityGroupId = (document.getElementById('lbs-s1-sg')        || {}).value || '';
     var vpcId           = (document.getElementById('lbs-s1-vpc')       || {}).value || '';
-    var durSel          = document.getElementById('lbs-s1-duration');
-    var durVal          = durSel ? durSel.value : '';
-
-    var durationHours;
-    if (durVal === 'custom') {
-      durationHours = parseInt((document.getElementById('lbs-s1-custom-hours') || {}).value, 10);
-    } else {
-      durationHours = parseInt(durVal, 10);
-    }
+    var hoursPerDay     = parseInt((document.getElementById('lbs-s1-hours-day') || {}).value, 10);
+    var months          = parseInt((document.getElementById('lbs-s1-months')    || {}).value, 10);
+    var durationHours   = hoursPerDay * 30 * months;
 
     var platform = '';
     var radios   = document.querySelectorAll('input[name="lbs-platform"]');
     radios.forEach(function (r) { if (r.checked) platform = r.value; });
 
-    if (!accountId)     { App.showToast('Select an AWS account', 'err');  return false; }
-    if (!region)        { App.showToast('Select a region', 'err');        return false; }
-    if (!platform)      { App.showToast('Select a platform', 'err');      return false; }
+    if (!accountId)     { App.showToast('Select an AWS account', 'err');   return false; }
+    if (!region)        { App.showToast('Select a region', 'err');         return false; }
+    if (!platform)      { App.showToast('Select a platform', 'err');       return false; }
     if (!instanceType)  { App.showToast('Select an instance type', 'err'); return false; }
-    if (!storageGb || storageGb < 8 || storageGb > 500) {
-      App.showToast('Storage must be between 8 and 500 GB', 'err'); return false;
+    var minStorage = platform === 'windows' ? 35 : 8;
+    if (!storageGb || storageGb < minStorage || storageGb > 500) {
+      App.showToast('Storage must be between ' + minStorage + ' and 500 GB', 'err'); return false;
     }
-    if (!durationHours || isNaN(durationHours) || durationHours < 1 || durationHours > 2160) {
-      App.showToast('Duration must be between 1 and 2160 hours', 'err'); return false;
+    if (!hoursPerDay || isNaN(hoursPerDay) || hoursPerDay < 1 || hoursPerDay > 24) {
+      App.showToast('Hours per day must be between 1 and 24', 'err'); return false;
+    }
+    if (!months || isNaN(months) || months < 1 || months > 36) {
+      App.showToast('Months must be between 1 and 36', 'err'); return false;
     }
     if (!subnetId) {
       App.showToast('Select a subnet (click "Load Network Options" first)', 'err'); return false;
@@ -592,8 +637,9 @@ const Labs = (function () {
       vpcId:            vpcId,
       subnetId:         subnetId,
       securityGroupIds: [securityGroupId],
+      hoursPerDay:      hoursPerDay,
+      months:           months,
       durationHours:    durationHours,
-      _durVal:          durVal,   // remember for re-render on Back
     };
     return true;
   }
@@ -640,8 +686,13 @@ const Labs = (function () {
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Pricing fetch failed');
 
-      var b = data.breakdown;
+      var b           = data.breakdown;
+      var hoursPerDay = wizardConfig.hoursPerDay;
+      var months      = wizardConfig.months;
+      var durationHours = wizardConfig.durationHours;
       wizardConfig.estimatedCost = b.totalUsd;
+
+      var durationLabel = hoursPerDay + ' hrs/day \u00d7 ' + months + ' month' + (months === 1 ? '' : 's') + ' = ' + durationHours.toLocaleString() + ' hrs';
 
       var rows = [
         '<tr><td>' + _esc(wizardConfig.instanceType) + ' EC2</td>' +
@@ -659,21 +710,34 @@ const Labs = (function () {
         );
       }
 
+      var regionLabel = (REGIONS.find(function (r) { return r.value === wizardConfig.region; }) || { label: wizardConfig.region }).label;
+      var osLabel     = wizardConfig.platform === 'windows' ? 'Windows Server' : 'Linux (Ubuntu)';
+
       contentEl.innerHTML = [
         '<table class="lbs-price-table">',
         '  <thead><tr><th>Component</th><th>Rate</th><th>Cost</th></tr></thead>',
         '  <tbody>' + rows.join('') + '</tbody>',
         '  <tfoot>',
         '    <tr class="lbs-price-total">',
-        '      <td colspan="2"><b>Total (' + _esc(String(wizardConfig.durationHours)) + ' hrs)</b></td>',
+        '      <td colspan="2"><b>Total (' + _esc(durationLabel) + ')</b></td>',
         '      <td><b>$' + b.totalUsd.toFixed(4) + ' USD</b></td>',
         '    </tr>',
         '  </tfoot>',
         '</table>',
-        '<p class="lbs-pricing-source">Rates from AWS Price List API</p>',
-        '<a href="https://calculator.aws/pricing/2/home" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="margin-top:4px;">',
-        '  View in AWS Pricing Calculator',
-        '</a>',
+        '<p class="lbs-pricing-source">Rates from AWS Price List API · Verify with AWS Pricing Calculator below</p>',
+        '<div class="lbs-calc-hint">',
+        '  <p class="lbs-calc-hint-title">Your configuration for AWS Pricing Calculator:</p>',
+        '  <ul class="lbs-calc-hint-list">',
+        '    <li>Region: ' + _esc(regionLabel) + '</li>',
+        '    <li>Operating System: ' + _esc(osLabel) + '</li>',
+        '    <li>Instance Type: ' + _esc(wizardConfig.instanceType) + '</li>',
+        '    <li>Usage: ' + _esc(String(hoursPerDay)) + ' hrs/day (Constant usage)</li>',
+        '    <li>EBS: ' + _esc(String(wizardConfig.storageGb)) + ' GB gp3</li>',
+        '  </ul>',
+        '  <a href="https://calculator.aws/#/createCalculator/ec2-enhancement" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">',
+        '    Open AWS Pricing Calculator \u2192',
+        '  </a>',
+        '</div>',
       ].join('\n');
 
       var nextBtn = document.getElementById('lbs-s2-next');
@@ -719,7 +783,7 @@ const Labs = (function () {
       '      I\'ve Paid — Submit Screenshot',
       '    </button>',
       '    <div id="lbs-s3-proceed" style="display:none; margin-top:12px;">',
-      '      <button class="btn btn-blue" onclick="Labs.nextStep()">Proceed to Provision</button>',
+      '      <button class="btn btn-blue" onclick="Labs.nextStep()">Submit Lab Request</button>',
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-footer">',
@@ -776,13 +840,16 @@ const Labs = (function () {
     }
   }
 
-  // ─── Step 4: Provisioning
+  // ─── Step 4: Request Submitted (pending admin approval)
 
   function _renderStep4(container) {
+    var costStr = wizardConfig.estimatedCost != null
+      ? '$' + Number(wizardConfig.estimatedCost).toFixed(4) + ' USD' : '';
+
     container.innerHTML = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
-      '    <h2 class="lbs-wizard-title">Create Lab — Step 4: Provisioning</h2>',
+      '    <h2 class="lbs-wizard-title">Create Lab — Step 4: Request Submitted</h2>',
       '    <div class="lbs-steps">',
       '      <span class="lbs-step lbs-step--done">1</span>',
       '      <span class="lbs-step lbs-step--done">2</span>',
@@ -791,40 +858,36 @@ const Labs = (function () {
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-body">',
-      '    <div id="lbs-s4-steps">',
-      '      <div class="lbs-provision-step" id="lbs-ps-1">Saving payment record…</div>',
-      '      <div class="lbs-provision-step" id="lbs-ps-2">Creating key pair…</div>',
-      '      <div class="lbs-provision-step" id="lbs-ps-3">Launching EC2 instance…</div>',
-      '      <div class="lbs-provision-step" id="lbs-ps-4">Waiting for instance to start…</div>',
+      '    <div class="lbs-submitted-banner">',
+      '      <div class="lbs-submitted-icon">&#10003;</div>',
+      '      <h3 style="margin:8px 0 4px;">Lab Request Submitted!</h3>',
+      '      <p style="margin:0; color:#aaa; font-size:0.9rem;">',
+      '        Your payment has been received and your lab request is pending admin review.',
+      '      </p>',
+      '      ' + (costStr ? '<p style="margin:8px 0 0; color:#8bc4ff;">Estimated cost: <b>' + _esc(costStr) + '</b></p>' : ''),
       '    </div>',
-      '    <div id="lbs-s4-error" style="display:none" class="lbs-err">',
-      '      <p id="lbs-s4-error-msg"></p>',
-      '      <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="Labs.provision()">Retry</button>',
-      '    </div>',
+      '    <p style="margin:20px 0 8px; color:#aaa; font-size:0.88rem; text-align:center;">',
+      '      An admin will verify your payment and approve your request shortly.',
+      '      Once approved, your EC2 instance will start provisioning automatically.',
+      '      You can track the status in the <b>Labs</b> list.',
+      '    </p>',
+      '  </div>',
+      '  <div class="lbs-wizard-footer">',
+      '    <button class="btn btn-blue" onclick="Labs._exitWizard()">View My Labs</button>',
       '  </div>',
       '</div>',
     ].join('\n');
-    provision();
   }
 
-  function _setProvisionStep(n) {
-    for (var i = 1; i <= 4; i++) {
-      var el = document.getElementById('lbs-ps-' + i);
-      if (!el) continue;
-      if (i < n)      el.className = 'lbs-provision-step lbs-provision-step--done';
-      else if (i === n) el.className = 'lbs-provision-step lbs-provision-step--active';
-      else             el.className = 'lbs-provision-step';
-    }
-  }
+  // ─── Submit lab request to backend (action=submit — no EC2 launched)
 
-  async function provision() {
-    var errEl    = document.getElementById('lbs-s4-error');
-    var errMsgEl = document.getElementById('lbs-s4-error-msg');
-    if (errEl) errEl.style.display = 'none';
-    _setProvisionStep(1);
+  async function _handleLabsSubmit() {
+    var btnEl = document.querySelector('#lbs-s3-proceed button');
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Submitting…'; }
 
     try {
       var body = {
+        action:           'submit',
         labName:          wizardConfig.labName || '',
         accountId:        wizardConfig.accountId,
         region:           wizardConfig.region,
@@ -837,25 +900,72 @@ const Labs = (function () {
         securityGroupIds: wizardConfig.securityGroupIds,
         durationHours:    wizardConfig.durationHours,
         paymentKey:       wizardConfig.paymentKey,
+        estimatedCost:    wizardConfig.estimatedCost,
       };
 
-      _setProvisionStep(2);
       var res  = await API.provisionLab(body);
       var data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || 'Provisioning failed');
+      if (!res.ok) throw new Error(data.message || data.error || 'Submission failed');
 
       currentLabId = data.labId;
-      if (data.estimatedCost != null) wizardConfig.estimatedCost = data.estimatedCost;
-
-      _setProvisionStep(3);
-
-      // Small delay then move to polling step
-      setTimeout(function () { _setProvisionStep(4); }, 800);
-      pollStatus(currentLabId);
+      wizardStep   = 4;
+      _renderWizard();
     } catch (e) {
-      if (errEl)    errEl.style.display = '';
-      if (errMsgEl) errMsgEl.textContent = 'Error: ' + e.message;
-      App.showToast('Provisioning failed: ' + e.message, 'err');
+      if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Submit Lab Request'; }
+      App.showToast('Submission failed: ' + e.message, 'err');
+    }
+  }
+
+  // ─── Admin: approve a pending lab
+
+  async function _approveLab(labId) {
+    _showConfirm(
+      'Approve Lab Request?',
+      'This will start provisioning the EC2 instance for this lab. The user will be charged.',
+      async function () {
+        try {
+          var res  = await API.provisionLab({ action: 'approve', labId: labId });
+          var data = await res.json();
+          if (!res.ok) throw new Error(data.message || data.error || 'Approval failed');
+          App.showToast('Lab approved — provisioning started', 'ok');
+          await _loadActiveLabs();
+        } catch (e) {
+          App.showToast('Approval failed: ' + e.message, 'err');
+        }
+      }
+    );
+  }
+
+  // ─── Admin: reject a pending lab
+
+  async function _rejectLab(labId) {
+    _showConfirm(
+      'Reject Lab Request?',
+      'This will reject the lab request. No EC2 instance will be launched.',
+      async function () {
+        try {
+          var res  = await API.provisionLab({ action: 'reject', labId: labId });
+          var data = await res.json();
+          if (!res.ok) throw new Error(data.message || data.error || 'Rejection failed');
+          App.showToast('Lab request rejected', 'ok');
+          await _loadActiveLabs();
+        } catch (e) {
+          App.showToast('Rejection failed: ' + e.message, 'err');
+        }
+      }
+    );
+  }
+
+  // ─── Admin: view payment screenshot for a pending lab
+
+  async function _viewPayment(labId) {
+    try {
+      var res  = await API.getLabPaymentScreenshot(labId);
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to fetch screenshot');
+      window.open(data.url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      App.showToast('Failed to open payment screenshot: ' + e.message, 'err');
     }
   }
 

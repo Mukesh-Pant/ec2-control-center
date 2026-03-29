@@ -2706,3 +2706,54 @@ code {
   word-break: break-all;
   user-select: all;
 }
+
+/* Duration grid — hours/day + months side by side */
+.lbs-duration-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+.lbs-sublabel {
+  display: block;
+  font-size: 0.8rem;
+  color: #8892a4;
+  margin-bottom: 4px;
+}
+
+/* Pricing step — calculator hint block */
+.lbs-calc-hint {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(59,91,219,.35);
+  border-radius: 6px;
+  background: rgba(59,91,219,.06);
+}
+.lbs-calc-hint-title {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: #8892a4;
+}
+.lbs-calc-hint-list {
+  margin: 0 0 10px;
+  padding-left: 16px;
+  font-size: 0.82rem;
+  color: #c8cfd8;
+}
+.lbs-calc-hint-list li { margin-bottom: 2px; }
+
+/* Request submitted banner (Step 4) */
+.lbs-submitted-banner {
+  text-align: center;
+  padding: 24px 16px 20px;
+  background: linear-gradient(135deg, rgba(34,197,94,.12), rgba(59,130,246,.08));
+  border: 1px solid rgba(34,197,94,.25);
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+.lbs-submitted-icon {
+  font-size: 2.5rem;
+  color: #22c55e;
+  line-height: 1;
+  margin-bottom: 6px;
+}
