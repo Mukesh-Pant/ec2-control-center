@@ -274,14 +274,28 @@ The **Labs** tab lets operators provision a dedicated EC2 instance for hands-on 
 3. **Payment** — upload a payment screenshot as proof of funding
 4. **Submitted** — request is saved as `pending_approval`; no EC2 is launched yet
 
-An admin then reviews the payment and clicks **Approve** (or **Reject**) from the Labs tab:
+An admin opens the **Pending** filter in the Labs tab, clicks the lab row to expand the inline detail panel, reviews the payment, and clicks **Approve** or **Reject**:
 - **Approve** → EC2 is provisioned (key pair created, instance launched, Elastic IP allocated), lab moves to `Running`
 - **Reject** → lab marked `Rejected`, no EC2 created
 
+### Labs dashboard
+
+The Labs tab shows a **filterable row-based table** instead of a flat card list:
+
+| Filter | Contents |
+|--------|----------|
+| **Active** | Running + Provisioning labs (default view) |
+| **Pending** | Labs awaiting admin approval |
+| **History** | Terminated + Rejected labs |
+| **All** | All labs; auto-selected if Active count = 0 |
+
+Clicking any row expands an **inline detail panel** directly beneath it showing Lab Info, connection details (SSH or RDP), Elastic IP allocation ID, and contextual action buttons. Only one panel is open at a time.
+
 ### Access & download
 
-- Once running, operators can download the **.pem key** for SSH access
-- Windows labs support one-click **RDP password retrieval**
+- Once running, click the lab row → expand panel → **Download .pem** for SSH access or **Download RDP File** for Windows
+- Windows labs support one-click **RDP password retrieval** from the expanded panel
+- Elastic IP allocation ID is shown in the expanded panel for reference
 - RBAC: operators provision labs for assigned accounts; admins approve and see all labs
 
 ---

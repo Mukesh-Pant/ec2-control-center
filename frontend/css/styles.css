@@ -2392,57 +2392,86 @@ code {
 .lbs-empty   { color: #8a9bb8; padding: 32px 0; font-size: 14px; text-align: center; }
 .lbs-err     { color: #ff6b6b; padding: 10px 0; font-size: 13px; }
 
-.lbs-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-  padding: 8px 0;
+/* Filter bar */
+.lbs-filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.lbs-pill {
+  padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  background: rgba(126,179,255,.08); border: 1px solid rgba(126,179,255,.18);
+  color: #8a9bb8; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.lbs-pill:hover { background: rgba(126,179,255,.14); color: #c9d8f0; }
+.lbs-pill--active { background: rgba(59,91,219,.22); border-color: #3b5bdb; color: #7eb3ff; }
+.lbs-pill-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px;
+  background: rgba(126,179,255,.15); color: #7eb3ff;
+  font-size: 11px; font-weight: 700; margin-left: 5px; vertical-align: middle;
 }
 
-.lbs-card {
-  background: #1e2430;
-  border: 1px solid rgba(126,179,255,.12);
-  border-radius: 8px;
-  overflow: hidden;
+/* Labs table */
+.lbs-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.lbs-tbl-head th {
+  text-align: left; padding: 8px 12px;
+  background: rgba(126,179,255,.06); color: #8a9bb8;
+  font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
+  border-bottom: 1px solid rgba(126,179,255,.14);
+  white-space: nowrap;
 }
+.lbs-tbl-head th:first-child { width: 32px; padding-right: 0; }
+.lbs-tbl-row { cursor: pointer; }
+.lbs-tbl-row:hover td { background: rgba(126,179,255,.04); }
+.lbs-tbl-row--expanded td { background: rgba(59,91,219,.06); }
+.lbs-tbl-row td {
+  padding: 10px 12px; color: #c9d8f0;
+  border-bottom: 1px solid rgba(126,179,255,.07);
+  vertical-align: middle;
+}
+.lbs-tbl-row td:first-child { padding-right: 0; color: #5a7aa8; }
 
-.lbs-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: rgba(126,179,255,.06);
-  border-bottom: 1px solid rgba(126,179,255,.10);
+/* Chevron indicator */
+.lbs-chevron {
+  display: inline-block; font-size: 10px;
+  transition: transform .18s; color: #5a7aa8; user-select: none;
 }
+.lbs-chevron--open { transform: rotate(90deg); color: #7eb3ff; }
 
-.lbs-platform-badge {
-  font-size: 12px;
-  font-weight: 600;
-  color: #c9d8f0;
+/* Expanded detail row */
+.lbs-detail-row td {
+  padding: 0; border-bottom: 1px solid rgba(126,179,255,.14);
+  background: rgba(20,24,32,.7);
 }
+.lbs-detail-panel {
+  position: relative; padding: 20px 24px 18px;
+  border-top: 1px solid rgba(59,91,219,.25);
+}
+.lbs-detail-close {
+  position: absolute; top: 12px; right: 14px;
+  background: none; border: none; color: #5a7aa8; font-size: 18px;
+  cursor: pointer; line-height: 1; padding: 2px 6px; border-radius: 4px;
+  transition: color .15s, background .15s;
+}
+.lbs-detail-close:hover { color: #e0eaff; background: rgba(126,179,255,.1); }
 
-.lbs-card-body {
-  padding: 12px 14px;
-  font-size: 13px;
+/* Detail panel sections */
+.lbs-detail-section { margin-bottom: 18px; }
+.lbs-detail-section:last-child { margin-bottom: 0; }
+.lbs-detail-section-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .6px; color: #5a7aa8; margin-bottom: 10px;
 }
+.lbs-detail-info-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 20px;
+}
+.lbs-detail-info-item { display: flex; flex-direction: column; gap: 2px; }
+.lbs-detail-info-label { font-size: 11px; color: #5a7aa8; }
+.lbs-detail-info-value { font-size: 13px; color: #c9d8f0; word-break: break-all; }
+.lbs-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 
-.lbs-card-row {
-  margin-bottom: 5px;
-  color: #c9d8f0;
-}
-
-.lbs-expiry {
-  color: #ffd166;
-  font-size: 12px;
-}
-
-.lbs-card-actions {
-  padding: 10px 14px;
-  border-top: 1px solid rgba(126,179,255,.10);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+/* Expiry colours in table rows */
+.lbs-expiry-warn { color: #ffd166; }
+.lbs-expiry-dead { color: #5a7aa8; }
 
 /* Status / payment badges */
 .lbs-badge {

@@ -349,7 +349,7 @@ Labs lets operators provision a dedicated EC2 instance ("lab") for hands-on trai
 User: 4-step wizard (Configure → Pricing → Payment → Submitted)
   → POST /labs { action:'submit' } → DynamoDB status='pending_approval', no EC2 launched
 
-Admin: Labs tab → pending card → View Payment → Approve / Reject
+Admin: Labs tab → Pending filter → click row to expand → View Payment → Approve / Reject
   → POST /labs { action:'approve', labId } → EC2 provisioned (key pair + EIP + instance)
   → POST /labs { action:'reject',  labId } → DynamoDB status='rejected', no EC2
 ```
@@ -415,11 +415,33 @@ Admin: Labs tab → pending card → View Payment → Approve / Reject
 - `_onDurationInput()` — live preview: `X hrs/day × Y months = Z hours`
 - Step 2 (`fetchPricing`) — shows breakdown table + `lbs-calc-hint` block with AWS Pricing Calculator link
 - Step 3 — Payment upload; submit button calls `_handleLabsSubmit()` (POST `action:'submit'`)
-- Step 4 — "Request Submitted" confirmation screen; no polling/provisioning
-- **Lab cards:** pending labs show yellow badge; admin sees Approve / Reject / View Payment buttons; non-admin sees "Awaiting admin approval"
-- `_approveLab(labId)` — POST `action:'approve'`; refreshes list on success
-- `_rejectLab(labId)` — POST `action:'reject'`; refreshes list on success
+- Step 4 — "Request Submitted" confirmation screen; `_exitWizard()` sets `_activeFilter = 'pending'` so user lands on Pending filter
+- **Lab list UI (redesigned):** filterable row-based table replaces flat card grid
+  - **Filter bar:** pills — `All` / `Active` / `Pending` / `History` with live counts; default `active`; auto-falls back to `all` if active count = 0
+  - Filter buckets: Active = `running`+`provisioning`; Pending = `pending_approval`; History = `terminated`+`rejected`
+  - **Table columns:** Chevron | Lab Name | Platform | Instance Type | Status | Account | Region | Expires
+  - **Inline expansion:** clicking a row inserts a detail `<tr>` directly below it; only one expanded at a time; X close button in panel top-right
+- **State variables:** `_activeFilter` (`'all'|'active'|'pending'|'history'`) + `_expandedLabId` (labId of open row, or null)
+- **Key functions:**
+  - `_renderLabsList()` — computes bucket counts, applies auto-fallback, filters visible labs, builds filter bar + table HTML
+  - `_renderFilterBar(counts)` — returns pill bar HTML string
+  - `_setFilter(filter)` — sets `_activeFilter`, clears `_expandedLabId`, re-renders (public)
+  - `_renderRow(lab)` — returns `<tr>` HTML with chevron, all columns, correct expanded class
+  - `_renderExpiry(lab)` — returns colored `<span>` using `_formatExpiry()`; yellow = future, gray = expired/absent
+  - `_toggleRowDetail(labId)` — expands/collapses inline detail `<tr>`; collapses any previously open row (public)
+  - `_collapseDetail()` — removes detail `<tr>`, resets chevron + row class, clears `_expandedLabId`
+  - `_renderDetailPanel(lab)` — returns full HTML for expanded panel based on status + role:
+    - All statuses: Lab Info grid (Lab ID, Instance ID, Public IP, Elastic IP with allocationId, Platform, Instance Type, Storage, Cost, Expires); admin also shows "Submitted by"
+    - `running`: Connection section (SSH command + keypair download OR RDP file + Windows password) + Actions (Download Lab Info; admin also Terminate)
+    - `provisioning`: pulsing provisioning message; admin gets Terminate
+    - `pending_approval`: admin sees View Payment / Approve / Reject; non-admin sees "Awaiting admin approval"
+    - `terminated`/`rejected`: Lab Info only
+  - Windows password div uses per-row namespaced ID `lbs-win-pass-${labId}` to avoid collisions
+- `_approveLab(labId)` — POST `action:'approve'`; sets `_expandedLabId = null`, refreshes list
+- `_rejectLab(labId)` — POST `action:'reject'`; sets `_expandedLabId = null`, refreshes list
 - `_viewPayment(labId)` — GET presigned URL; opens in new tab
+- `pollStatus()` — on `running`: sets `_activeFilter = 'active'`, calls `_renderLabsList()` then `_toggleRowDetail(labId)` to auto-expand the ready lab (replaces old `showConnectInfo`)
+- **Public API:** `init`, `onTabActivated`, `_setFilter`, `_toggleRowDetail`, `_approveLab`, `_rejectLab`, `_viewPayment`, `_getWindowsPassword`, `_downloadKeypair`, `_downloadLabInfo`, `_downloadRdp`, `_confirmDelete`
 
 **Status labels + badge classes:**
 | Status | Label | Class |

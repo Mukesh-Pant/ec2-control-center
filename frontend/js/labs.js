@@ -8,14 +8,16 @@
 const Labs = (function () {
 
   // ─── Private state
-  var loaded       = false;
-  var wizardStep   = 0;       // 0 = active labs panel, 1–5 = wizard steps
-  var wizardConfig = {};      // collected form values across wizard steps
-  var activeLabs   = [];      // last fetched from GET /labs
-  var currentLabId = null;    // labId being provisioned or viewed
-  var _pollTimer   = null;    // setInterval handle for provisioning poll
-  var _accounts    = [];      // cached enabled accounts list
-  var _confirmCb   = null;    // pending in-page confirm callback
+  var loaded        = false;
+  var wizardStep    = 0;       // 0 = active labs panel, 1–4 = wizard steps
+  var wizardConfig  = {};      // collected form values across wizard steps
+  var activeLabs    = [];      // last fetched from GET /labs
+  var currentLabId  = null;    // labId being provisioned or viewed
+  var _pollTimer    = null;    // setTimeout handle for provisioning poll
+  var _accounts     = [];      // cached enabled accounts list
+  var _confirmCb    = null;    // pending in-page confirm callback
+  var _activeFilter = 'active'; // current filter pill: 'all'|'active'|'pending'|'history'
+  var _expandedLabId = null;   // labId of currently expanded row, or null
 
   // ─── Display maps
 
@@ -207,67 +209,125 @@ const Labs = (function () {
     var listEl = document.getElementById('lbs-list');
     if (!listEl) return;
 
+    // ── Compute bucket counts
+    var counts = { all: activeLabs.length, active: 0, pending: 0, history: 0 };
+    activeLabs.forEach(function (lab) {
+      if (lab.status === 'running' || lab.status === 'provisioning') counts.active++;
+      else if (lab.status === 'pending_approval')                     counts.pending++;
+      else if (lab.status === 'terminated' || lab.status === 'rejected') counts.history++;
+    });
+
+    // ── Auto-fallback: if default filter has nothing, show all
+    if (_activeFilter === 'active' && counts.active === 0) _activeFilter = 'all';
+
+    // ── Filter visible labs
+    var visible = activeLabs.filter(function (lab) {
+      if (_activeFilter === 'all')     return true;
+      if (_activeFilter === 'active')  return lab.status === 'running' || lab.status === 'provisioning';
+      if (_activeFilter === 'pending') return lab.status === 'pending_approval';
+      if (_activeFilter === 'history') return lab.status === 'terminated' || lab.status === 'rejected';
+      return true;
+    });
+
+    // ── Build HTML
+    var html = _renderFilterBar(counts);
+
     if (activeLabs.length === 0) {
-      listEl.innerHTML = '<div class="lbs-empty">No labs yet. Click "+ Create New Lab" to get started.</div>';
+      html += '<div class="lbs-empty">No labs yet. Click &ldquo;+ Create New Lab&rdquo; to get started.</div>';
+      listEl.innerHTML = html;
       return;
     }
 
-    var role = Auth.getRole();
-    var html = '<div class="lbs-grid">';
+    if (visible.length === 0) {
+      var emptyMsg = {
+        active:  'No active labs. ',
+        pending: 'No labs awaiting approval.',
+        history: 'No terminated or rejected labs.',
+        all:     'No labs yet.',
+      }[_activeFilter] || 'No labs found.';
+      var switchLink = _activeFilter === 'active'
+        ? '<button class="lbs-pill" onclick="Labs._setFilter(\'all\')">View All<span class="lbs-pill-count">' + counts.all + '</span></button>'
+        : '';
+      html += '<div class="lbs-empty">' + emptyMsg + ' ' + switchLink + '</div>';
+      listEl.innerHTML = html;
+      return;
+    }
 
-    activeLabs.forEach(function (lab) {
-      var platformLabel = PLATFORM_LABELS[lab.platform] || lab.platform;
-      var statusClass   = STATUS_CLASSES[lab.status]    || 'lbs-badge--gray';
-      var statusLabel   = STATUS_LABELS[lab.status]     || lab.status;
-      var expiry        = lab.expiresAt ? _formatExpiry(lab.expiresAt) : '';
-      var paidBadge     = lab.paymentStatus === 'paid'
-        ? '<span class="lbs-badge lbs-badge--green">Paid</span>'
-        : '<span class="lbs-badge lbs-badge--yellow">Payment Pending</span>';
-      var costStr   = lab.estimatedCost ? '$' + Number(lab.estimatedCost).toFixed(4) + ' USD' : '';
-      var isLinux   = lab.platform !== 'windows';
-      var labIdEsc  = _esc(lab.labId);
+    html += '<table class="lbs-tbl">';
+    html += '<thead class="lbs-tbl-head"><tr>';
+    html += '<th></th>';
+    html += '<th>Lab Name</th>';
+    html += '<th>Platform</th>';
+    html += '<th>Instance</th>';
+    html += '<th>Status</th>';
+    html += '<th>Account</th>';
+    html += '<th>Region</th>';
+    html += '<th>Expires</th>';
+    html += '</tr></thead>';
+    html += '<tbody>';
+    visible.forEach(function (lab) { html += _renderRow(lab); });
+    html += '</tbody></table>';
 
-      html += '<div class="lbs-card">';
-      html +=   '<div class="lbs-card-head">';
-      html +=     '<span class="lbs-platform-badge">' + _esc(platformLabel) + '</span>';
-      html +=     '<span class="lbs-badge ' + statusClass + '">' + _esc(statusLabel) + '</span>';
-      html +=   '</div>';
-      html +=   '<div class="lbs-card-body">';
-      if (lab.labName) {
-        html += '<div class="lbs-card-row"><b>Name:</b> '     + _esc(lab.labName)       + '</div>';
-      }
-      html +=     '<div class="lbs-card-row"><b>Instance:</b> ' + _esc(lab.instanceType) + '</div>';
-      html +=     '<div class="lbs-card-row"><b>Region:</b> '   + _esc(lab.region)        + '</div>';
-      if (lab.publicIp)   html += '<div class="lbs-card-row"><b>IP:</b> '   + _esc(lab.publicIp)   + '</div>';
-      if (costStr)        html += '<div class="lbs-card-row"><b>Cost:</b> ' + _esc(costStr)         + '</div>';
-      if (expiry)         html += '<div class="lbs-card-row lbs-expiry">'   + _esc(expiry)          + '</div>';
-      html +=     '<div class="lbs-card-row">' + paidBadge + '</div>';
-      html +=   '</div>';
-      html +=   '<div class="lbs-card-actions">';
-      if (lab.status === 'running') {
-        html += '<button class="btn btn-sm btn-outline" onclick="Labs.showConnectInfo(\'' + labIdEsc + '\')">Connect</button> ';
-        if (isLinux) {
-          html += '<button class="btn btn-sm btn-outline" onclick="Labs.downloadKeypair(\'' + labIdEsc + '\')">Download .pem</button> ';
-        }
-      }
-      if (lab.status === 'pending_approval') {
-        if (role === 'admin') {
-          html += '<button class="btn btn-sm btn-outline" onclick="Labs._viewPayment(\'' + labIdEsc + '\')">View Payment</button> ';
-          html += '<button class="btn btn-sm btn-blue" onclick="Labs._approveLab(\'' + labIdEsc + '\')">Approve</button> ';
-          html += '<button class="btn btn-sm btn-danger" onclick="Labs._rejectLab(\'' + labIdEsc + '\')">Reject</button> ';
-        } else {
-          html += '<span class="lbs-help-text">Awaiting admin approval…</span>';
-        }
-      }
-      if (role === 'admin' && lab.status !== 'pending_approval' && lab.status !== 'rejected' && lab.status !== 'terminated') {
-        html += '<button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate</button>';
-      }
-      html +=   '</div>';
-      html += '</div>';
-    });
-
-    html += '</div>';
     listEl.innerHTML = html;
+  }
+
+  // ─── Filter bar HTML
+
+  function _renderFilterBar(counts) {
+    var filters = [
+      { key: 'all',     label: 'All'     },
+      { key: 'active',  label: 'Active'  },
+      { key: 'pending', label: 'Pending' },
+      { key: 'history', label: 'History' },
+    ];
+    var pills = filters.map(function (f) {
+      var active = _activeFilter === f.key ? ' lbs-pill--active' : '';
+      return '<button class="lbs-pill' + active + '" onclick="Labs._setFilter(\'' + f.key + '\')">' +
+        f.label + '<span class="lbs-pill-count">' + (counts[f.key] || 0) + '</span>' +
+        '</button>';
+    }).join('');
+    return '<div class="lbs-filter-bar">' + pills + '</div>';
+  }
+
+  // ─── Set active filter (public for pill onclick)
+
+  function _setFilter(filter) {
+    _activeFilter = filter;
+    _expandedLabId = null;
+    _renderLabsList();
+  }
+
+  // ─── Render a single table row
+
+  function _renderRow(lab) {
+    var platformLabel = PLATFORM_LABELS[lab.platform] || lab.platform;
+    var statusClass   = STATUS_CLASSES[lab.status]    || 'lbs-badge--gray';
+    var statusLabel   = STATUS_LABELS[lab.status]     || lab.status;
+    var labIdEsc      = _esc(lab.labId);
+    var acctDisplay   = lab.accountId ? (lab.accountId.substring(0, 8) + '\u2026') : '\u2014';
+    var isExpanded    = _expandedLabId === lab.labId;
+    var chevClass     = 'lbs-chevron' + (isExpanded ? ' lbs-chevron--open' : '');
+    var rowClass      = 'lbs-tbl-row' + (isExpanded ? ' lbs-tbl-row--expanded' : '');
+
+    return '<tr class="' + rowClass + '" id="lbs-row-' + labIdEsc + '" onclick="Labs._toggleRowDetail(\'' + labIdEsc + '\')">' +
+      '<td><span class="' + chevClass + '" id="lbs-chev-' + labIdEsc + '">&#9658;</span></td>' +
+      '<td>' + _esc(lab.labName || ('ec2ctrl-lab-' + lab.labId.substring(0, 8))) + '</td>' +
+      '<td>' + _esc(platformLabel) + '</td>' +
+      '<td>' + _esc(lab.instanceType || '\u2014') + '</td>' +
+      '<td><span class="lbs-badge ' + statusClass + '">' + _esc(statusLabel) + '</span></td>' +
+      '<td>' + acctDisplay + '</td>' +
+      '<td>' + _esc(lab.region || '\u2014') + '</td>' +
+      '<td>' + _renderExpiry(lab) + '</td>' +
+      '</tr>';
+  }
+
+  // ─── Render expiry cell (returns HTML string)
+
+  function _renderExpiry(lab) {
+    if (!lab.expiresAt) return '<span class="lbs-expiry-dead">\u2014</span>';
+    var expired = new Date(lab.expiresAt) < new Date();
+    var txt = _formatExpiry(lab.expiresAt);
+    return '<span class="' + (expired ? 'lbs-expiry-dead' : 'lbs-expiry-warn') + '">' + _esc(txt) + '</span>';
   }
 
   function _confirmDelete(labId) {
@@ -280,6 +340,7 @@ const Labs = (function () {
           var data = await res.json();
           if (!res.ok) throw new Error(data.message || data.error || 'Delete failed');
           App.showToast('Lab terminated', 'ok');
+          _expandedLabId = null;
           await _loadActiveLabs();
         } catch (e) {
           App.showToast('Terminate error: ' + e.message, 'err');
@@ -288,13 +349,163 @@ const Labs = (function () {
     );
   }
 
-  // ─── Show connection info for an existing (running) lab
+  // ─── Row expand / collapse
 
-  function showConnectInfo(labId) {
+  function _toggleRowDetail(labId) {
+    if (_expandedLabId === labId) {
+      _collapseDetail();
+      return;
+    }
+    if (_expandedLabId) _collapseDetail();
+
     var lab = activeLabs.find(function (l) { return l.labId === labId; });
     if (!lab) return;
-    currentLabId = labId;
-    _showStep5Panel(lab);
+
+    _expandedLabId = labId;
+    var row = document.getElementById('lbs-row-' + labId);
+    if (!row) return;
+    row.classList.add('lbs-tbl-row--expanded');
+    var chev = document.getElementById('lbs-chev-' + labId);
+    if (chev) chev.classList.add('lbs-chevron--open');
+
+    var detailRow = document.createElement('tr');
+    detailRow.id        = 'lbs-detail-' + labId;
+    detailRow.className = 'lbs-detail-row';
+    detailRow.innerHTML = '<td colspan="8">' + _renderDetailPanel(lab) + '</td>';
+    row.parentNode.insertBefore(detailRow, row.nextSibling);
+  }
+
+  function _collapseDetail() {
+    if (!_expandedLabId) return;
+    var row = document.getElementById('lbs-row-' + _expandedLabId);
+    if (row) {
+      row.classList.remove('lbs-tbl-row--expanded');
+      var chev = document.getElementById('lbs-chev-' + _expandedLabId);
+      if (chev) chev.classList.remove('lbs-chevron--open');
+    }
+    var detailRow = document.getElementById('lbs-detail-' + _expandedLabId);
+    if (detailRow) detailRow.remove();
+    _expandedLabId = null;
+  }
+
+  // ─── Render inline detail panel for an expanded row
+
+  function _renderDetailPanel(lab) {
+    var labIdEsc      = _esc(lab.labId);
+    var role          = Auth.getRole();
+    var isAdmin       = role === 'admin';
+    var isWindows     = lab.platform === 'windows';
+    var platformLabel = PLATFORM_LABELS[lab.platform] || lab.platform;
+    var ip            = lab.publicIp || lab.publicDns || '';
+    var costStr       = lab.estimatedCost != null ? '$' + Number(lab.estimatedCost).toFixed(4) + ' USD' : '\u2014';
+    var expiry        = lab.expiresAt ? _formatExpiry(lab.expiresAt) : '\u2014';
+    var createdAt     = lab.createdAt ? new Date(lab.createdAt).toUTCString() : '\u2014';
+    var storageStr    = lab.storageGb ? lab.storageGb + ' GB' : '\u2014';
+
+    // ── Elastic IP field
+    var eipValue;
+    if (lab.elasticIp && lab.allocationId) {
+      eipValue = _esc(ip || '\u2014') + ' <span style="color:#5a7aa8;font-size:11px;">(alloc: ' + _esc(lab.allocationId) + ')</span>';
+    } else if (lab.elasticIp) {
+      eipValue = 'Requested';
+    } else {
+      eipValue = 'Not requested';
+    }
+
+    // ── Lab Info section (always shown)
+    var infoItems = [
+      { label: 'Lab ID',        value: '<code style="font-size:12px;user-select:all;">' + labIdEsc + '</code>' },
+      { label: 'Instance ID',   value: _esc(lab.instanceId || '\u2014') },
+      { label: 'Created',       value: _esc(createdAt) },
+      { label: 'Estimated Cost',value: _esc(costStr) },
+      { label: 'Public IP',     value: _esc(ip || '\u2014') },
+      { label: 'Elastic IP',    value: eipValue },
+      { label: 'Platform',      value: _esc(platformLabel) },
+      { label: 'Instance Type', value: _esc(lab.instanceType || '\u2014') },
+      { label: 'Storage',       value: _esc(storageStr) },
+      { label: 'Expires',       value: _esc(expiry) },
+    ];
+    if (isAdmin) {
+      infoItems.splice(3, 0, { label: 'Submitted by', value: _esc(lab.userEmail || lab.callerEmail || '\u2014') });
+    }
+
+    var infoHtml = infoItems.map(function (item) {
+      return '<div class="lbs-detail-info-item">' +
+        '<span class="lbs-detail-info-label">' + item.label + '</span>' +
+        '<span class="lbs-detail-info-value">' + item.value + '</span>' +
+        '</div>';
+    }).join('');
+
+    var html = '<div class="lbs-detail-panel">' +
+      '<button class="lbs-detail-close" onclick="Labs._toggleRowDetail(\'' + labIdEsc + '\')" title="Close">\u2715</button>' +
+      '<div class="lbs-detail-section">' +
+        '<div class="lbs-detail-section-title">Lab Info</div>' +
+        '<div class="lbs-detail-info-grid">' + infoHtml + '</div>' +
+      '</div>';
+
+    // ── Connection section (running only)
+    if (lab.status === 'running') {
+      var sshUser = _sshUser(lab.platform);
+      var sshCmd  = 'ssh -i keypair.pem ' + sshUser + '@' + (ip || '(IP pending)');
+      var connHtml;
+      if (isWindows) {
+        connHtml =
+          '<button class="btn btn-sm btn-outline" onclick="Labs._downloadRdp(\'' + labIdEsc + '\')">Download RDP File</button>' +
+          '<button class="btn btn-sm btn-outline" onclick="Labs._getWindowsPassword(\'' + labIdEsc + '\')">Get Windows Password</button>' +
+          '<div id="lbs-win-pass-' + labIdEsc + '" style="display:none;margin-top:10px;padding:10px;background:#141820;border-radius:6px;border:1px solid rgba(126,179,255,.15);"></div>';
+      } else {
+        connHtml =
+          '<div class="lbs-code-block" style="margin-bottom:10px;">' + _esc(sshCmd) + '</div>' +
+          '<button class="btn btn-sm btn-outline" onclick="Labs.downloadKeypair(\'' + labIdEsc + '\')">Download Keypair (.pem)</button>';
+      }
+      html += '<div class="lbs-detail-section">' +
+        '<div class="lbs-detail-section-title">' + (isWindows ? 'RDP Connection' : 'SSH Connection') + '</div>' +
+        '<div class="lbs-detail-actions">' + connHtml + '</div>' +
+        '</div>';
+
+      // ── Actions section
+      var actionBtns = '<button class="btn btn-sm btn-outline" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Lab Info (.txt)</button>';
+      if (isAdmin) {
+        actionBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Lab</button>';
+      }
+      html += '<div class="lbs-detail-section">' +
+        '<div class="lbs-detail-section-title">Actions</div>' +
+        '<div class="lbs-detail-actions">' + actionBtns + '</div>' +
+        '</div>';
+    }
+
+    // ── Provisioning status
+    if (lab.status === 'provisioning') {
+      html += '<div class="lbs-detail-section">' +
+        '<div class="lbs-provision-step lbs-provision-step--active">Provisioning \u2014 EC2 instance is being prepared&hellip;</div>' +
+        '</div>';
+      if (isAdmin) {
+        html += '<div class="lbs-detail-section">' +
+          '<div class="lbs-detail-actions"><button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Lab</button></div>' +
+          '</div>';
+      }
+    }
+
+    // ── Pending approval actions
+    if (lab.status === 'pending_approval') {
+      if (isAdmin) {
+        html += '<div class="lbs-detail-section">' +
+          '<div class="lbs-detail-section-title">Admin Actions</div>' +
+          '<div class="lbs-detail-actions">' +
+            '<button class="btn btn-sm btn-outline" onclick="Labs._viewPayment(\'' + labIdEsc + '\')">View Payment</button>' +
+            '<button class="btn btn-sm btn-blue" onclick="Labs._approveLab(\'' + labIdEsc + '\')">Approve</button>' +
+            '<button class="btn btn-sm btn-danger" onclick="Labs._rejectLab(\'' + labIdEsc + '\')">Reject</button>' +
+          '</div>' +
+          '</div>';
+      } else {
+        html += '<div class="lbs-detail-section">' +
+          '<div class="lbs-help-text" style="color:#ffd166;">Awaiting admin approval&hellip;</div>' +
+          '</div>';
+      }
+    }
+
+    html += '</div>'; // close lbs-detail-panel
+    return html;
   }
 
   // ─── Wizard control
@@ -333,6 +544,8 @@ const Labs = (function () {
     if (listEl) listEl.style.display = '';
     if (btnNew) btnNew.style.display = '';
 
+    _activeFilter  = 'pending';
+    _expandedLabId = null;
     _loadActiveLabs();
   }
 
@@ -928,6 +1141,7 @@ const Labs = (function () {
           var data = await res.json();
           if (!res.ok) throw new Error(data.message || data.error || 'Approval failed');
           App.showToast('Lab approved — provisioning started', 'ok');
+          _expandedLabId = null;
           await _loadActiveLabs();
         } catch (e) {
           App.showToast('Approval failed: ' + e.message, 'err');
@@ -948,6 +1162,7 @@ const Labs = (function () {
           var data = await res.json();
           if (!res.ok) throw new Error(data.message || data.error || 'Rejection failed');
           App.showToast('Lab request rejected', 'ok');
+          _expandedLabId = null;
           await _loadActiveLabs();
         } catch (e) {
           App.showToast('Rejection failed: ' + e.message, 'err');
@@ -986,16 +1201,17 @@ const Labs = (function () {
           if (lab.status === 'running') {
             _pollTimer = null;
             activeLabs = labs;
-            _setProvisionStep(5);
-            _showStep5Panel(lab);
+            _activeFilter = 'active';
+            _renderLabsList();
+            _toggleRowDetail(labId);
+            App.showToast('Lab is ready!', 'ok');
             return;  // stop polling
           }
           if (lab.status === 'error') {
             _pollTimer = null;
-            var errEl    = document.getElementById('lbs-s4-error');
-            var errMsgEl = document.getElementById('lbs-s4-error-msg');
-            if (errEl)    errEl.style.display = '';
-            if (errMsgEl) errMsgEl.textContent = 'Instance failed to start. Check the AWS console for details.';
+            activeLabs = labs;
+            _renderLabsList();
+            App.showToast('Lab provisioning failed. Check AWS console for details.', 'err');
             return;  // stop polling
           }
           _schedule();
@@ -1105,7 +1321,7 @@ const Labs = (function () {
   // ─── Windows password retrieval (Lambda RSA decrypt)
 
   async function _getWindowsPassword(labId) {
-    var passEl = document.getElementById('lbs-win-pass');
+    var passEl = document.getElementById('lbs-win-pass-' + labId);
     if (passEl) { passEl.style.display = ''; passEl.innerHTML = '<span style="color:#fff;">Retrieving password\u2026</span>'; }
     try {
       var res  = await API.getLabWindowsPassword(labId);
@@ -1179,11 +1395,12 @@ const Labs = (function () {
     pollStatus:      pollStatus,
     downloadLabInfo: downloadLabInfo,
     downloadKeypair: downloadKeypair,
-    showConnectInfo: showConnectInfo,
     // Confirm dialog
     confirmOk:       confirmOk,
     confirmCancel:   confirmCancel,
     // Exposed for inline onclick handlers
+    _setFilter:          _setFilter,
+    _toggleRowDetail:    _toggleRowDetail,
     _approveLab:         _approveLab,
     _rejectLab:          _rejectLab,
     _viewPayment:        _viewPayment,
