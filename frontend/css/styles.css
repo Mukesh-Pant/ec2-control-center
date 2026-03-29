@@ -2757,3 +2757,17 @@ code {
   line-height: 1;
   margin-bottom: 6px;
 }
+
+/* Skeleton loading rows — used while instance data loads from Lambda */
+.skeleton-row {
+  height: 38px;
+  background: linear-gradient(90deg, #e8edf5 25%, #f4f7fb 50%, #e8edf5 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s infinite;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

@@ -170,7 +170,7 @@ Resources:
         Enabled: true
         DefaultRootObject: index.html
         HttpVersion: http2
-        PriceClass: PriceClass_100
+        PriceClass: PriceClass_200
         Comment: !Sub 'EC2 Control Portal ${Environment}'
         Origins:
           - Id: S3Origin
@@ -751,7 +751,7 @@ Resources:
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300
-      MemorySize: 256
+      MemorySize: 512
       Code:
         S3Bucket: !Ref LambdaCodeS3Bucket
         S3Key: !Sub 'lambda/ec2-controller-${Environment}-${LambdaCodeVersion}.zip'

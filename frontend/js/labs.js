@@ -970,32 +970,45 @@ const Labs = (function () {
   }
 
   function pollStatus(labId) {
-    if (_pollTimer) clearInterval(_pollTimer);
-    _pollTimer = setInterval(async function () {
-      try {
-        var res  = await API.getLabsList();
-        var data = await res.json();
-        if (!res.ok) return;
-        var labs = data.labs || [];
-        var lab  = labs.find(function (l) { return l.labId === labId; });
-        if (!lab) return;
+    if (_pollTimer) { clearTimeout(_pollTimer); _pollTimer = null; }
+    var _pollInterval = 5000;  // start at 5s, doubles each cycle up to 30s
 
-        if (lab.status === 'running') {
-          clearInterval(_pollTimer);
-          _pollTimer = null;
-          activeLabs = labs;
-          _setProvisionStep(5);   // all done
-          _showStep5Panel(lab);
-        } else if (lab.status === 'error') {
-          clearInterval(_pollTimer);
-          _pollTimer = null;
-          var errEl    = document.getElementById('lbs-s4-error');
-          var errMsgEl = document.getElementById('lbs-s4-error-msg');
-          if (errEl)    errEl.style.display = '';
-          if (errMsgEl) errMsgEl.textContent = 'Instance failed to start. Check the AWS console for details.';
-        }
-      } catch (_) { /* ignore transient network errors during poll */ }
-    }, 5000);
+    function _tick() {
+      _pollTimer = setTimeout(async function () {
+        try {
+          var res  = await API.getLabsList();
+          var data = await res.json();
+          if (!res.ok) { _schedule(); return; }
+          var labs = data.labs || [];
+          var lab  = labs.find(function (l) { return l.labId === labId; });
+          if (!lab) { _schedule(); return; }
+
+          if (lab.status === 'running') {
+            _pollTimer = null;
+            activeLabs = labs;
+            _setProvisionStep(5);
+            _showStep5Panel(lab);
+            return;  // stop polling
+          }
+          if (lab.status === 'error') {
+            _pollTimer = null;
+            var errEl    = document.getElementById('lbs-s4-error');
+            var errMsgEl = document.getElementById('lbs-s4-error-msg');
+            if (errEl)    errEl.style.display = '';
+            if (errMsgEl) errMsgEl.textContent = 'Instance failed to start. Check the AWS console for details.';
+            return;  // stop polling
+          }
+          _schedule();
+        } catch (_) { _schedule(); /* ignore transient network errors */ }
+      }, _pollInterval);
+    }
+
+    function _schedule() {
+      _pollInterval = Math.min(_pollInterval * 2, 30000);  // 5s → 10s → 20s → 30s cap
+      _tick();
+    }
+
+    _tick();
   }
 
   // ─── Step 5: Connection Info

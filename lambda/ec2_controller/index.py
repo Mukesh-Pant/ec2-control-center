@@ -32,9 +32,28 @@ import audit
 import pricing
 import backup
 import labs
+from console_login import handle_console_login
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Module-level boto3 singletons — created once per warm container
+_ddb_resource   = None
+_cognito_client = None
+
+
+def _get_ddb():
+    global _ddb_resource
+    if _ddb_resource is None:
+        _ddb_resource = boto3.resource('dynamodb')
+    return _ddb_resource
+
+
+def _get_cognito():
+    global _cognito_client
+    if _cognito_client is None:
+        _cognito_client = boto3.client('cognito-idp')
+    return _cognito_client
 
 
 def lambda_handler(event, context):
@@ -64,7 +83,6 @@ def lambda_handler(event, context):
     elif path == '/backup' and method == 'POST':
         return backup.handle_backup_mutation(event)
     elif path == '/console-login' and method == 'POST':
-        from console_login import handle_console_login
         return handle_console_login(event)
     elif path == '/labs' and method == 'GET':
         return labs.handle_labs_list(event)
@@ -322,8 +340,7 @@ def handle_accounts_mutation(event):
     logger.info("accounts mutation: action=%s accountId=%s caller=%s",
                 action, account_id, caller)
 
-    ddb   = boto3.resource('dynamodb')
-    table = ddb.Table(os.environ.get('ACCOUNTS_TABLE', 'ec2-control-accounts-production'))
+    table = _get_ddb().Table(os.environ.get('ACCOUNTS_TABLE', 'ec2-control-accounts-production'))
 
     # Prevent mutations on the central account's roleArn/removal
     def _is_central(acct_id):
@@ -518,7 +535,7 @@ def handle_users_list(event):
         return err
 
     user_pool_id = os.environ.get('USER_POOL_ID', '')
-    cognito = boto3.client('cognito-idp')
+    cognito = _get_cognito()
 
     users = []
     paginator = cognito.get_paginator('list_users')
@@ -577,7 +594,7 @@ def handle_users_mutation(event):
         return error_response(400, 'email is required.')
 
     user_pool_id = os.environ.get('USER_POOL_ID', '')
-    cognito = boto3.client('cognito-idp')
+    cognito = _get_cognito()
     ALL_GROUPS = ['admins', 'operators', 'viewers']
     GROUP_MAP  = {'admin': 'admins', 'operator': 'operators', 'viewer': 'viewers'}
 

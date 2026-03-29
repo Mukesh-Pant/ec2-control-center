@@ -11,43 +11,41 @@ const Analytics = (function () {
 
   async function load() {
     var instances = Instances.getAll();
-    _renderStatCards(instances);
     _renderFleetRing(instances);
     _renderCostByAcct(instances);
     _renderTypeBreakdown(instances);
     _renderCostProjection(instances);
-    _loadActivityRows();
+
+    // Single audit fetch shared by stat cards and activity rows
+    try {
+      var res  = await API.getAuditLog({ limit: 200 });
+      var data = await res.json();
+      if (!res.ok) return;
+      var items = data.items || [];
+      _renderStatCards(instances, items);
+      _renderActivityByInst(items);
+      _renderActivityByUser(items);
+    } catch (err) { /* silent */ }
   }
 
   // ─── Stat Cards ────────────────────────────────────────────────────────────
 
-  function _renderStatCards(instances) {
+  function _renderStatCards(instances, auditItems) {
     var prices  = App.prices;
     var running = instances.filter(function (i) { return i.state === 'running'; });
     var hourly  = running.reduce(function (s, i) { return s + (prices[i.instanceType] || 0.05); }, 0);
     var monthly = (hourly * 24 * 30).toFixed(2);
 
-    App.setText('an-proj', monthly > 0 ? '$' + monthly : '—');
-    App.setText('fleet-upd', running.length + ' / ' + instances.length + ' running');
+    App.setText('an-proj',    monthly > 0 ? '$' + monthly : '—');
+    App.setText('fleet-upd',  running.length + ' / ' + instances.length + ' running');
 
-    _loadAuditStats();
-  }
+    var items  = auditItems || [];
+    var starts = items.filter(function (i) { return (i.action || '').toLowerCase() === 'start'; }).length;
+    var stops  = items.filter(function (i) { return (i.action || '').toLowerCase().includes('stop'); }).length;
 
-  async function _loadAuditStats() {
-    try {
-      var res  = await API.getAuditLog({ limit: 200 });
-      var data = await res.json();
-      if (!res.ok) return;
-
-      var items  = data.items || [];
-      var starts = items.filter(function (i) { return (i.action || '').toLowerCase() === 'start'; }).length;
-      var stops  = items.filter(function (i) { return (i.action || '').toLowerCase().includes('stop'); }).length;
-
-      App.setText('an-total',  items.length);
-      App.setText('an-starts', starts);
-      App.setText('an-stops',  stops);
-
-    } catch (err) { /* silent */ }
+    App.setText('an-total',  items.length);
+    App.setText('an-starts', starts);
+    App.setText('an-stops',  stops);
   }
 
   // ─── Fleet Ring SVG ─────────────────────────────────────────────────────────
@@ -217,18 +215,6 @@ const Analytics = (function () {
   }
 
   // ─── Activity by Instance / User ───────────────────────────────────────────
-
-  async function _loadActivityRows() {
-    try {
-      var res  = await API.getAuditLog({ limit: 200 });
-      var data = await res.json();
-      if (!res.ok) return;
-
-      _renderActivityByInst(data.items || []);
-      _renderActivityByUser(data.items || []);
-
-    } catch (err) { /* silent */ }
-  }
 
   function _renderActivityByInst(items) {
     var wrap = document.getElementById('an-inst-rows');

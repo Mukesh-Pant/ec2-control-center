@@ -28,6 +28,7 @@ Fully serverless, zero infrastructure to manage.
 | M9 | Backup — AWS Backup service, on-demand + scheduled backups, restore, /backup endpoint | ✅ LIVE |
 | M10 | Console Login — one-click AWS Console via STS federation + Firefox container tabs extension | ✅ LIVE |
 | M11 | Labs — self-service EC2 lab provisioning, payment upload, pending-approval workflow, admin controls | 🚧 IN DEV |
+| Perf | Performance — STS cred caching, boto3 singletons, script defer, skeleton loading, Lambda 512MB, CloudFront PriceClass_200 | ✅ LIVE |
 
 **API:** REST API v1 (migrated from HTTP API v2) with COGNITO_USER_POOLS authorizer.
 
@@ -475,6 +476,9 @@ Admin: Labs tab → pending card → View Payment → Approve / Reject
 | Custom domain | CloudFront Alias + ACM (us-east-1) + Route 53 A ALIAS | Standard CDN HTTPS pattern |
 | Console login | STS AssumeRole → AWS Federation API → SigninToken | No credential exposure; single-use URL; browser handles session |
 | Firefox containers | One named container per AWS account | Isolated cookies per account; no cross-account session bleed |
+| Lambda memory | 512 MB | Doubles CPU allocation vs 256MB; needed for 20-thread STS/EC2 ThreadPoolExecutor to run efficiently |
+| CloudFront PriceClass | PriceClass_200 | Includes Asia Pacific (Mumbai) edge nodes; India users served locally not via Europe |
+| STS cred caching | Module-level TTL dict + threading.Lock (10 min TTL) | 20 concurrent threads × N accounts = STS rate-limit without cache; creds last 15 min so 10 min cache is safe |
 
 ---
 
@@ -513,16 +517,21 @@ Admin: Labs tab → pending card → View Payment → Approve / Reject
 - CORS headers required in EVERY response (REST API v1 doesn't auto-add them)
 - `get_accounts()` → enabled only (EC2 listing); `get_all_accounts()` → all (admin panel)
 - `action` strings from POST body: always call `.strip().lower()` before comparing → use lowercase in `if/elif` checks (e.g. `'setrole'` not `'setRole'`)
+- **boto3 singletons:** All boto3 clients/resources are module-level singletons (`_client = None` + lazy init) — never create clients inside handlers (adds TLS setup per-request)
+- **STS credential caching:** `accounts.py` and `labs.py` cache assumed-role credentials in a module-level dict with a `threading.Lock` and 10-min TTL. `get_ec2_client()` and `_get_member_creds()` never call `assume_role()` more than once per 10 min per account per warm container. Do NOT remove this cache — the ThreadPoolExecutor fires 20+ concurrent STS calls without it, causing throttling.
+- **DynamoDB pagination:** All `table.scan()` calls must loop over `LastEvaluatedKey` to retrieve all pages. A single `scan()` only returns up to ~1MB; silently drops records beyond that. Both `get_accounts()` and `get_all_accounts()` in `accounts.py` handle pagination correctly — follow the same pattern for any new scan.
 
 ### Frontend (JavaScript)
 - All modules: IIFE pattern — `const ModuleName = (function() { ... return {...}; })()`
 - **Script load order:** `cognito-sdk (CDN+fallback)` → `auth` → `authui` → `api` → `instances` → `audit` → `billing` → `analytics` → `accounts` → `users` → `backup` → `labs` → `app`
+- **Script loading:** Cognito SDK + `auth.js` + `authui.js` are synchronous (CDN fallback uses `document.write`; `Auth` must be defined before bootstrap). All other modules (`api.js` → `app.js`) use `defer`. `Auth.init()` is called inside a `DOMContentLoaded` listener to guarantee `App` is defined when `Auth._bootApp()` calls `App.init()`.
 - `const CONFIG = { /*__INJECT__*/ };` in index.html — replaced at deploy by config_injector
 - Auth uses `sessionStorage`; `isNearExpiry()` = < 10 min buffer (handles Cognito clock skew)
 - `Auth.init()` is the entry point — decides whether to show login page or boot dashboard
 - Dashboard pages: `dashboard`, `instances`, `billing`, `analytics`, `audit`, `accounts`, `users`, `backup`, `labs`
 - Admin-only pages: `accounts` and `users` tabs visible only when `App.setAdmin(true)`
 - Role badge shown in sidebar: `rbac-admin` (blue) / `rbac-operator` (green) / `rbac-viewer` (gray)
+- **Skeleton loading:** `App.init()` injects `.skeleton-row` shimmer placeholders into `#dash-list` and `#ag-wrap` before `Instances.refresh()` fires, so the dashboard is never blank while Lambda responds
 
 ### CloudFormation
 - `AuthorizationType: COGNITO_USER_POOLS` + `AuthorizerId: !Ref RestApiAuthorizer`

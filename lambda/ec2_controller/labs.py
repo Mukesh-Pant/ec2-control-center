@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import time
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -32,6 +33,11 @@ MAX_DURATION_HOURS = 26280  # 3 years × 365 days × 24 hrs
 _ddb = None
 _s3  = None
 _sts = None
+
+# STS credential cache for labs cross-account calls
+_labs_creds_cache: dict = {}
+_labs_creds_lock = threading.Lock()
+_LABS_CREDS_TTL = 600  # 10 min; creds valid for 15 min
 
 
 def _get_ddb():
@@ -64,23 +70,31 @@ def _get_labs_table():
 
 # ─── Cross-account helpers ────────────────────────────────────────────────────
 
-def _assume_role(account_id):
-    """Return credentials dict for the member account cross-account role."""
+def _get_member_creds(account_id):
+    """Return cached STS creds dict, or None for the central account (use default Lambda creds)."""
+    if account_id == CENTRAL_ACCOUNT_ID:
+        return None
+
+    now = time.monotonic()
+    with _labs_creds_lock:
+        entry = _labs_creds_cache.get(account_id)
+        if entry and entry['expires_at'] > now and entry['creds'] is not None:
+            return entry['creds']
+        # Sentinel: prevent concurrent threads from all calling STS simultaneously
+        _labs_creds_cache[account_id] = {'creds': None, 'expires_at': 0}
+
     role_arn = f'arn:aws:iam::{account_id}:role/EC2ControlCrossAccountRole-{ENVIRONMENT}'
+    logger.info("Refreshing labs STS creds for account %s", account_id)
     assumed = _get_sts().assume_role(
         RoleArn=role_arn,
         RoleSessionName=f'ec2ctrl-labs-{account_id}',
         ExternalId=f'ec2-control-{CENTRAL_ACCOUNT_ID}',
         DurationSeconds=900,
     )
-    return assumed['Credentials']
-
-
-def _get_member_creds(account_id):
-    """Return creds dict or None. None means central account — use default Lambda creds."""
-    if account_id == CENTRAL_ACCOUNT_ID:
-        return None
-    return _assume_role(account_id)
+    creds = assumed['Credentials']
+    with _labs_creds_lock:
+        _labs_creds_cache[account_id] = {'creds': creds, 'expires_at': now + _LABS_CREDS_TTL}
+    return creds
 
 
 def _boto3_client(service, region, creds=None):

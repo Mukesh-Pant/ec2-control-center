@@ -43,8 +43,8 @@ Cognito SDK (SRP) ──► auth.js (JWT tokens in sessionStorage)
 REST API Gateway (v1, REGIONAL, COGNITO_USER_POOLS authorizer)
   │
   ▼
-Lambda: ec2-controller (Python 3.12)
-  ├── STS AssumeRole → member accounts
+Lambda: ec2-controller (Python 3.12, 512 MB)
+  ├── STS AssumeRole → member accounts (credentials cached 10 min per container)
   ├── ThreadPoolExecutor → parallel multi-account/region queries
   ├── DynamoDB → account registry + audit logs + user-account RBAC
   ├── Cognito IdP → group management (admins/operators/viewers)
@@ -283,6 +283,22 @@ An admin then reviews the payment and clicks **Approve** (or **Reject**) from th
 - Once running, operators can download the **.pem key** for SSH access
 - Windows labs support one-click **RDP password retrieval**
 - RBAC: operators provision labs for assigned accounts; admins approve and see all labs
+
+---
+
+## Performance
+
+The portal is optimised for fast initial load and low-latency multi-account operations:
+
+| Area | Optimisation |
+|------|-------------|
+| **STS credentials** | Assumed-role credentials are cached per-account for 10 min (thread-safe). A single `/ec2 list` request no longer fires a fresh `AssumeRole` for every account × thread. |
+| **boto3 clients** | All boto3 clients are module-level singletons — created once per warm Lambda container, not per request. |
+| **DynamoDB pagination** | All table scans paginate over `LastEvaluatedKey` to guarantee all records are returned regardless of table size. |
+| **Script loading** | Non-auth frontend modules use HTML `defer` — the browser parses the full page before downloading them, removing 1–3 s of blank-screen time. |
+| **Dashboard skeleton** | The dashboard renders immediately with shimmer placeholders while the instance list loads from Lambda. |
+| **Lambda memory** | Main Lambda runs at 512 MB (double the original 256 MB). Lambda CPU scales linearly with memory, reducing execution time for parallel operations by ~30–50%. |
+| **CloudFront edge** | `PriceClass_200` serves users in India, South-East Asia, and Japan from regional edge nodes instead of routing through Europe. |
 
 ---
 
