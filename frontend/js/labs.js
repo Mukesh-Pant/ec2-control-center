@@ -1166,6 +1166,9 @@ const Labs = (function () {
     confirmOk:       confirmOk,
     confirmCancel:   confirmCancel,
     // Exposed for inline onclick handlers
+    _approveLab:         _approveLab,
+    _rejectLab:          _rejectLab,
+    _viewPayment:        _viewPayment,
     _exitWizard:         _exitWizard,
     _onDurationInput:    _onDurationInput,
     _onPlatformChange:   _onPlatformChange,
