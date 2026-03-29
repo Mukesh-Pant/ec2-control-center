@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import time
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -26,12 +27,17 @@ LABS_KEYS_BUCKET   = os.environ.get('LABS_KEYS_BUCKET', '')
 LABS_PAYMENTS_BUCKET = os.environ.get('LABS_PAYMENTS_BUCKET', '')
 CENTRAL_ACCOUNT_ID = os.environ.get('CENTRAL_ACCOUNT_ID', '')
 ENVIRONMENT        = os.environ.get('ENVIRONMENT', 'production')
-MAX_DURATION_HOURS = 2160  # 90 days
+MAX_DURATION_HOURS = 26280  # 3 years × 365 days × 24 hrs
 
 # ─── Lazy singletons ──────────────────────────────────────────────────────────
 _ddb = None
 _s3  = None
 _sts = None
+
+# STS credential cache for labs cross-account calls
+_labs_creds_cache: dict = {}
+_labs_creds_lock = threading.Lock()
+_LABS_CREDS_TTL = 600  # 10 min; creds valid for 15 min
 
 
 def _get_ddb():
@@ -64,23 +70,31 @@ def _get_labs_table():
 
 # ─── Cross-account helpers ────────────────────────────────────────────────────
 
-def _assume_role(account_id):
-    """Return credentials dict for the member account cross-account role."""
+def _get_member_creds(account_id):
+    """Return cached STS creds dict, or None for the central account (use default Lambda creds)."""
+    if account_id == CENTRAL_ACCOUNT_ID:
+        return None
+
+    now = time.monotonic()
+    with _labs_creds_lock:
+        entry = _labs_creds_cache.get(account_id)
+        if entry and entry['expires_at'] > now and entry['creds'] is not None:
+            return entry['creds']
+        # Sentinel: prevent concurrent threads from all calling STS simultaneously
+        _labs_creds_cache[account_id] = {'creds': None, 'expires_at': 0}
+
     role_arn = f'arn:aws:iam::{account_id}:role/EC2ControlCrossAccountRole-{ENVIRONMENT}'
+    logger.info("Refreshing labs STS creds for account %s", account_id)
     assumed = _get_sts().assume_role(
         RoleArn=role_arn,
         RoleSessionName=f'ec2ctrl-labs-{account_id}',
         ExternalId=f'ec2-control-{CENTRAL_ACCOUNT_ID}',
         DurationSeconds=900,
     )
-    return assumed['Credentials']
-
-
-def _get_member_creds(account_id):
-    """Return creds dict or None. None means central account — use default Lambda creds."""
-    if account_id == CENTRAL_ACCOUNT_ID:
-        return None
-    return _assume_role(account_id)
+    creds = assumed['Credentials']
+    with _labs_creds_lock:
+        _labs_creds_cache[account_id] = {'creds': creds, 'expires_at': now + _LABS_CREDS_TTL}
+    return creds
 
 
 def _boto3_client(service, region, creds=None):
@@ -164,6 +178,49 @@ def _calculate_estimated_cost(platform, instance_type, region, storage_gb, elast
     except Exception as exc:
         logger.warning('_calculate_estimated_cost failed: %s', exc)
         return 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /labs/payment  — admin views payment screenshot for a pending lab
+# ─────────────────────────────────────────────────────────────────────────────
+
+def handle_labs_payment_view(event):
+    """Return a presigned S3 URL for the payment screenshot of a lab. Admin only."""
+    admin_guard = require_admin(event)
+    if admin_guard:
+        return admin_guard
+
+    params = event.get('queryStringParameters') or {}
+    lab_id = params.get('labId', '').strip()
+    if not lab_id:
+        return error_response(400, 'labId query parameter is required.')
+
+    try:
+        result = _get_labs_table().get_item(Key={'labId': lab_id})
+    except ClientError as e:
+        return error_response(500, str(e))
+
+    lab = result.get('Item')
+    if not lab:
+        return error_response(404, 'Lab not found.')
+
+    payment_key = lab.get('paymentS3Key', '')
+    if not payment_key:
+        return error_response(404, 'No payment screenshot for this lab.')
+
+    if not LABS_PAYMENTS_BUCKET:
+        return error_response(500, 'LABS_PAYMENTS_BUCKET is not configured.')
+
+    try:
+        url = _get_s3().generate_presigned_url(
+            'get_object',
+            Params={'Bucket': LABS_PAYMENTS_BUCKET, 'Key': payment_key},
+            ExpiresIn=900,  # 15 minutes
+        )
+    except ClientError as e:
+        return error_response(500, str(e))
+
+    return response(200, {'url': url})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -261,7 +318,7 @@ def handle_labs_pricing(event):
     if duration_hours <= 0:
         return error_response(400, 'durationHours must be positive.')
     if duration_hours > MAX_DURATION_HOURS:
-        return error_response(400, f'durationHours cannot exceed {MAX_DURATION_HOURS} (90 days).')
+        return error_response(400, f'durationHours cannot exceed {MAX_DURATION_HOURS} (3 years).')
 
     try:
         if os_param == 'windows':
@@ -398,7 +455,7 @@ def handle_labs_network_options(event):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def handle_labs_provision(event):
-    """Provision a new lab EC2 instance and store metadata in DynamoDB."""
+    """Route POST /labs by action: 'submit' | 'approve' | 'reject'."""
     guard = _require_operator_or_admin(event)
     if guard:
         return guard
@@ -408,7 +465,20 @@ def handle_labs_provision(event):
     except json.JSONDecodeError:
         return error_response(400, 'Invalid JSON body.')
 
-    # Required fields
+    action = body.get('action', 'submit').strip().lower()
+
+    if action == 'submit':
+        return _handle_labs_submit(event, body)
+    elif action == 'approve':
+        return _handle_labs_approve(event, body)
+    elif action == 'reject':
+        return _handle_labs_reject(event, body)
+    else:
+        return error_response(400, f'Unknown action: {action}. Valid: submit, approve, reject.')
+
+
+def _validate_lab_fields(body):
+    """Validate and parse common lab creation fields. Returns (fields_dict, error_response) tuple."""
     account_id         = body.get('accountId', '').strip()
     region             = body.get('region', '').strip()
     platform           = body.get('platform', '').strip().lower()
@@ -421,53 +491,194 @@ def handle_labs_provision(event):
     payment_key        = body.get('paymentKey', '').strip()
     lab_name_input     = body.get('labName', '').strip()[:100]
 
-    # Validate required fields
     missing = [f for f, v in [
         ('accountId', account_id), ('region', region), ('platform', platform),
         ('instanceType', instance_type), ('subnetId', subnet_id),
     ] if not v]
     if missing:
-        return error_response(400, f'Missing required fields: {", ".join(missing)}')
+        return None, error_response(400, f'Missing required fields: {", ".join(missing)}')
     if storage_gb is None:
-        return error_response(400, 'storageGb is required.')
+        return None, error_response(400, 'storageGb is required.')
     if duration_hours is None:
-        return error_response(400, 'durationHours is required.')
+        return None, error_response(400, 'durationHours is required.')
     if not security_group_ids:
-        return error_response(400, 'securityGroupIds is required and must not be empty.')
+        return None, error_response(400, 'securityGroupIds is required and must not be empty.')
     if platform not in SUPPORTED_PLATFORMS:
-        return error_response(400, f'Unsupported platform: {platform}. Supported: {", ".join(sorted(SUPPORTED_PLATFORMS))}')
+        return None, error_response(400, f'Unsupported platform: {platform}. Supported: {", ".join(sorted(SUPPORTED_PLATFORMS))}')
 
     try:
         storage_gb     = int(storage_gb)
         duration_hours = float(duration_hours)
     except (ValueError, TypeError):
-        return error_response(400, 'storageGb and durationHours must be numeric.')
+        return None, error_response(400, 'storageGb and durationHours must be numeric.')
 
     if storage_gb < 8 or storage_gb > 16384:
-        return error_response(400, 'storageGb must be between 8 and 16384.')
+        return None, error_response(400, 'storageGb must be between 8 and 16384.')
     if duration_hours <= 0:
-        return error_response(400, 'durationHours must be positive.')
+        return None, error_response(400, 'durationHours must be positive.')
     if duration_hours > MAX_DURATION_HOURS:
-        return error_response(400, f'durationHours cannot exceed {MAX_DURATION_HOURS} (90 days).')
+        return None, error_response(400, f'durationHours cannot exceed {MAX_DURATION_HOURS} (3 years).')
     if not isinstance(security_group_ids, list) or len(security_group_ids) == 0:
-        return error_response(400, 'securityGroupIds must be a non-empty list.')
+        return None, error_response(400, 'securityGroupIds must be a non-empty list.')
+
+    return {
+        'account_id':         account_id,
+        'region':             region,
+        'platform':           platform,
+        'instance_type':      instance_type,
+        'storage_gb':         storage_gb,
+        'elastic_ip':         elastic_ip,
+        'subnet_id':          subnet_id,
+        'security_group_ids': security_group_ids,
+        'duration_hours':     duration_hours,
+        'payment_key':        payment_key,
+        'lab_name_input':     lab_name_input,
+    }, None
+
+
+def _do_provision_ec2(fields, lab_id, estimated_cost, caller_email):
+    """Run the actual EC2 provisioning steps. Returns DynamoDB item dict or raises."""
+    account_id         = fields['account_id']
+    region             = fields['region']
+    platform           = fields['platform']
+    instance_type      = fields['instance_type']
+    storage_gb         = fields['storage_gb']
+    elastic_ip         = fields['elastic_ip']
+    subnet_id          = fields['subnet_id']
+    security_group_ids = fields['security_group_ids']
+    duration_hours     = fields['duration_hours']
+    payment_key        = fields['payment_key']
+    lab_name_input     = fields['lab_name_input']
+
+    creds    = _get_member_creds(account_id)
+    ec2      = _boto3_client('ec2', region, creds)
+    ami_id   = _get_latest_ami(platform, region, creds)
+    logger.info('_do_provision_ec2: AMI %s for platform %s in %s', ami_id, platform, region)
+
+    key_name  = f'ec2ctrl-lab-{lab_id}'
+    ec2_name  = lab_name_input if lab_name_input else f'ec2ctrl-lab-{lab_id}'
+
+    # Create EC2 key pair and store .pem
+    if not LABS_KEYS_BUCKET:
+        raise ValueError('LABS_KEYS_BUCKET is not configured.')
+    key_resp  = ec2.create_key_pair(KeyName=key_name)
+    pem_bytes = key_resp['KeyMaterial'].encode('utf-8')
+    s3_key    = f'keys/{lab_id}.pem'
+    _get_s3().put_object(Bucket=LABS_KEYS_BUCKET, Key=s3_key, Body=pem_bytes, ContentType='text/plain')
+    logger.info('_do_provision_ec2: stored .pem at s3://%s/%s', LABS_KEYS_BUCKET, s3_key)
+
+    # Launch instance
+    run_resp = ec2.run_instances(
+        ImageId=ami_id,
+        InstanceType=instance_type,
+        KeyName=key_name,
+        SubnetId=subnet_id,
+        SecurityGroupIds=security_group_ids,
+        MinCount=1,
+        MaxCount=1,
+        BlockDeviceMappings=[{
+            'DeviceName': _ROOT_DEVICE[platform],
+            'Ebs': {
+                'VolumeSize':          storage_gb,
+                'VolumeType':          'gp3',
+                'DeleteOnTermination': True,
+            },
+        }],
+        TagSpecifications=[{
+            'ResourceType': 'instance',
+            'Tags': [
+                {'Key': 'Name',             'Value': ec2_name},
+                {'Key': 'ec2ctrl:labId',    'Value': lab_id},
+                {'Key': 'ec2ctrl:managedBy','Value': 'ec2-control'},
+            ],
+        }],
+    )
+    instance_id = run_resp['Instances'][0]['InstanceId']
+    logger.info('_do_provision_ec2: launched instance %s', instance_id)
+
+    # Elastic IP
+    allocation_id = ''
+    if elastic_ip:
+        try:
+            eip_resp      = ec2.allocate_address(Domain='vpc')
+            allocation_id = eip_resp['AllocationId']
+            logger.info('_do_provision_ec2: allocated EIP %s, waiting for instance %s to be running', allocation_id, instance_id)
+            # Instance must be in 'running' state before EIP can be associated
+            waiter = ec2.get_waiter('instance_running')
+            waiter.wait(
+                InstanceIds=[instance_id],
+                WaiterConfig={'Delay': 10, 'MaxAttempts': 18},  # up to 180 seconds
+            )
+            ec2.associate_address(InstanceId=instance_id, AllocationId=allocation_id)
+            logger.info('_do_provision_ec2: associated EIP %s to instance %s', allocation_id, instance_id)
+        except Exception as e:
+            logger.error('EIP allocation/association failed for instance %s: %s', instance_id, e)
+            # Release EIP if it was allocated
+            if allocation_id:
+                try: ec2.release_address(AllocationId=allocation_id)
+                except Exception: pass
+            try: ec2.terminate_instances(InstanceIds=[instance_id])
+            except Exception: pass
+            try: ec2.delete_key_pair(KeyName=key_name)
+            except Exception: pass
+            try: _get_s3().delete_object(Bucket=LABS_KEYS_BUCKET, Key=s3_key)
+            except Exception: pass
+            raise RuntimeError(f'Failed to allocate Elastic IP: {e}')
+
+    expires_at = (datetime.utcnow() + timedelta(hours=duration_hours)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    return {
+        'labId':          lab_id,
+        'labName':        ec2_name,
+        'userEmail':      caller_email,
+        'accountId':      account_id,
+        'region':         region,
+        'instanceId':     instance_id,
+        'instanceType':   instance_type,
+        'platform':       platform,
+        'amiId':          ami_id,
+        'storageGb':      Decimal(str(storage_gb)),
+        'elasticIp':      bool(elastic_ip),
+        'allocationId':   allocation_id,
+        'keyName':        key_name,
+        'keyS3Key':       s3_key,
+        'subnetId':       subnet_id,
+        'securityGroupIds': json.dumps(security_group_ids),
+        'durationHours':  Decimal(str(duration_hours)),
+        'expiresAt':      expires_at,
+        'warningSent':    False,
+        'status':         'provisioning',
+        'estimatedCost':  Decimal(str(estimated_cost)),
+        'paymentStatus':  'paid' if payment_key else 'pending',
+        'paymentS3Key':   payment_key,
+        'publicIp':       '',
+        'publicDns':      '',
+        'createdAt':      datetime.utcnow().isoformat(),
+    }, instance_id
+
+
+def _handle_labs_submit(event, body):
+    """Submit a new lab request — saves to DynamoDB as pending_approval. No EC2 launched."""
+    fields, err = _validate_lab_fields(body)
+    if err:
+        return err
 
     caller_email = get_caller(event)
 
-    # Account access check for operators
     if not is_admin(event):
         allowed = get_allowed_account_ids(caller_email)
-        if account_id not in allowed:
+        if fields['account_id'] not in allowed:
             return error_response(403, 'You do not have access to this account.')
 
-    # Verify payment screenshot exists in S3 before accepting
+    payment_key = fields['payment_key']
     if payment_key:
         try:
             _get_s3().head_object(Bucket=LABS_PAYMENTS_BUCKET, Key=payment_key)
         except Exception:
             return error_response(400, 'Payment screenshot not found. Please upload your payment screenshot first.')
+    else:
+        return error_response(400, 'Payment screenshot is required.')
 
-    # Estimated cost — use frontend-provided value if present; else calculate
     if 'estimatedCost' in body:
         try:
             estimated_cost = float(body['estimatedCost'])
@@ -475,132 +686,150 @@ def handle_labs_provision(event):
             estimated_cost = 0.0
     else:
         estimated_cost = _calculate_estimated_cost(
-            platform, instance_type, region, storage_gb, elastic_ip, duration_hours
+            fields['platform'], fields['instance_type'], fields['region'],
+            fields['storage_gb'], fields['elastic_ip'], fields['duration_hours']
         )
+
+    lab_id   = str(uuid.uuid4())
+    lab_name = fields['lab_name_input'] if fields['lab_name_input'] else f'ec2ctrl-lab-{lab_id}'
+
+    item = {
+        'labId':            lab_id,
+        'labName':          lab_name,
+        'userEmail':        caller_email,
+        'accountId':        fields['account_id'],
+        'region':           fields['region'],
+        'instanceId':       '',
+        'instanceType':     fields['instance_type'],
+        'platform':         fields['platform'],
+        'amiId':            '',
+        'storageGb':        Decimal(str(fields['storage_gb'])),
+        'elasticIp':        bool(fields['elastic_ip']),
+        'allocationId':     '',
+        'keyName':          '',
+        'keyS3Key':         '',
+        'subnetId':         fields['subnet_id'],
+        'securityGroupIds': json.dumps(fields['security_group_ids']),
+        'durationHours':    Decimal(str(fields['duration_hours'])),
+        'expiresAt':        '',
+        'warningSent':      False,
+        'status':           'pending_approval',
+        'estimatedCost':    Decimal(str(estimated_cost)),
+        'paymentStatus':    'paid',
+        'paymentS3Key':     payment_key,
+        'publicIp':         '',
+        'publicDns':        '',
+        'createdAt':        datetime.utcnow().isoformat(),
+    }
+    try:
+        _get_labs_table().put_item(Item=item)
+        logger.info('_handle_labs_submit: lab %s saved as pending_approval', lab_id)
+    except ClientError as e:
+        logger.exception('_handle_labs_submit DynamoDB error')
+        return error_response(500, str(e))
+
+    return response(200, {'labId': lab_id, 'status': 'pending_approval', 'estimatedCost': estimated_cost})
+
+
+def _handle_labs_approve(event, body):
+    """Approve a pending lab — admin only. Provisions EC2 and updates DynamoDB."""
+    admin_guard = require_admin(event)
+    if admin_guard:
+        return admin_guard
+
+    lab_id = body.get('labId', '').strip()
+    if not lab_id:
+        return error_response(400, 'labId is required.')
+
+    table = _get_labs_table()
+    try:
+        result = table.get_item(Key={'labId': lab_id})
+    except ClientError as e:
+        return error_response(500, str(e))
+
+    lab = result.get('Item')
+    if not lab:
+        return error_response(404, 'Lab not found.')
+    if lab.get('status') != 'pending_approval':
+        return error_response(400, f'Lab is not pending approval (status: {lab.get("status")}).')
+
+    # Reconstruct fields from stored record
+    try:
+        sg_ids = json.loads(lab.get('securityGroupIds', '[]'))
+    except (json.JSONDecodeError, TypeError):
+        sg_ids = []
+
+    fields = {
+        'account_id':         lab['accountId'],
+        'region':             lab['region'],
+        'platform':           lab['platform'],
+        'instance_type':      lab['instanceType'],
+        'storage_gb':         int(lab['storageGb']),
+        'elastic_ip':         bool(lab.get('elasticIp', False)),
+        'subnet_id':          lab.get('subnetId', ''),
+        'security_group_ids': sg_ids,
+        'duration_hours':     float(lab['durationHours']),
+        'payment_key':        lab.get('paymentS3Key', ''),
+        'lab_name_input':     lab.get('labName', ''),
+    }
+
+    estimated_cost = float(lab.get('estimatedCost', 0))
+    caller_email   = lab['userEmail']
 
     try:
-        creds = _get_member_creds(account_id)
-        ec2   = _boto3_client('ec2', region, creds)
-
-        # Lookup latest AMI
-        ami_id = _get_latest_ami(platform, region, creds)
-        logger.info('labs_provision: AMI %s for platform %s in %s', ami_id, platform, region)
-
-        # Generate lab ID
-        lab_id     = str(uuid.uuid4())
-        key_name   = f'ec2ctrl-lab-{lab_id}'
-        ec2_name   = lab_name_input if lab_name_input else f'ec2ctrl-lab-{lab_id}'
-
-        # Create EC2 key pair and save .pem to S3
-        key_resp = ec2.create_key_pair(KeyName=key_name)
-        pem_bytes = key_resp['KeyMaterial'].encode('utf-8')
-        s3_key    = f'keys/{lab_id}.pem'
-        if not LABS_KEYS_BUCKET:
-            return error_response(500, 'LABS_KEYS_BUCKET is not configured.')
-        _get_s3().put_object(
-            Bucket=LABS_KEYS_BUCKET,
-            Key=s3_key,
-            Body=pem_bytes,
-            ContentType='text/plain',
-        )
-        logger.info('labs_provision: stored .pem at s3://%s/%s', LABS_KEYS_BUCKET, s3_key)
-
-        # Launch instance
-        run_resp = ec2.run_instances(
-            ImageId=ami_id,
-            InstanceType=instance_type,
-            KeyName=key_name,
-            SubnetId=subnet_id,
-            SecurityGroupIds=security_group_ids,
-            MinCount=1,
-            MaxCount=1,
-            BlockDeviceMappings=[{
-                'DeviceName': _ROOT_DEVICE[platform],
-                'Ebs': {
-                    'VolumeSize':          storage_gb,
-                    'VolumeType':          'gp3',
-                    'DeleteOnTermination': True,
-                },
-            }],
-            TagSpecifications=[{
-                'ResourceType': 'instance',
-                'Tags': [
-                    {'Key': 'Name',               'Value': ec2_name},
-                    {'Key': 'ec2ctrl:labId',       'Value': lab_id},
-                    {'Key': 'ec2ctrl:managedBy',   'Value': 'ec2-control'},
-                ],
-            }],
-        )
-        instance_id = run_resp['Instances'][0]['InstanceId']
-        logger.info('labs_provision: launched instance %s', instance_id)
-
-        # Optionally allocate and associate an Elastic IP
-        allocation_id = ''
-        if elastic_ip:
-            try:
-                eip_resp      = ec2.allocate_address(Domain='vpc')
-                allocation_id = eip_resp['AllocationId']
-                ec2.associate_address(InstanceId=instance_id, AllocationId=allocation_id)
-                logger.info('labs_provision: allocated EIP %s for instance %s', allocation_id, instance_id)
-            except Exception as e:
-                logger.error("EIP allocation/association failed: %s", e)
-                # Cleanup: delete key pair and .pem
-                try:
-                    ec2.delete_key_pair(KeyName=key_name)
-                except Exception:
-                    pass
-                try:
-                    _get_s3().delete_object(Bucket=LABS_KEYS_BUCKET, Key=f'keys/{lab_id}.pem')
-                except Exception:
-                    pass
-                return error_response(500, 'Failed to allocate Elastic IP.')
-
-        # Compute expiry timestamp — consistent ISO format without microseconds or +00:00 suffix
-        # so DynamoDB string comparisons in the expiry checker work reliably.
-        expires_at = (datetime.utcnow() + timedelta(hours=duration_hours)).strftime('%Y-%m-%dT%H:%M:%SZ')
-
-        # Write DynamoDB record
-        item = {
-            'labId':          lab_id,
-            'labName':        ec2_name,
-            'userEmail':      caller_email,
-            'accountId':      account_id,
-            'region':         region,
-            'instanceId':     instance_id,
-            'instanceType':   instance_type,
-            'platform':       platform,
-            'amiId':          ami_id,
-            'storageGb':      Decimal(str(storage_gb)),
-            'elasticIp':      bool(elastic_ip),
-            'allocationId':   allocation_id,
-            'keyName':        key_name,
-            'keyS3Key':       s3_key,
-            'durationHours':  Decimal(str(duration_hours)),
-            'expiresAt':      expires_at,
-            'warningSent':    False,
-            'status':         'provisioning',
-            'estimatedCost':  Decimal(str(estimated_cost)),
-            'paymentStatus':  'paid' if payment_key else 'pending',
-            'paymentS3Key':   payment_key,
-            'publicIp':       '',
-            'publicDns':      '',
-            'createdAt':      datetime.utcnow().isoformat(),
-        }
-        _get_labs_table().put_item(Item=item)
-        logger.info('labs_provision: DynamoDB record written for lab %s', lab_id)
-
+        item, instance_id = _do_provision_ec2(fields, lab_id, estimated_cost, caller_email)
+    except RuntimeError as e:
+        return error_response(500, str(e))
     except ClientError as e:
-        logger.exception('handle_labs_provision AWS error')
+        logger.exception('_handle_labs_approve AWS error')
         return error_response(500, str(e))
     except ValueError as e:
-        logger.exception('handle_labs_provision value error')
-        return error_response(400, str(e))
+        return error_response(500, str(e))
 
-    return response(200, {
-        'labId':         lab_id,
-        'instanceId':    instance_id,
-        'estimatedCost': estimated_cost,
-    })
+    try:
+        table.put_item(Item=item)
+        logger.info('_handle_labs_approve: lab %s provisioning started, instance %s', lab_id, instance_id)
+    except ClientError as e:
+        logger.exception('_handle_labs_approve DynamoDB write error')
+        return error_response(500, str(e))
+
+    return response(200, {'labId': lab_id, 'instanceId': instance_id, 'estimatedCost': estimated_cost})
+
+
+def _handle_labs_reject(event, body):
+    """Reject a pending lab — admin only. No EC2 operations."""
+    admin_guard = require_admin(event)
+    if admin_guard:
+        return admin_guard
+
+    lab_id = body.get('labId', '').strip()
+    if not lab_id:
+        return error_response(400, 'labId is required.')
+
+    table = _get_labs_table()
+    try:
+        result = table.get_item(Key={'labId': lab_id})
+    except ClientError as e:
+        return error_response(500, str(e))
+
+    lab = result.get('Item')
+    if not lab:
+        return error_response(404, 'Lab not found.')
+    if lab.get('status') not in ('pending_approval',):
+        return error_response(400, f'Lab cannot be rejected in status: {lab.get("status")}.')
+
+    try:
+        table.update_item(
+            Key={'labId': lab_id},
+            UpdateExpression='SET #s = :s',
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={':s': 'rejected'},
+        )
+        logger.info('_handle_labs_reject: lab %s rejected', lab_id)
+    except ClientError as e:
+        return error_response(500, str(e))
+
+    return response(200, {'labId': lab_id, 'status': 'rejected'})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -898,12 +1127,25 @@ def handle_labs_delete(event):
         creds = _get_member_creds(account_id)
         ec2   = _boto3_client('ec2', region, creds)
 
-        ec2.terminate_instances(InstanceIds=[instance_id])
-        logger.info('handle_labs_delete: terminated instance %s', instance_id)
+        if instance_id:
+            ec2.terminate_instances(InstanceIds=[instance_id])
+            logger.info('handle_labs_delete: terminated instance %s', instance_id)
 
         if allocation_id:
-            ec2.release_address(AllocationId=allocation_id)
-            logger.info('handle_labs_delete: released EIP %s', allocation_id)
+            # Disassociate EIP before releasing — required if instance is still in shutting-down state
+            try:
+                addr_resp = ec2.describe_addresses(AllocationIds=[allocation_id])
+                assoc_id  = addr_resp['Addresses'][0].get('AssociationId', '')
+                if assoc_id:
+                    ec2.disassociate_address(AssociationId=assoc_id)
+                    logger.info('handle_labs_delete: disassociated EIP %s (assoc %s)', allocation_id, assoc_id)
+            except Exception as e:
+                logger.warning('handle_labs_delete: could not disassociate EIP %s: %s', allocation_id, e)
+            try:
+                ec2.release_address(AllocationId=allocation_id)
+                logger.info('handle_labs_delete: released EIP %s', allocation_id)
+            except Exception as e:
+                logger.warning('handle_labs_delete: could not release EIP %s: %s', allocation_id, e)
 
         # Delete EC2 key pair in member account
         try:

@@ -2,6 +2,8 @@
 
 import os
 import logging
+import time
+import threading
 import boto3
 
 logger = logging.getLogger()
@@ -14,6 +16,11 @@ CENTRAL_ACCOUNT_ID = os.environ.get('CENTRAL_ACCOUNT_ID', '')
 
 _sts_client = None
 _ddb_resource = None
+
+# STS credential cache: {account_id: {'creds': {...}, 'expires_at': float}}
+_creds_cache: dict = {}
+_creds_lock = threading.Lock()
+_CREDS_TTL = 600  # 10 min; creds are valid for 15 min (DurationSeconds=900)
 
 
 def _get_sts():
@@ -31,47 +38,70 @@ def _get_ddb():
 
 
 def get_accounts():
-    """Fetch all enabled accounts from DynamoDB AccountRegistry."""
+    """Fetch all enabled accounts from DynamoDB AccountRegistry (handles pagination)."""
     table = _get_ddb().Table(ACCOUNTS_TABLE)
-    result = table.scan(
-        FilterExpression='enabled = :t',
-        ExpressionAttributeValues={':t': True}
-    )
-    return result.get('Items', [])
+    items, kwargs = [], {
+        'FilterExpression': 'enabled = :t',
+        'ExpressionAttributeValues': {':t': True},
+    }
+    while True:
+        result = table.scan(**kwargs)
+        items.extend(result.get('Items', []))
+        if 'LastEvaluatedKey' not in result:
+            break
+        kwargs['ExclusiveStartKey'] = result['LastEvaluatedKey']
+    return items
 
 
 def get_all_accounts():
-    """Fetch all accounts from DynamoDB AccountRegistry (including disabled)."""
+    """Fetch all accounts from DynamoDB AccountRegistry, including disabled (handles pagination)."""
     table = _get_ddb().Table(ACCOUNTS_TABLE)
-    result = table.scan()
-    return result.get('Items', [])
+    items, kwargs = [], {}
+    while True:
+        result = table.scan(**kwargs)
+        items.extend(result.get('Items', []))
+        if 'LastEvaluatedKey' not in result:
+            break
+        kwargs['ExclusiveStartKey'] = result['LastEvaluatedKey']
+    return items
 
 
-def get_ec2_client(account_id, region):
-    """
-    Return a boto3 EC2 client.
-    For the central account, uses default Lambda credentials.
-    For member accounts, uses STS AssumeRole.
-    """
-    if not account_id or account_id == CENTRAL_ACCOUNT_ID:
-        return boto3.client('ec2', region_name=region)
+def _get_cached_creds(account_id: str) -> dict:
+    """Return cached STS credentials for a member account, refreshing if stale."""
+    now = time.monotonic()
+    with _creds_lock:
+        entry = _creds_cache.get(account_id)
+        if entry and entry['expires_at'] > now and entry['creds'] is not None:
+            return entry['creds']
+        # Sentinel: mark in-progress so concurrent threads skip the STS call
+        _creds_cache[account_id] = {'creds': None, 'expires_at': 0}
 
+    # Perform the STS call outside the lock to avoid blocking other threads
     role_arn = f'arn:aws:iam::{account_id}:role/EC2ControlCrossAccountRole-{ENVIRONMENT}'
-    logger.info("Assuming role %s for account %s", role_arn, account_id)
-
+    logger.info("Refreshing STS creds for account %s", account_id)
     assumed = _get_sts().assume_role(
         RoleArn=role_arn,
         RoleSessionName=f'ec2-control-{account_id}',
         ExternalId=f'ec2-control-{CENTRAL_ACCOUNT_ID}',
-        DurationSeconds=900
+        DurationSeconds=900,
     )
     creds = assumed['Credentials']
+    with _creds_lock:
+        _creds_cache[account_id] = {'creds': creds, 'expires_at': now + _CREDS_TTL}
+    return creds
+
+
+def get_ec2_client(account_id, region):
+    """Return a boto3 EC2 client, using cached STS credentials for member accounts."""
+    if not account_id or account_id == CENTRAL_ACCOUNT_ID:
+        return boto3.client('ec2', region_name=region)
+    creds = _get_cached_creds(account_id)
     return boto3.client(
         'ec2',
         region_name=region,
         aws_access_key_id=creds['AccessKeyId'],
         aws_secret_access_key=creds['SecretAccessKey'],
-        aws_session_token=creds['SessionToken']
+        aws_session_token=creds['SessionToken'],
     )
 
 

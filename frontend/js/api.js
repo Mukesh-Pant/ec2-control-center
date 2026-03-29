@@ -207,6 +207,13 @@ const API = (function () {
     return call('/labs/network-options?accountId=' + encodeURIComponent(accountId) + '&region=' + encodeURIComponent(region), 'GET', null);
   }
 
+  /**
+   * GET /labs/payment — get presigned URL for a lab's payment screenshot (admin only)
+   */
+  function getLabPaymentScreenshot(labId) {
+    return call('/labs/payment?labId=' + encodeURIComponent(labId), 'GET', null);
+  }
+
   return {
     call,
     ec2Action,
@@ -228,6 +235,7 @@ const API = (function () {
     getLabWindowsPassword,
     getLabPricing,
     getLabNetworkOptions,
+    getLabPaymentScreenshot,
   };
 
 })();

@@ -28,6 +28,11 @@ const App = (function () {
   function go(page) {
     if (!PAGE_TITLES[page]) return;
 
+    // Stop instance detail panel polling when navigating away from instances
+    if (currentPage === 'instances' && page !== 'instances') {
+      if (typeof Instances !== 'undefined' && Instances.closeDP) Instances.closeDP();
+    }
+
     document.querySelectorAll('.nitem').forEach(function (el) {
       el.classList.toggle('on', el.id === 'nav-' + page);
     });
@@ -274,8 +279,18 @@ const App = (function () {
     Backup.init();
     Labs.init();
     startClock();
+
+    // Show dashboard shell immediately — don't wait for instance data
     go('dashboard');
     log('Portal ready', 'sys');
+
+    // Inject skeleton rows so the user sees content placeholders while Lambda responds
+    var skRow = '<div class="skeleton-row"></div>';
+    var skel  = skRow + skRow + skRow;
+    var el;
+    el = document.getElementById('dash-list'); if (el) el.innerHTML = skel;
+    el = document.getElementById('ag-wrap');   if (el) el.innerHTML = skel;
+
     Instances.refresh();
   }
 

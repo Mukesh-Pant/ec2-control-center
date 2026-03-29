@@ -497,7 +497,7 @@
       <!-- Extension install banner (hidden until extension-check fires) -->
       <div id="ext-install-banner" class="ext-banner hidden">
         <span>&#9889; Install the EC2 Control Firefox Extension to enable one-click AWS Console login</span>
-        <a id="ext-install-link" href="#" target="_blank" rel="noopener noreferrer">Install Extension</a>
+        <a id="ext-install-link" href="https://addons.mozilla.org/firefox/addon/2993196/" target="_blank" rel="noopener noreferrer">Install Extension</a>
         <button onclick="document.getElementById('ext-install-banner').classList.add('hidden')" title="Dismiss">&#x2715;</button>
       </div>
 
@@ -1175,10 +1175,16 @@
           <div id="lbs-header">
             <div class="pv-hd">
               <div class="pv-title">EC2 Labs</div>
-              <button class="btn btn-blue" id="lbs-btn-new" onclick="Labs.startWizard()">
-                <svg viewBox="0 0 24 24" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Create New Lab
-              </button>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button class="btn btn-out" id="lbs-btn-refresh" onclick="Labs.refresh()" title="Refresh labs status">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  Refresh
+                </button>
+                <button class="btn btn-blue" id="lbs-btn-new" onclick="Labs.startWizard()">
+                  <svg viewBox="0 0 24 24" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Create New Lab
+                </button>
+              </div>
             </div>
           </div>
           <div id="lbs-list"></div>
@@ -1220,16 +1226,18 @@
 
 <script src="js/auth.js"></script>
 <script src="js/authui.js"></script>
-<script src="js/api.js"></script>
-<script src="js/instances.js"></script>
-<script src="js/audit.js"></script>
-<script src="js/accounts.js"></script>
-<script src="js/billing.js"></script>
-<script src="js/analytics.js"></script>
-<script src="js/users.js"></script>
-        <script src="js/backup.js"></script>
-<script src="js/labs.js"></script>
-<script src="js/app.js"></script>
+
+<!-- Deferred: executed in order after HTML parsing, before DOMContentLoaded -->
+<script defer src="js/api.js"></script>
+<script defer src="js/instances.js"></script>
+<script defer src="js/audit.js"></script>
+<script defer src="js/accounts.js"></script>
+<script defer src="js/billing.js"></script>
+<script defer src="js/analytics.js"></script>
+<script defer src="js/users.js"></script>
+<script defer src="js/backup.js"></script>
+<script defer src="js/labs.js"></script>
+<script defer src="js/app.js"></script>
 
 <script>
   // Show errors visually so we can debug a blank screen
@@ -1240,8 +1248,11 @@
     document.body.style.background = '#f1f5fb';
     document.body.innerHTML = '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;max-width:600px;font-family:sans-serif"><h2 style="color:#dc2626;margin:0 0 12px">JS Error</h2><p style="margin:0;font-family:monospace;font-size:13px;color:#1e2a3a">' + msg + '<br><span style="color:#8596ae">' + src + ':' + line + '</span></p></div>';
   };
-  // Bootstrap — start auth flow once all modules are loaded
-  Auth.init().catch(function(e) { window.onerror(e.message || String(e), 'auth.js', 0); });
+  // DOMContentLoaded fires after all deferred scripts have executed,
+  // guaranteeing App is defined before Auth._bootApp() calls App.init()
+  document.addEventListener('DOMContentLoaded', function () {
+    Auth.init().catch(function(e) { window.onerror(e.message || String(e), 'auth.js', 0); });
+  });
 </script>
 
 </body>

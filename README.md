@@ -20,6 +20,7 @@ A **production SaaS web portal** for managing EC2 instances across multiple AWS 
 | **RBAC** | Role-based access control via Cognito groups — admins, operators, viewers with per-account grants |
 | **Backup & Restore** | On-demand and scheduled EC2 backups via AWS Backup; restore to new instance or replace in place |
 | **Console Login** | One-click AWS Console access for any account — each account opens in an isolated Firefox container tab |
+| **Labs** | Self-service EC2 lab provisioning — 4-step wizard, payment upload, admin approval gate before EC2 launch |
 | **Custom Domain** | Serve on your own domain with apex redirect via CloudFront + ACM + Route 53 |
 | **Zero Infrastructure** | Fully serverless — API Gateway + Lambda + DynamoDB + S3 + CloudFront |
 
@@ -42,14 +43,15 @@ Cognito SDK (SRP) ──► auth.js (JWT tokens in sessionStorage)
 REST API Gateway (v1, REGIONAL, COGNITO_USER_POOLS authorizer)
   │
   ▼
-Lambda: ec2-controller (Python 3.12)
-  ├── STS AssumeRole → member accounts
+Lambda: ec2-controller (Python 3.12, 512 MB)
+  ├── STS AssumeRole → member accounts (credentials cached 10 min per container)
   ├── ThreadPoolExecutor → parallel multi-account/region queries
   ├── DynamoDB → account registry + audit logs + user-account RBAC
   ├── Cognito IdP → group management (admins/operators/viewers)
   ├── Cost Explorer → billing data
   ├── AWS Backup → ec2-control-vault-production (backup, schedule, restore)
-  └── AWS Federation API → console login URLs (STS AssumeRole → SigninToken)
+  ├── AWS Federation API → console login URLs (STS AssumeRole → SigninToken)
+  └── Labs EC2 provisioning (key pair + EIP, pending-approval gate)
 
 Console Login flow:
   Portal (Console Login button)
@@ -75,11 +77,12 @@ EC2-control-center/
 │   └── member-role-stack.yaml    ← Cross-account IAM role (deploy in each member account)
 ├── lambda/
 │   ├── ec2_controller/
-│   │   ├── index.py              ← Main handler: /ec2, /accounts, /audit, /pricing, /users, /backup, /console-login
+│   │   ├── index.py              ← Main handler: /ec2, /accounts, /audit, /pricing, /users, /backup, /console-login, /labs
 │   │   ├── accounts.py           ← Account registry (DynamoDB + STS AssumeRole)
 │   │   ├── audit.py              ← Audit log read/write
 │   │   ├── backup.py             ← AWS Backup: on-demand, schedules, restore, delete
 │   │   ├── console_login.py      ← Console login: STS AssumeRole → Federation API → SigninToken URL
+│   │   ├── labs.py               ← Labs: submit/approve/reject provisioning, EIP, payment view
 │   │   ├── pricing.py            ← EC2 on-demand pricing lookup
 │   │   └── utils.py              ← CORS helpers, JWT claims, error mapping, RBAC helpers
 │   ├── config_injector/
@@ -101,6 +104,7 @@ EC2-control-center/
 │       ├── accounts.js           ← Multi-account management + Console Login button
 │       ├── users.js              ← User management: roles, account grants (admin only)
 │       ├── backup.js             ← Backup dashboard: on-demand, schedules, restore
+│       ├── labs.js               ← Labs dashboard: 4-step wizard, pending-approval flow, admin controls
 │       ├── app.js                ← App init, tabs, toast, session timer, role badge, extension detection
 │       └── vendor/
 │           └── amazon-cognito-identity.min.js  ← Cognito SDK v6.3.12 (CDN fallback)
@@ -256,6 +260,59 @@ The Backup tab lets you create and manage EC2 backups powered by **AWS Backup**:
 Recovery points are stored in the central vault `ec2-control-vault-production`.
 
 > **Adding a new member account:** after onboarding via the Accounts tab, also add the account ARN to the vault `AccessPolicy` in `cloudformation/central-stack.yaml` and redeploy.
+
+---
+
+## Labs
+
+The **Labs** tab lets operators provision a dedicated EC2 instance for hands-on training, with an admin-gated approval workflow before any EC2 is launched.
+
+### How it works
+
+1. **Configure** — choose region, instance type (with vCPU/RAM specs shown), OS platform, storage, and usage duration (hours/day × months)
+2. **Pricing** — review the estimated cost breakdown and open the AWS Pricing Calculator for verification
+3. **Payment** — upload a payment screenshot as proof of funding
+4. **Submitted** — request is saved as `pending_approval`; no EC2 is launched yet
+
+An admin opens the **Pending** filter in the Labs tab, clicks the lab row to expand the inline detail panel, reviews the payment, and clicks **Approve** or **Reject**:
+- **Approve** → EC2 is provisioned (key pair created, instance launched, Elastic IP allocated), lab moves to `Running`
+- **Reject** → lab marked `Rejected`, no EC2 created
+
+### Labs dashboard
+
+The Labs tab shows a **filterable row-based table** instead of a flat card list:
+
+| Filter | Contents |
+|--------|----------|
+| **Active** | Running + Provisioning labs (default view) |
+| **Pending** | Labs awaiting admin approval |
+| **History** | Terminated + Rejected labs |
+| **All** | All labs; auto-selected if Active count = 0 |
+
+Clicking any row expands an **inline detail panel** directly beneath it showing Lab Info, connection details (SSH or RDP), Elastic IP allocation ID, and contextual action buttons. Only one panel is open at a time.
+
+### Access & download
+
+- Once running, click the lab row → expand panel → **Download .pem** for SSH access or **Download RDP File** for Windows
+- Windows labs support one-click **RDP password retrieval** from the expanded panel
+- Elastic IP allocation ID is shown in the expanded panel for reference
+- RBAC: operators provision labs for assigned accounts; admins approve and see all labs
+
+---
+
+## Performance
+
+The portal is optimised for fast initial load and low-latency multi-account operations:
+
+| Area | Optimisation |
+|------|-------------|
+| **STS credentials** | Assumed-role credentials are cached per-account for 10 min (thread-safe). A single `/ec2 list` request no longer fires a fresh `AssumeRole` for every account × thread. |
+| **boto3 clients** | All boto3 clients are module-level singletons — created once per warm Lambda container, not per request. |
+| **DynamoDB pagination** | All table scans paginate over `LastEvaluatedKey` to guarantee all records are returned regardless of table size. |
+| **Script loading** | Non-auth frontend modules use HTML `defer` — the browser parses the full page before downloading them, removing 1–3 s of blank-screen time. |
+| **Dashboard skeleton** | The dashboard renders immediately with shimmer placeholders while the instance list loads from Lambda. |
+| **Lambda memory** | Main Lambda runs at 512 MB (double the original 256 MB). Lambda CPU scales linearly with memory, reducing execution time for parallel operations by ~30–50%. |
+| **CloudFront edge** | `PriceClass_200` serves users in India, South-East Asia, and Japan from regional edge nodes instead of routing through Europe. |
 
 ---
 
