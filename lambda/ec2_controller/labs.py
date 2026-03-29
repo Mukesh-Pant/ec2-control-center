@@ -588,10 +588,21 @@ def _do_provision_ec2(fields, lab_id, estimated_cost, caller_email):
         try:
             eip_resp      = ec2.allocate_address(Domain='vpc')
             allocation_id = eip_resp['AllocationId']
+            logger.info('_do_provision_ec2: allocated EIP %s, waiting for instance %s to be running', allocation_id, instance_id)
+            # Instance must be in 'running' state before EIP can be associated
+            waiter = ec2.get_waiter('instance_running')
+            waiter.wait(
+                InstanceIds=[instance_id],
+                WaiterConfig={'Delay': 10, 'MaxAttempts': 18},  # up to 180 seconds
+            )
             ec2.associate_address(InstanceId=instance_id, AllocationId=allocation_id)
-            logger.info('_do_provision_ec2: allocated EIP %s for instance %s', allocation_id, instance_id)
+            logger.info('_do_provision_ec2: associated EIP %s to instance %s', allocation_id, instance_id)
         except Exception as e:
             logger.error('EIP allocation/association failed for instance %s: %s', instance_id, e)
+            # Release EIP if it was allocated
+            if allocation_id:
+                try: ec2.release_address(AllocationId=allocation_id)
+                except Exception: pass
             try: ec2.terminate_instances(InstanceIds=[instance_id])
             except Exception: pass
             try: ec2.delete_key_pair(KeyName=key_name)
@@ -1102,12 +1113,25 @@ def handle_labs_delete(event):
         creds = _get_member_creds(account_id)
         ec2   = _boto3_client('ec2', region, creds)
 
-        ec2.terminate_instances(InstanceIds=[instance_id])
-        logger.info('handle_labs_delete: terminated instance %s', instance_id)
+        if instance_id:
+            ec2.terminate_instances(InstanceIds=[instance_id])
+            logger.info('handle_labs_delete: terminated instance %s', instance_id)
 
         if allocation_id:
-            ec2.release_address(AllocationId=allocation_id)
-            logger.info('handle_labs_delete: released EIP %s', allocation_id)
+            # Disassociate EIP before releasing — required if instance is still in shutting-down state
+            try:
+                addr_resp = ec2.describe_addresses(AllocationIds=[allocation_id])
+                assoc_id  = addr_resp['Addresses'][0].get('AssociationId', '')
+                if assoc_id:
+                    ec2.disassociate_address(AssociationId=assoc_id)
+                    logger.info('handle_labs_delete: disassociated EIP %s (assoc %s)', allocation_id, assoc_id)
+            except Exception as e:
+                logger.warning('handle_labs_delete: could not disassociate EIP %s: %s', allocation_id, e)
+            try:
+                ec2.release_address(AllocationId=allocation_id)
+                logger.info('handle_labs_delete: released EIP %s', allocation_id)
+            except Exception as e:
+                logger.warning('handle_labs_delete: could not release EIP %s: %s', allocation_id, e)
 
         # Delete EC2 key pair in member account
         try:
