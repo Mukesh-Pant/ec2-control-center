@@ -2748,6 +2748,8 @@ code {
 @media (max-width: 480px) {
   .dash-quick-grid { grid-template-columns: repeat(2, 1fr); }
 }
+}
+.lbs-submitted-icon { font-size: 2.8rem; color: var(--green); line-height: 1; margin-bottom: 8px; }
 
 /* Skeleton loading rows — used while instance data loads from Lambda */
 .skeleton-row {
