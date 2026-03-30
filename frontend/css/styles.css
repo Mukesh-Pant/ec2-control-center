@@ -2714,6 +2714,41 @@ code {
   .lbs-stat-val  { font-size: 22px; }
 }
 
+/* ── Dashboard — Quick Actions grid ── */
+.dash-quick-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; padding: 4px 0 8px;
+}
+.dq-card {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 6px; padding: 14px 14px 12px;
+  background: var(--bg); border: 1px solid var(--bd);
+  border-radius: var(--rlg); cursor: pointer; text-align: left;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+  box-shadow: none;
+}
+.dq-card:hover {
+  background: var(--white); border-color: var(--blue3);
+  box-shadow: var(--shm);
+}
+.dq-ico {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.dq-ico.blue   { background: var(--bdim);  color: var(--blue);  }
+.dq-ico.green  { background: var(--gdim);  color: var(--green); }
+.dq-ico.amber  { background: var(--adim);  color: var(--amber); }
+.dq-ico.cyan   { background: var(--cdim);  color: var(--cyan);  }
+.dq-ico.violet { background: var(--vdim);  color: var(--violet);}
+.dq-ico.red    { background: var(--rdim);  color: var(--red);   }
+.dq-label { font-size: 13px; font-weight: 700; color: var(--ink); }
+.dq-sub   { font-size: 11px; color: var(--ink3); }
+
+@media (max-width: 480px) {
+  .dash-quick-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* Skeleton loading rows — used while instance data loads from Lambda */
 .skeleton-row {
   height: 38px;

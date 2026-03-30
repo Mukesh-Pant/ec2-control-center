@@ -1468,6 +1468,7 @@ const Labs = (function () {
     _viewPayment:        _viewPayment,
     _exitWizard:         _exitWizard,
     _onDurationInput:    _onDurationInput,
+    _onDateRangeChange:  _onDateRangeChange,
     _onPlatformChange:   _onPlatformChange,
     _loadNetworkOptions: _loadNetworkOptions,
     _onVpcChange:        _onVpcChange,

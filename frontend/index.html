@@ -567,21 +567,54 @@
           </div>
           <div class="card">
             <div class="card-hd">
-              <div class="card-title"><span class="cdot amber"></span>Activity Feed</div>
-              <button class="btn btn-ghost btn-xs" onclick="App.clearLog()">
-                <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>Clear
+              <div class="card-title"><span class="cdot blue"></span>Quick Actions</div>
+            </div>
+            <div class="dash-quick-grid">
+              <button class="dq-card" onclick="App.go('instances')">
+                <div class="dq-ico blue">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                </div>
+                <div class="dq-label">Instances</div>
+                <div class="dq-sub">Start, stop &amp; inspect</div>
+              </button>
+              <button class="dq-card" onclick="App.go('labs')">
+                <div class="dq-ico green">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </div>
+                <div class="dq-label">My Servers</div>
+                <div class="dq-sub">Provision lab servers</div>
+              </button>
+              <button class="dq-card" onclick="App.go('billing')">
+                <div class="dq-ico amber">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <div class="dq-label">Billing</div>
+                <div class="dq-sub">Cost &amp; usage estimates</div>
+              </button>
+              <button class="dq-card" onclick="App.go('backup')">
+                <div class="dq-ico cyan">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                </div>
+                <div class="dq-label">Backups</div>
+                <div class="dq-sub">Snapshots &amp; restores</div>
+              </button>
+              <button class="dq-card" onclick="App.go('audit')">
+                <div class="dq-ico violet">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                </div>
+                <div class="dq-label">Audit Log</div>
+                <div class="dq-sub">Full action history</div>
+              </button>
+              <button class="dq-card" onclick="App.go('analytics')">
+                <div class="dq-ico red">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                </div>
+                <div class="dq-label">Analytics</div>
+                <div class="dq-sub">Usage &amp; fleet health</div>
               </button>
             </div>
-            <div class="feed-wrap" id="feed-wrap">
-              <ul class="log-ul" id="log-ul">
-                <li class="log-li">
-                  <span class="log-t">--:--:--</span>
-                  <i class="log-d sys"></i>
-                  <span class="log-m">Portal initialised — ready</span>
-                  <span class="lchip sys">SYS</span>
-                </li>
-              </ul>
-            </div>
+            <!-- Hidden log target — app.js App.log() still works -->
+            <ul class="log-ul" id="log-ul" style="display:none"></ul>
           </div>
         </div>
       </div><!-- /dashboard -->
