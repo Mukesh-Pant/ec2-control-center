@@ -20,7 +20,7 @@ const App = (function () {
     accounts:  'Accounts',
     users:     'Users',
     backup:    'Backups',
-    labs:      'EC2 Labs',
+    labs:      'My Servers',
   };
 
   // ─── Navigation ────────────────────────────────────────────────────────────
