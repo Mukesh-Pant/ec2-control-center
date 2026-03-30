@@ -236,31 +236,56 @@ const Labs = (function () {
     });
 
     // ── Build HTML
+    if (activeLabs.length === 0) {
+      html += [
+        '<div class="lbs-onboard">',
+        '  <div class="lbs-onboard-hero">',
+        '    <div class="lbs-onboard-icon">&#128187;</div>',
+        '    <h2 class="lbs-onboard-title">No servers yet</h2>',
+        '    <p class="lbs-onboard-desc">Provision a dedicated cloud server for your training or project. Your server is ready within minutes once payment is verified by our team.</p>',
+        '    <button class="btn btn-blue" onclick="Labs.startWizard()">',
+        '      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+        '      Create Your First Server',
+        '    </button>',
+        '  </div>',
+        '  <div class="lbs-how-works">',
+        '    <div class="lbs-hw-heading">How it works</div>',
+        '    <div class="lbs-hw-steps">',
+        '      <div class="lbs-hw-step"><div class="lbs-hw-num">1</div><div><div class="lbs-hw-label">Configure</div><div class="lbs-hw-text">Choose your OS, instance type, storage, and the dates you need the server.</div></div></div>',
+        '      <div class="lbs-hw-step"><div class="lbs-hw-num">2</div><div><div class="lbs-hw-label">Pay</div><div class="lbs-hw-text">Review the estimated cost and complete payment via QR code. Upload a screenshot as proof.</div></div></div>',
+        '      <div class="lbs-hw-step"><div class="lbs-hw-num">3</div><div><div class="lbs-hw-label">Get approved</div><div class="lbs-hw-text">Our team verifies your payment (usually a few minutes) and provisions your server automatically.</div></div></div>',
+        '      <div class="lbs-hw-step"><div class="lbs-hw-num">4</div><div><div class="lbs-hw-label">Connect</div><div class="lbs-hw-text">Download your key pair and connect via SSH (Linux) or RDP (Windows). Your server stays live until the expiry date.</div></div></div>',
+        '    </div>',
+        '  </div>',
+        '</div>',
+      ].join('\n');
+      listEl.innerHTML = html;
+      return;
+    }
+
     var statsHtml = '<div class="lbs-stats-row">' +
       '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-ico lbs-stat-ico--blue"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg></div>' +
         '<div class="lbs-stat-val">' + counts.all + '</div>' +
         '<div class="lbs-stat-lbl">Total Servers</div>' +
       '</div>' +
       '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-ico lbs-stat-ico--green"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>' +
         '<div class="lbs-stat-val lbs-stat-green">' + counts.active + '</div>' +
         '<div class="lbs-stat-lbl">Active</div>' +
       '</div>' +
       '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-ico lbs-stat-ico--amber"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>' +
         '<div class="lbs-stat-val lbs-stat-amber">' + counts.pending + '</div>' +
         '<div class="lbs-stat-lbl">Pending Approval</div>' +
       '</div>' +
       '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-ico lbs-stat-ico--gray"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></div>' +
         '<div class="lbs-stat-val lbs-stat-gray">' + (counts.history || 0) + '</div>' +
         '<div class="lbs-stat-lbl">Archived</div>' +
       '</div>' +
     '</div>';
     var html = statsHtml + _renderFilterBar(counts);
-
-    if (activeLabs.length === 0) {
-      html += '<div class="lbs-empty">No servers yet. Click &ldquo;New Server&rdquo; to get started.</div>';
-      listEl.innerHTML = html;
-      return;
-    }
 
     if (visible.length === 0) {
       var emptyMsg = {
@@ -280,7 +305,7 @@ const Labs = (function () {
     html += '<table class="lbs-tbl">';
     html += '<thead class="lbs-tbl-head"><tr>';
     html += '<th></th>';
-    html += '<th>Lab Name</th>';
+    html += '<th>Server Name</th>';
     html += '<th>Platform</th>';
     html += '<th>Instance</th>';
     html += '<th>Status</th>';
@@ -429,7 +454,7 @@ const Labs = (function () {
     // ── Elastic IP field
     var eipValue;
     if (lab.elasticIp && lab.allocationId) {
-      eipValue = _esc(ip || '\u2014') + ' <span style="color:#5a7aa8;font-size:11px;">(alloc: ' + _esc(lab.allocationId) + ')</span>';
+      eipValue = _esc(ip || '\u2014') + ' <span style="color:var(--ink3);font-size:11px;">(alloc: ' + _esc(lab.allocationId) + ')</span>';
     } else if (lab.elasticIp) {
       eipValue = 'Requested';
     } else {
@@ -463,7 +488,7 @@ const Labs = (function () {
     var html = '<div class="lbs-detail-panel">' +
       '<button class="lbs-detail-close" onclick="Labs._toggleRowDetail(\'' + labIdEsc + '\')" title="Close">\u2715</button>' +
       '<div class="lbs-detail-section">' +
-        '<div class="lbs-detail-section-title">Lab Info</div>' +
+        '<div class="lbs-detail-section-title">Server Details</div>' +
         '<div class="lbs-detail-info-grid">' + infoHtml + '</div>' +
       '</div>';
 
@@ -476,7 +501,7 @@ const Labs = (function () {
         connHtml =
           '<button class="btn btn-sm btn-outline" onclick="Labs._downloadRdp(\'' + labIdEsc + '\')">Download RDP File</button>' +
           '<button class="btn btn-sm btn-outline" onclick="Labs._getWindowsPassword(\'' + labIdEsc + '\')">Get Windows Password</button>' +
-          '<div id="lbs-win-pass-' + labIdEsc + '" style="display:none;margin-top:10px;padding:10px;background:#141820;border-radius:6px;border:1px solid rgba(126,179,255,.15);"></div>';
+          '<div id="lbs-win-pass-' + labIdEsc + '" class="lbs-code-block" style="display:none;margin-top:10px;"></div>';
       } else {
         connHtml =
           '<div class="lbs-code-block" style="margin-bottom:10px;">' + _esc(sshCmd) + '</div>' +
@@ -490,10 +515,10 @@ const Labs = (function () {
       // ── Actions section
       var actionBtns = '<button class="btn btn-sm btn-outline" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Lab Info (.txt)</button>';
       if (isAdmin) {
-        actionBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Lab</button>';
+        actionBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>';
       }
       html += '<div class="lbs-detail-section">' +
-        '<div class="lbs-detail-section-title">Actions</div>' +
+        '<div class="lbs-detail-section-title">Manage Server</div>' +
         '<div class="lbs-detail-actions">' + actionBtns + '</div>' +
         '</div>';
     }
@@ -501,11 +526,25 @@ const Labs = (function () {
     // ── Provisioning status
     if (lab.status === 'provisioning') {
       html += '<div class="lbs-detail-section">' +
-        '<div class="lbs-provision-step lbs-provision-step--active">Provisioning \u2014 EC2 instance is being prepared&hellip;</div>' +
+        '<div class="lbs-prov-card">' +
+          '<div class="lbs-prov-header">' +
+            '<div class="lbs-prov-spinner"></div>' +
+            '<div>' +
+              '<div class="lbs-prov-title">Setting up your server&hellip;</div>' +
+              '<div class="lbs-prov-sub">This typically takes 2&ndash;5 minutes. Status updates automatically.</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="lbs-pv-timeline">' +
+            '<div class="lbs-pv-step lbs-pv-done"><span class="lbs-pv-dot"></span><span>Payment verified &amp; approved</span></div>' +
+            '<div class="lbs-pv-step lbs-pv-active"><span class="lbs-pv-dot"></span><span>Creating server resources (key pair, network, storage)</span></div>' +
+            '<div class="lbs-pv-step"><span class="lbs-pv-dot"></span><span>Configuring network &amp; security</span></div>' +
+            '<div class="lbs-pv-step"><span class="lbs-pv-dot"></span><span>Launching EC2 instance</span></div>' +
+          '</div>' +
+        '</div>' +
         '</div>';
       if (isAdmin) {
         html += '<div class="lbs-detail-section">' +
-          '<div class="lbs-detail-actions"><button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Lab</button></div>' +
+          '<div class="lbs-detail-actions"><button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button></div>' +
           '</div>';
       }
     }
@@ -513,12 +552,20 @@ const Labs = (function () {
     // ── Pending approval actions
     if (lab.status === 'pending_approval') {
       if (isAdmin) {
+        var costMeta  = lab.estimatedCost != null ? ' &middot; ' + _esc(_npmFmt(Number(lab.estimatedCost))) : '';
+        var submitter = _esc(lab.userEmail || lab.callerEmail || '\u2014');
         html += '<div class="lbs-detail-section">' +
-          '<div class="lbs-detail-section-title">Admin Actions</div>' +
-          '<div class="lbs-detail-actions">' +
-            '<button class="btn btn-sm btn-outline" onclick="Labs._viewPayment(\'' + labIdEsc + '\')">View Payment</button>' +
-            '<button class="btn btn-sm btn-blue" onclick="Labs._approveLab(\'' + labIdEsc + '\')">Approve</button>' +
-            '<button class="btn btn-sm btn-danger" onclick="Labs._rejectLab(\'' + labIdEsc + '\')">Reject</button>' +
+          '<div class="lbs-detail-section-title">Payment Review</div>' +
+          '<div class="lbs-review-card">' +
+            '<div class="lbs-review-top">' +
+              '<span class="lbs-review-badge">&#9679; Awaiting Your Review</span>' +
+              '<span class="lbs-review-meta">Submitted by ' + submitter + costMeta + '</span>' +
+            '</div>' +
+            '<div class="lbs-review-actions">' +
+              '<button class="btn btn-sm btn-outline" onclick="Labs._viewPayment(\'' + labIdEsc + '\')">&#128247; View Payment Screenshot</button>' +
+              '<button class="btn btn-sm btn-success" onclick="Labs._approveLab(\'' + labIdEsc + '\')">&#10003; Approve &amp; Provision</button>' +
+              '<button class="btn btn-sm btn-danger" onclick="Labs._rejectLab(\'' + labIdEsc + '\')">&#10007; Reject</button>' +
+            '</div>' +
           '</div>' +
           '</div>';
       } else {
@@ -527,7 +574,7 @@ const Labs = (function () {
             '<div class="lbs-verification-icon">&#128269;</div>' +
             '<div>' +
               '<h4 class="lbs-verification-title">Payment Verification in Progress</h4>' +
-              '<p class="lbs-verification-msg">Your payment is being reviewed by our team. Your server will be provisioned automatically once the payment is confirmed. This typically takes a few minutes.</p>' +
+              '<p class="lbs-verification-msg">Your payment is being reviewed by our team. Your server will be provisioned automatically once payment is confirmed &mdash; this usually takes a few minutes. You\'ll see the status change to <b>Provisioning</b> here.</p>' +
             '</div>' +
           '</div>' +
           '</div>';
@@ -1045,14 +1092,14 @@ const Labs = (function () {
       '  <div class="lbs-wizard-body">',
       '    <div class="lbs-payment-amount"><span style="font-size:13px;font-weight:400;color:var(--ink3);display:block;margin-bottom:4px;">Amount Due</span>' + _esc(totalStr) + '</div>',
       '    <div class="lbs-qr-wrap">',
-      '      <img src="PaymentQR.jpeg" alt="Payment QR Code" class="lbs-qr-img">',
+      '      <img src="PaymentQR.png" alt="Payment QR Code" class="lbs-qr-img">',
       '    </div>',
       '    <div class="lbs-form-row" style="margin-top:16px;">',
       '      <label class="lbs-label">Upload Payment Screenshot (JPG / PNG, max 5 MB)</label>',
       '      <input type="file" id="lbs-s3-screenshot" accept="image/jpeg,image/png,image/webp" onchange="Labs._onScreenshotChange()">',
       '    </div>',
       '    <div id="lbs-s3-preview" style="display:none; margin-top:8px;">',
-      '      <img id="lbs-s3-preview-img" style="max-width:200px; max-height:200px; border-radius:6px; border:1px solid #444;">',
+      '      <img id="lbs-s3-preview-img" style="max-width:200px; max-height:200px; border-radius:6px; border:1px solid var(--bd2);">',
       '    </div>',
       '    <p id="lbs-s3-status" class="lbs-help-text"></p>',
       '    <button class="btn btn-blue" id="lbs-s3-submit" onclick="Labs.submitPayment()" style="margin-top:8px;">',

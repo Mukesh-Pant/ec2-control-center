@@ -2751,6 +2751,89 @@ code {
 }
 .lbs-submitted-icon { font-size: 2.8rem; color: var(--green); line-height: 1; margin-bottom: 8px; }
 
+/* ── My Servers — empty-state onboarding card ── */
+.lbs-onboard { max-width: 760px; }
+.lbs-onboard-hero {
+  text-align: center; padding: 36px 24px 28px;
+  background: var(--white); border: 1px solid var(--bd);
+  border-radius: var(--rlg); box-shadow: var(--sh); margin-bottom: 14px;
+}
+.lbs-onboard-icon { font-size: 2.6rem; margin-bottom: 10px; line-height: 1; }
+.lbs-onboard-title { font-size: 20px; font-weight: 800; color: var(--ink); margin: 0 0 8px; letter-spacing: -.3px; }
+.lbs-onboard-desc {
+  font-size: 14px; color: var(--ink3); margin: 0 auto 22px;
+  line-height: 1.6; max-width: 480px;
+}
+.lbs-how-works {
+  background: var(--white); border: 1px solid var(--bd);
+  border-radius: var(--rlg); padding: 20px 24px; box-shadow: var(--sh);
+}
+.lbs-hw-heading {
+  font-size: 11px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--blue); margin: 0 0 16px;
+}
+.lbs-hw-steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 28px; }
+.lbs-hw-step  { display: flex; align-items: flex-start; gap: 12px; }
+.lbs-hw-num {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--bdim); color: var(--blue);
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid rgba(37,99,235,.22);
+}
+.lbs-hw-label { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 2px; }
+.lbs-hw-text  { font-size: 12px; color: var(--ink3); line-height: 1.55; }
+
+/* ── My Servers — provisioning timeline card ── */
+.lbs-prov-card {
+  background: var(--bdim); border: 1px solid var(--blue3);
+  border-radius: var(--rlg); padding: 18px 20px;
+}
+.lbs-prov-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.lbs-prov-spinner {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  border: 3px solid var(--bdim); border-top-color: var(--blue);
+  animation: lbs-spin .8s linear infinite;
+}
+@keyframes lbs-spin { to { transform: rotate(360deg); } }
+.lbs-prov-title { font-size: 14px; font-weight: 700; color: var(--ink); }
+.lbs-prov-sub   { font-size: 12px; color: var(--ink3); margin-top: 2px; }
+.lbs-pv-timeline { display: flex; flex-direction: column; gap: 10px; padding-left: 4px; }
+.lbs-pv-step {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: var(--ink4);
+}
+.lbs-pv-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid var(--bd2); flex-shrink: 0; background: var(--white);
+}
+.lbs-pv-step.lbs-pv-done { color: var(--green); }
+.lbs-pv-step.lbs-pv-done .lbs-pv-dot { background: var(--green); border-color: var(--green); }
+.lbs-pv-step.lbs-pv-active { color: var(--blue2); font-weight: 600; }
+.lbs-pv-step.lbs-pv-active .lbs-pv-dot {
+  background: var(--blue2); border-color: var(--blue2);
+  animation: lbs-pulse .9s ease-in-out infinite alternate;
+}
+
+/* ── My Servers — admin payment review card ── */
+.lbs-review-card {
+  background: var(--white); border: 1px solid var(--bd);
+  border-radius: var(--rlg); padding: 16px 18px; box-shadow: var(--sh);
+}
+.lbs-review-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.lbs-review-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--adim); color: var(--amber);
+  border: 1px solid rgba(217,119,6,.25); border-radius: 20px;
+  font-size: 12px; font-weight: 700; padding: 4px 12px;
+}
+.lbs-review-meta { font-size: 12px; color: var(--ink3); }
+.lbs-review-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 600px) {
+  .lbs-hw-steps { grid-template-columns: 1fr; }
+}
+
 /* Skeleton loading rows — used while instance data loads from Lambda */
 .skeleton-row {
   height: 38px;
