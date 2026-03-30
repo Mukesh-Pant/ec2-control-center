@@ -19,10 +19,10 @@ const Labs = (function () {
   var _activeFilter = 'active'; // current filter pill: 'all'|'active'|'pending'|'history'
   var _expandedLabId = null;   // labId of currently expanded row, or null
 
-  var USD_TO_NPR = 135;
+  function _getNprRate() { return (window.NPR_RATE && window.NPR_RATE > 0) ? window.NPR_RATE : 135; }
   function _npmFmt(usd) {
     if (usd == null || usd <= 0) return '\u2014';
-    return 'NPR\u00a0' + (usd * USD_TO_NPR).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return 'NPR\u00a0' + (usd * _getNprRate()).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   // ─── Display maps
@@ -462,9 +462,12 @@ const Labs = (function () {
     }
 
     // ── Lab Info section (always shown)
+    var stateLabel = STATUS_LABELS[lab.status] || lab.status;
+    var stateClass = STATUS_CLASSES[lab.status] || 'lbs-badge--gray';
     var infoItems = [
       { label: 'Lab ID',        value: '<code style="font-size:12px;user-select:all;">' + labIdEsc + '</code>' },
       { label: 'Instance ID',   value: _esc(lab.instanceId || '\u2014') },
+      { label: 'State',         value: '<span class="lbs-badge ' + stateClass + '">' + _esc(stateLabel) + '</span>' },
       { label: 'Created',       value: _esc(createdAt) },
       { label: 'Estimated Cost',value: _esc(costStr) },
       { label: 'Public IP',     value: _esc(ip || '\u2014') },
@@ -514,6 +517,7 @@ const Labs = (function () {
 
       // ── Actions section
       var actionBtns = '<button class="btn btn-sm btn-outline" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Lab Info (.txt)</button>';
+      actionBtns += ' <a class="btn btn-sm btn-outline" href="#" onclick="App.go(\'instances\');return false;">View in Instances Tab</a>';
       if (isAdmin) {
         actionBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>';
       }
@@ -1360,7 +1364,7 @@ const Labs = (function () {
           '  <div class="lbs-info-label">RDP Connection</div>',
           '  <button class="btn btn-outline btn-sm" onclick="Labs._downloadRdp(\'' + labIdEsc + '\')">Download RDP File</button>',
           '  <button class="btn btn-outline btn-sm" onclick="Labs._getWindowsPassword(\'' + labIdEsc + '\')" style="margin-left:8px;">Get Windows Password</button>',
-          '  <div id="lbs-win-pass" style="display:none; margin-top:10px; padding:10px; background:#1e2430; border-radius:6px;"></div>',
+          '  <div id="lbs-win-pass-' + labIdEsc + '" class="lbs-code-block" style="display:none;margin-top:10px;"></div>',
           '</div>',
         ].join('\n')
       : [
@@ -1431,16 +1435,16 @@ const Labs = (function () {
 
   async function _getWindowsPassword(labId) {
     var passEl = document.getElementById('lbs-win-pass-' + labId);
-    if (passEl) { passEl.style.display = ''; passEl.innerHTML = '<span style="color:#fff;">Retrieving password\u2026</span>'; }
+    if (passEl) { passEl.style.display = ''; passEl.innerHTML = '<span style="color:var(--ink3);">Retrieving password\u2026</span>'; }
     try {
       var res  = await API.getLabWindowsPassword(labId);
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to get Windows password');
       if (passEl) {
-        passEl.innerHTML = '<b style="color:#fff;">Password:</b> <code style="user-select:all; font-size:15px;">' + _esc(data.password) + '</code>';
+        passEl.innerHTML = '<b style="color:var(--ink2);">Password:</b> <code style="user-select:all; font-size:15px;">' + _esc(data.password) + '</code>';
       }
     } catch (e) {
-      if (passEl) passEl.innerHTML = '<span style="color:#fff;">Error: ' + _esc(e.message) + ' (password may not be ready \u2014 wait 4+ minutes after launch)</span>';
+      if (passEl) passEl.innerHTML = '<span style="color:var(--ink3);">Error: ' + _esc(e.message) + ' (password may not be ready \u2014 wait 4+ minutes after launch)</span>';
       App.showToast('Password retrieval failed: ' + e.message, 'err');
     }
   }
