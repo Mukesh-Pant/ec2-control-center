@@ -19,6 +19,12 @@ const Labs = (function () {
   var _activeFilter = 'active'; // current filter pill: 'all'|'active'|'pending'|'history'
   var _expandedLabId = null;   // labId of currently expanded row, or null
 
+  var USD_TO_NPR = 135;
+  function _npmFmt(usd) {
+    if (usd == null || usd <= 0) return '\u2014';
+    return 'NPR\u00a0' + (usd * USD_TO_NPR).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   // ─── Display maps
 
   var PLATFORM_LABELS = {
@@ -230,10 +236,28 @@ const Labs = (function () {
     });
 
     // ── Build HTML
-    var html = _renderFilterBar(counts);
+    var statsHtml = '<div class="lbs-stats-row">' +
+      '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-val">' + counts.all + '</div>' +
+        '<div class="lbs-stat-lbl">Total Servers</div>' +
+      '</div>' +
+      '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-val lbs-stat-green">' + counts.active + '</div>' +
+        '<div class="lbs-stat-lbl">Active</div>' +
+      '</div>' +
+      '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-val lbs-stat-amber">' + counts.pending + '</div>' +
+        '<div class="lbs-stat-lbl">Pending Approval</div>' +
+      '</div>' +
+      '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-val lbs-stat-gray">' + (counts.history || 0) + '</div>' +
+        '<div class="lbs-stat-lbl">Archived</div>' +
+      '</div>' +
+    '</div>';
+    var html = statsHtml + _renderFilterBar(counts);
 
     if (activeLabs.length === 0) {
-      html += '<div class="lbs-empty">No labs yet. Click &ldquo;+ Create New Lab&rdquo; to get started.</div>';
+      html += '<div class="lbs-empty">No servers yet. Click &ldquo;New Server&rdquo; to get started.</div>';
       listEl.innerHTML = html;
       return;
     }
@@ -397,7 +421,7 @@ const Labs = (function () {
     var isWindows     = lab.platform === 'windows';
     var platformLabel = PLATFORM_LABELS[lab.platform] || lab.platform;
     var ip            = lab.publicIp || lab.publicDns || '';
-    var costStr       = lab.estimatedCost != null ? '$' + Number(lab.estimatedCost).toFixed(4) + ' USD' : '\u2014';
+    var costStr       = lab.estimatedCost != null ? _npmFmt(Number(lab.estimatedCost)) : '\u2014';
     var expiry        = lab.expiresAt ? _formatExpiry(lab.expiresAt) : '\u2014';
     var createdAt     = lab.createdAt ? new Date(lab.createdAt).toUTCString() : '\u2014';
     var storageStr    = lab.storageGb ? lab.storageGb + ' GB' : '\u2014';
@@ -499,7 +523,13 @@ const Labs = (function () {
           '</div>';
       } else {
         html += '<div class="lbs-detail-section">' +
-          '<div class="lbs-help-text" style="color:#ffd166;">Awaiting admin approval&hellip;</div>' +
+          '<div class="lbs-verification-notice">' +
+            '<div class="lbs-verification-icon">&#128269;</div>' +
+            '<div>' +
+              '<h4 class="lbs-verification-title">Payment Verification in Progress</h4>' +
+              '<p class="lbs-verification-msg">Your payment is being reviewed by our team. Your server will be provisioned automatically once the payment is confirmed. This typically takes a few minutes.</p>' +
+            '</div>' +
+          '</div>' +
           '</div>';
       }
     }
@@ -626,7 +656,7 @@ const Labs = (function () {
     container.innerHTML = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
-      '    <h2 class="lbs-wizard-title">Create Lab — Step 1: Configure</h2>',
+      '    <h2 class="lbs-wizard-title">New Server — Step 1: Configure</h2>',
       '    <div class="lbs-steps">',
       '      <span class="lbs-step lbs-step--active">1</span>',
       '      <span class="lbs-step">2</span>',
@@ -665,17 +695,19 @@ const Labs = (function () {
       '      <input type="checkbox" id="lbs-s1-eip"' + eipChecked + '>',
       '    </div>',
       '    <div class="lbs-form-row">',
-      '      <label class="lbs-label">Duration</label>',
+      '      <label class="lbs-label">Server Duration</label>',
       '      <div class="lbs-duration-grid">',
       '        <div>',
-      '          <span class="lbs-sublabel">Hours I use it per day</span>',
-      '          <input type="number" id="lbs-s1-hours-day" class="lbs-input" min="1" max="24"',
-      '                 value="' + (wizardConfig.hoursPerDay || 8) + '" oninput="Labs._onDurationInput()">',
+      '          <span class="lbs-sublabel">Start Date</span>',
+      '          <input type="date" id="lbs-s1-start-date" class="lbs-input"',
+      '                 value="' + (wizardConfig.startDate || _todayStr()) + '" min="' + _todayStr() + '"',
+      '                 oninput="Labs._onDateRangeChange()">',
       '        </div>',
       '        <div>',
-      '          <span class="lbs-sublabel">For how many months</span>',
-      '          <input type="number" id="lbs-s1-months" class="lbs-input" min="1" max="36"',
-      '                 value="' + (wizardConfig.months || 1) + '" oninput="Labs._onDurationInput()">',
+      '          <span class="lbs-sublabel">End Date</span>',
+      '          <input type="date" id="lbs-s1-end-date" class="lbs-input"',
+      '                 value="' + (wizardConfig.endDate || _tomorrowStr()) + '" min="' + _tomorrowStr() + '"',
+      '                 oninput="Labs._onDateRangeChange()">',
       '        </div>',
       '      </div>',
       '      <p id="lbs-s1-duration-preview" class="lbs-help-text" style="margin-top:4px;"></p>',
@@ -706,19 +738,38 @@ const Labs = (function () {
     ].join('\n');
   }
 
-  function _onDurationInput() {
-    var h = parseInt((document.getElementById('lbs-s1-hours-day') || {}).value, 10) || 0;
-    var m = parseInt((document.getElementById('lbs-s1-months')    || {}).value, 10) || 0;
-    var preview = document.getElementById('lbs-s1-duration-preview');
-    if (preview) {
-      if (h > 0 && m > 0) {
-        var total = h * 30 * m;
-        preview.textContent = 'Total: ' + h + ' hrs/day \u00d7 ' + m + ' month' + (m === 1 ? '' : 's') + ' = ' + total.toLocaleString() + ' hours';
+  function _todayStr() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function _tomorrowStr() {
+    var d = new Date(); d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function _onDateRangeChange() {
+    var startEl  = document.getElementById('lbs-s1-start-date');
+    var endEl    = document.getElementById('lbs-s1-end-date');
+    var preview  = document.getElementById('lbs-s1-duration-preview');
+    if (!startEl || !endEl || !preview) return;
+    var start = startEl.value;
+    var end   = endEl.value;
+    if (start && end) {
+      var days = Math.round((new Date(end) - new Date(start)) / 86400000);
+      if (days <= 0) {
+        preview.textContent = 'End date must be after start date.';
+        preview.style.color = 'var(--red)';
       } else {
-        preview.textContent = '';
+        preview.style.color = '';
+        preview.textContent = start + ' \u2192 ' + end + ' \u2014 ' + days + ' day' + (days === 1 ? '' : 's') + ' (' + (days * 24).toLocaleString() + ' hours)';
       }
+    } else {
+      preview.textContent = '';
     }
   }
+
+  // Keep old function name as alias so any stray callers don't break
+  function _onDurationInput() { _onDateRangeChange(); }
 
   function _onPlatformChange() {
     var radios = document.querySelectorAll('input[name="lbs-platform"]');
@@ -810,9 +861,12 @@ const Labs = (function () {
     var subnetId        = (document.getElementById('lbs-s1-subnet')    || {}).value || '';
     var securityGroupId = (document.getElementById('lbs-s1-sg')        || {}).value || '';
     var vpcId           = (document.getElementById('lbs-s1-vpc')       || {}).value || '';
-    var hoursPerDay     = parseInt((document.getElementById('lbs-s1-hours-day') || {}).value, 10);
-    var months          = parseInt((document.getElementById('lbs-s1-months')    || {}).value, 10);
-    var durationHours   = hoursPerDay * 30 * months;
+    var startDate     = ((document.getElementById('lbs-s1-start-date') || {}).value || '').trim();
+    var endDate       = ((document.getElementById('lbs-s1-end-date')   || {}).value || '').trim();
+    var totalDays     = startDate && endDate ? Math.round((new Date(endDate) - new Date(startDate)) / 86400000) : 0;
+    var hoursPerDay   = 24;
+    var months        = Math.max(1, Math.ceil(totalDays / 30));
+    var durationHours = totalDays * 24;
 
     var platform = '';
     var radios   = document.querySelectorAll('input[name="lbs-platform"]');
@@ -826,11 +880,14 @@ const Labs = (function () {
     if (!storageGb || storageGb < minStorage || storageGb > 500) {
       App.showToast('Storage must be between ' + minStorage + ' and 500 GB', 'err'); return false;
     }
-    if (!hoursPerDay || isNaN(hoursPerDay) || hoursPerDay < 1 || hoursPerDay > 24) {
-      App.showToast('Hours per day must be between 1 and 24', 'err'); return false;
+    if (!startDate || !endDate) {
+      App.showToast('Select a start and end date for your server', 'err'); return false;
     }
-    if (!months || isNaN(months) || months < 1 || months > 36) {
-      App.showToast('Months must be between 1 and 36', 'err'); return false;
+    if (totalDays <= 0) {
+      App.showToast('End date must be after start date', 'err'); return false;
+    }
+    if (months > 36) {
+      App.showToast('Server duration cannot exceed 36 months (3 years)', 'err'); return false;
     }
     if (!subnetId) {
       App.showToast('Select a subnet (click "Load Network Options" first)', 'err'); return false;
@@ -853,6 +910,9 @@ const Labs = (function () {
       hoursPerDay:      hoursPerDay,
       months:           months,
       durationHours:    durationHours,
+      startDate:        startDate,
+      endDate:          endDate,
+      totalDays:        totalDays,
     };
     return true;
   }
@@ -863,7 +923,7 @@ const Labs = (function () {
     container.innerHTML = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
-      '    <h2 class="lbs-wizard-title">Create Lab — Step 2: Pricing Review</h2>',
+      '    <h2 class="lbs-wizard-title">New Server — Step 2: Pricing Review</h2>',
       '    <div class="lbs-steps">',
       '      <span class="lbs-step lbs-step--done">1</span>',
       '      <span class="lbs-step lbs-step--active">2</span>',
@@ -905,21 +965,24 @@ const Labs = (function () {
       var durationHours = wizardConfig.durationHours;
       wizardConfig.estimatedCost = b.totalUsd;
 
-      var durationLabel = hoursPerDay + ' hrs/day \u00d7 ' + months + ' month' + (months === 1 ? '' : 's') + ' = ' + durationHours.toLocaleString() + ' hrs';
+      var startDate     = wizardConfig.startDate || '';
+      var endDate       = wizardConfig.endDate   || '';
+      var totalDays     = wizardConfig.totalDays || Math.round(durationHours / 24);
+      var durationLabel = startDate + ' \u2192 ' + endDate + ' (' + totalDays + ' days, ' + durationHours.toLocaleString() + ' hrs)';
 
       var rows = [
         '<tr><td>' + _esc(wizardConfig.instanceType) + ' EC2</td>' +
           '<td>$' + b.ec2Hourly.toFixed(4) + '/hr</td>' +
-          '<td>$' + b.ec2Cost.toFixed(4) + '</td></tr>',
+          '<td>' + _npmFmt(b.ec2Cost) + '</td></tr>',
         '<tr><td>EBS gp3 (' + _esc(String(wizardConfig.storageGb)) + ' GB)</td>' +
           '<td>$' + b.ebsPerGbMonth.toFixed(4) + '/GB-mo</td>' +
-          '<td>$' + b.ebsCost.toFixed(4) + '</td></tr>',
+          '<td>' + _npmFmt(b.ebsCost) + '</td></tr>',
       ];
       if (wizardConfig.elasticIp) {
         rows.push(
           '<tr><td>Elastic IP</td>' +
           '<td>$' + b.eipHourly.toFixed(4) + '/hr</td>' +
-          '<td>$' + b.eipCost.toFixed(4) + '</td></tr>'
+          '<td>' + _npmFmt(b.eipCost) + '</td></tr>'
         );
       }
 
@@ -933,7 +996,7 @@ const Labs = (function () {
         '  <tfoot>',
         '    <tr class="lbs-price-total">',
         '      <td colspan="2"><b>Total (' + _esc(durationLabel) + ')</b></td>',
-        '      <td><b>$' + b.totalUsd.toFixed(4) + ' USD</b></td>',
+        '      <td><b>' + _npmFmt(b.totalUsd) + '</b></td>',
         '    </tr>',
         '  </tfoot>',
         '</table>',
@@ -944,7 +1007,7 @@ const Labs = (function () {
         '    <li>Region: ' + _esc(regionLabel) + '</li>',
         '    <li>Operating System: ' + _esc(osLabel) + '</li>',
         '    <li>Instance Type: ' + _esc(wizardConfig.instanceType) + '</li>',
-        '    <li>Usage: ' + _esc(String(hoursPerDay)) + ' hrs/day (Constant usage)</li>',
+        '    <li>Duration: ' + _esc(String(totalDays)) + ' days (' + _esc(startDate) + ' \u2192 ' + _esc(endDate) + ')</li>',
         '    <li>EBS: ' + _esc(String(wizardConfig.storageGb)) + ' GB gp3</li>',
         '  </ul>',
         '  <a href="https://calculator.aws/#/createCalculator/ec2-enhancement" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">',
@@ -965,13 +1028,13 @@ const Labs = (function () {
 
   function _renderStep3(container) {
     var totalStr = wizardConfig.estimatedCost != null
-      ? '$' + Number(wizardConfig.estimatedCost).toFixed(4) + ' USD'
+      ? _npmFmt(Number(wizardConfig.estimatedCost))
       : '—';
 
     container.innerHTML = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
-      '    <h2 class="lbs-wizard-title">Create Lab — Step 3: Payment</h2>',
+      '    <h2 class="lbs-wizard-title">New Server — Step 3: Payment</h2>',
       '    <div class="lbs-steps">',
       '      <span class="lbs-step lbs-step--done">1</span>',
       '      <span class="lbs-step lbs-step--done">2</span>',
@@ -980,7 +1043,7 @@ const Labs = (function () {
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-body">',
-      '    <div class="lbs-payment-amount">Please pay <strong>' + _esc(totalStr) + '</strong></div>',
+      '    <div class="lbs-payment-amount"><span style="font-size:13px;font-weight:400;color:var(--ink3);display:block;margin-bottom:4px;">Amount Due</span>' + _esc(totalStr) + '</div>',
       '    <div class="lbs-qr-wrap">',
       '      <img src="PaymentQR.jpeg" alt="Payment QR Code" class="lbs-qr-img">',
       '    </div>',
@@ -993,10 +1056,10 @@ const Labs = (function () {
       '    </div>',
       '    <p id="lbs-s3-status" class="lbs-help-text"></p>',
       '    <button class="btn btn-blue" id="lbs-s3-submit" onclick="Labs.submitPayment()" style="margin-top:8px;">',
-      '      I\'ve Paid — Submit Screenshot',
+      '      Upload Payment Confirmation',
       '    </button>',
       '    <div id="lbs-s3-proceed" style="display:none; margin-top:12px;">',
-      '      <button class="btn btn-blue" onclick="Labs.nextStep()">Submit Lab Request</button>',
+      '      <button class="btn btn-blue" onclick="Labs.nextStep()">Submit Server Request</button>',
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-footer">',
@@ -1057,12 +1120,12 @@ const Labs = (function () {
 
   function _renderStep4(container) {
     var costStr = wizardConfig.estimatedCost != null
-      ? '$' + Number(wizardConfig.estimatedCost).toFixed(4) + ' USD' : '';
+      ? _npmFmt(Number(wizardConfig.estimatedCost)) : '';
 
     container.innerHTML = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
-      '    <h2 class="lbs-wizard-title">Create Lab — Step 4: Request Submitted</h2>',
+      '    <h2 class="lbs-wizard-title">New Server — Step 4: Submitted</h2>',
       '    <div class="lbs-steps">',
       '      <span class="lbs-step lbs-step--done">1</span>',
       '      <span class="lbs-step lbs-step--done">2</span>',
@@ -1073,16 +1136,15 @@ const Labs = (function () {
       '  <div class="lbs-wizard-body">',
       '    <div class="lbs-submitted-banner">',
       '      <div class="lbs-submitted-icon">&#10003;</div>',
-      '      <h3 style="margin:8px 0 4px;">Lab Request Submitted!</h3>',
-      '      <p style="margin:0; color:#aaa; font-size:0.9rem;">',
-      '        Your payment has been received and your lab request is pending admin review.',
+      '      <h3 style="margin:8px 0 4px;color:var(--ink);">Server Request Submitted!</h3>',
+      '      <p style="margin:0;color:var(--ink3);font-size:0.9rem;">',
+      '        Thank you! Your payment details have been received and are awaiting admin review.',
       '      </p>',
-      '      ' + (costStr ? '<p style="margin:8px 0 0; color:#8bc4ff;">Estimated cost: <b>' + _esc(costStr) + '</b></p>' : ''),
+      '      ' + (costStr ? '<p style="margin:8px 0 0;color:var(--blue);font-weight:600;">Estimated cost: ' + _esc(costStr) + '</p>' : ''),
       '    </div>',
-      '    <p style="margin:20px 0 8px; color:#aaa; font-size:0.88rem; text-align:center;">',
-      '      An admin will verify your payment and approve your request shortly.',
-      '      Once approved, your EC2 instance will start provisioning automatically.',
-      '      You can track the status in the <b>Labs</b> list.',
+      '    <p style="margin:20px 0 8px;font-size:0.9rem;text-align:center;color:var(--ink3);line-height:1.6;">',
+      '      Our team will verify your payment and provision your server automatically.<br>',
+      '      Track the status in the <b>My Servers</b> list. You will see your server appear once approved.',
       '    </p>',
       '  </div>',
       '  <div class="lbs-wizard-footer">',
@@ -1406,6 +1468,7 @@ const Labs = (function () {
     _viewPayment:        _viewPayment,
     _exitWizard:         _exitWizard,
     _onDurationInput:    _onDurationInput,
+    _onDateRangeChange:  _onDateRangeChange,
     _onPlatformChange:   _onPlatformChange,
     _loadNetworkOptions: _loadNetworkOptions,
     _onVpcChange:        _onVpcChange,

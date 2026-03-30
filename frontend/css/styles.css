@@ -2672,6 +2672,85 @@ code {
 }
 .lbs-submitted-icon { font-size: 2.8rem; color: var(--green); line-height: 1; margin-bottom: 8px; }
 
+/* ── My Servers — stats dashboard row ── */
+.lbs-stats-row {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px; margin-bottom: 20px;
+}
+.lbs-stat-card {
+  background: var(--white); border: 1px solid var(--bd);
+  border-radius: var(--rlg); padding: 16px 18px;
+  box-shadow: var(--sh);
+}
+.lbs-stat-val {
+  font-size: 28px; font-weight: 800; color: var(--ink);
+  font-family: var(--mono); line-height: 1;
+}
+.lbs-stat-lbl { font-size: 12px; color: var(--ink3); margin-top: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.lbs-stat-green { color: var(--green); }
+.lbs-stat-amber { color: var(--amber); }
+.lbs-stat-gray  { color: var(--ink4); }
+
+/* ── My Servers — payment verification notice (non-admin view) ── */
+.lbs-verification-notice {
+  display: flex; align-items: flex-start; gap: 14px;
+  background: var(--adim); border: 1px solid rgba(217,119,6,.25);
+  border-radius: var(--rlg); padding: 18px 20px;
+}
+.lbs-verification-icon { font-size: 22px; flex-shrink: 0; line-height: 1; margin-top: 2px; }
+.lbs-verification-title {
+  font-size: 14px; font-weight: 700; color: var(--amber);
+  margin: 0 0 6px;
+}
+.lbs-verification-msg {
+  font-size: 13px; color: var(--ink2); margin: 0; line-height: 1.55;
+}
+
+@media (max-width: 768px) {
+  .lbs-stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .lbs-stats-row { grid-template-columns: 1fr 1fr; }
+  .lbs-stat-val  { font-size: 22px; }
+}
+
+/* ── Dashboard — Quick Actions grid ── */
+.dash-quick-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; padding: 4px 0 8px;
+}
+.dq-card {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 6px; padding: 14px 14px 12px;
+  background: var(--bg); border: 1px solid var(--bd);
+  border-radius: var(--rlg); cursor: pointer; text-align: left;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+  box-shadow: none;
+}
+.dq-card:hover {
+  background: var(--white); border-color: var(--blue3);
+  box-shadow: var(--shm);
+}
+.dq-ico {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.dq-ico.blue   { background: var(--bdim);  color: var(--blue);  }
+.dq-ico.green  { background: var(--gdim);  color: var(--green); }
+.dq-ico.amber  { background: var(--adim);  color: var(--amber); }
+.dq-ico.cyan   { background: var(--cdim);  color: var(--cyan);  }
+.dq-ico.violet { background: var(--vdim);  color: var(--violet);}
+.dq-ico.red    { background: var(--rdim);  color: var(--red);   }
+.dq-label { font-size: 13px; font-weight: 700; color: var(--ink); }
+.dq-sub   { font-size: 11px; color: var(--ink3); }
+
+@media (max-width: 480px) {
+  .dash-quick-grid { grid-template-columns: repeat(2, 1fr); }
+}
+}
+.lbs-submitted-icon { font-size: 2.8rem; color: var(--green); line-height: 1; margin-bottom: 8px; }
+
 /* Skeleton loading rows — used while instance data loads from Lambda */
 .skeleton-row {
   height: 38px;

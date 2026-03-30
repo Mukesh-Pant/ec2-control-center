@@ -5,6 +5,12 @@
 
 const Billing = (function () {
 
+  var USD_TO_NPR = 135;
+  function _npr(usd) {
+    if (!usd || usd <= 0) return '—';
+    return 'NPR\u00a0' + (usd * USD_TO_NPR).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   // ─── Daily Summary (per-instance from audit logs) ─────────────────────────────
   async function loadDailySummary() {
     var instanceId = document.getElementById('daily-instance-id').value.trim();
@@ -54,7 +60,7 @@ const Billing = (function () {
     var rowsHtml = '';
     rows.forEach(function (r) {
       var pct     = Math.min(100, (r.runningHours / 24) * 100).toFixed(1);
-      var costTxt = r.estimatedCost > 0 ? '$' + r.estimatedCost.toFixed(4) : '—';
+      var costTxt = r.estimatedCost > 0 ? _npr(r.estimatedCost) : '—';
       rowsHtml +=
         '<tr>' +
         '<td class="audit-cell-mono">' + App.esc(r.date) + '</td>' +
@@ -75,20 +81,21 @@ const Billing = (function () {
         '<div class="daily-meta-badges">' +
           '<span class="daily-badge badge-id">'   + App.esc(data.instanceId) + '</span>' +
           '<span class="daily-badge badge-type">' + App.esc(iType) + '</span>' +
-          (rate > 0 ? '<span class="daily-badge badge-rate">$' + rate.toFixed(4) + '/hr on-demand</span>' : '') +
+          (rate > 0 ? '<span class="daily-badge badge-rate">' + _npr(rate) + '/hr on-demand</span>' : '') +
         '</div>' +
         '<div class="daily-totals-row">' +
           '<div class="daily-total-box"><div class="daily-total-label">Total Running</div><div class="daily-total-val running-hrs">' + totalRun.toFixed(2) + ' hrs</div></div>' +
-          '<div class="daily-total-box"><div class="daily-total-label">Est. Total Cost</div><div class="daily-total-val cost-val">' + (totalCost > 0 ? '$' + totalCost.toFixed(4) : '—') + '</div></div>' +
+          '<div class="daily-total-box"><div class="daily-total-label">Est. Total Cost</div><div class="daily-total-val cost-val">' + _npr(totalCost) + '</div></div>' +
           '<div class="daily-total-box"><div class="daily-total-label">Days Analysed</div><div class="daily-total-val">' + rows.length + '</div></div>' +
         '</div>' +
       '</div>' +
       '<table class="audit-table daily-table">' +
-        '<thead><tr><th>Date</th><th>Running Hours</th><th>Stopped Hours</th><th>Events</th><th>Est. Cost (USD)</th></tr></thead>' +
+        '<thead><tr><th>Date</th><th>Running Hours</th><th>Stopped Hours</th><th>Events</th><th>Est. Cost (NPR)</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
       '</table>' +
       '<div class="daily-disclaimer">&#9432;&nbsp; Estimates use live on-demand Linux pricing from AWS Price List API (region-specific). ' +
-      'Actual charges depend on your pricing tier, EBS volumes, and data transfer.</div>';
+      'Actual charges depend on your pricing tier, EBS volumes, and data transfer. ' +
+      '(1 USD = NPR 135, indicative rate)</div>';
   }
 
   // ─── Today's Session Estimate (live pricing from /pricing) ────────────────────
@@ -138,7 +145,6 @@ const Billing = (function () {
     var rows = running.map(function (i) {
       var region = i.region || 'ap-south-1';
       var rate   = priceMap[(i.instanceType || '') + '@' + region] || 0;
-      var dayEst = (rate * 24).toFixed(4);
       return (
         '<div class="session-row">' +
           '<div style="flex:1;min-width:0">' +
@@ -149,22 +155,23 @@ const Billing = (function () {
           '</div>' +
           '<div class="session-type">' + App.esc(i.instanceType || '—') + '</div>' +
           '<div style="font-family:var(--mono);font-size:11px;color:var(--ink3)">' +
-            (rate > 0 ? '$' + rate.toFixed(4) + '/hr' : '—') +
+            (rate > 0 ? _npr(rate) + '/hr' : '—') +
           '</div>' +
-          '<div class="session-cost">' + (rate > 0 ? '~$' + dayEst + '/day' : '—') + '</div>' +
+          '<div class="session-cost">' + (rate > 0 ? '~' + _npr(rate * 24) + '/day' : '—') + '</div>' +
         '</div>'
       );
     }).join('');
 
     wrap.innerHTML = rows +
       '<div class="bill-disclaimer">ℹ Live on-demand Linux pricing via AWS Price List API (region-specific). ' +
-      'Actual charges depend on your pricing tier, EBS volumes, and data transfer.</div>';
+      'Actual charges depend on your pricing tier, EBS volumes, and data transfer. ' +
+      '(1 USD = NPR 135, indicative rate)</div>';
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────
   function _fmtCost(n) {
     if (!n || n < 0.00001) return '<span class="cost-zero">—</span>';
-    return '<span class="cost-num">$' + n.toFixed(4) + '</span>';
+    return '<span class="cost-num">' + _npr(n) + '</span>';
   }
 
   function _emptyBlock(ico, msg) {
