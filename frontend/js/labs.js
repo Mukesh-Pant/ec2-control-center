@@ -863,6 +863,20 @@ const Labs = (function () {
       '      <p id="lbs-s1-duration-preview" class="lbs-help-text" style="margin-top:4px;"></p>',
       '    </div>',
       '    <div class="lbs-form-row">',
+      '      <label class="lbs-label">Daily Uptime</label>',
+      '      <div class="lbs-uptime-row">',
+      '        <select id="lbs-s1-uptime" class="lbs-select" style="max-width:180px;" onchange="Labs._onDateRangeChange()">',
+      '          <option value="4"'  + (wizardConfig.hoursPerDay ===  4 ? ' selected' : '') + '>4 hrs/day</option>',
+      '          <option value="6"'  + (wizardConfig.hoursPerDay ===  6 ? ' selected' : '') + '>6 hrs/day</option>',
+      '          <option value="8"'  + (wizardConfig.hoursPerDay ===  8 ? ' selected' : '') + '>8 hrs/day (business hours)</option>',
+      '          <option value="12"' + (wizardConfig.hoursPerDay === 12 ? ' selected' : '') + '>12 hrs/day</option>',
+      '          <option value="16"' + (wizardConfig.hoursPerDay === 16 ? ' selected' : '') + '>16 hrs/day</option>',
+      '          <option value="24"' + (!wizardConfig.hoursPerDay || wizardConfig.hoursPerDay === 24 ? ' selected' : '') + '>24 hrs/day — always on (default)</option>',
+      '        </select>',
+      '        <span class="lbs-help-text" style="margin-top:0;">Uptime is <b>24 hrs/day</b> by default. Choose a lower value if you plan to shut the server down between sessions — it reduces your estimated cost.</span>',
+      '      </div>',
+      '    </div>',
+      '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Network Options</label>',
       '      <button class="btn btn-outline btn-sm" onclick="Labs._loadNetworkOptions()">Load VPCs / Subnets / Security Groups</button>',
       '      <span id="lbs-s1-net-status" class="lbs-help-text"></span>',
@@ -904,6 +918,8 @@ const Labs = (function () {
     if (!startEl || !endEl || !preview) return;
     var start = startEl.value;
     var end   = endEl.value;
+    var uptimeEl    = document.getElementById('lbs-s1-uptime');
+    var hoursPerDay = uptimeEl ? (parseInt(uptimeEl.value, 10) || 24) : 24;
     if (start && end) {
       var days = Math.round((new Date(end) - new Date(start)) / 86400000);
       if (days <= 0) {
@@ -911,7 +927,8 @@ const Labs = (function () {
         preview.style.color = 'var(--red)';
       } else {
         preview.style.color = '';
-        preview.textContent = start + ' \u2192 ' + end + ' \u2014 ' + days + ' day' + (days === 1 ? '' : 's') + ' (' + (days * 24).toLocaleString() + ' hours)';
+        var totalHours = days * hoursPerDay;
+        preview.textContent = start + ' \u2192 ' + end + ' \u2014 ' + days + ' day' + (days === 1 ? '' : 's') + ' \u00d7 ' + hoursPerDay + ' hrs/day = ' + totalHours.toLocaleString() + ' total hours';
       }
     } else {
       preview.textContent = '';
@@ -1014,9 +1031,9 @@ const Labs = (function () {
     var startDate     = ((document.getElementById('lbs-s1-start-date') || {}).value || '').trim();
     var endDate       = ((document.getElementById('lbs-s1-end-date')   || {}).value || '').trim();
     var totalDays     = startDate && endDate ? Math.round((new Date(endDate) - new Date(startDate)) / 86400000) : 0;
-    var hoursPerDay   = 24;
+    var hoursPerDay   = parseInt((document.getElementById('lbs-s1-uptime') || {}).value || '24', 10) || 24;
     var months        = Math.max(1, Math.ceil(totalDays / 30));
-    var durationHours = totalDays * 24;
+    var durationHours = totalDays * hoursPerDay;
 
     var platform = '';
     var radios   = document.querySelectorAll('input[name="lbs-platform"]');
@@ -1219,7 +1236,8 @@ const Labs = (function () {
       'Server Type:    ' + (config.instanceType || '—'),
       'Storage:        ' + (config.storageGb || '—') + ' GB (gp3 SSD)',
       'Fixed IP:       ' + (config.elasticIp ? 'Yes' : 'No'),
-      'Duration:       ' + startDate + ' → ' + endDate + ' (' + totalDays + ' days)',
+      'Daily Uptime:   ' + (config.hoursPerDay || 24) + ' hrs/day',
+      'Duration:       ' + startDate + ' \u2192 ' + endDate + ' (' + totalDays + ' days, ' + ((config.durationHours || 0).toLocaleString()) + ' total hrs)',
       '',
       'COST BREAKDOWN',
       sep2,
