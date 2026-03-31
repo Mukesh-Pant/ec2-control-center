@@ -35,8 +35,12 @@ const Customers = (function () {
         {id:'pay-c1-5',date:'2025-11-06',amount:1000,notes:''},
         {id:'pay-c1-6',date:'2025-12-03',amount:1000,notes:''},
       ],
+      signedBy:'Adarsh', accountManager:'Adarsh',
       contracts:[
-        {id:'ctr-c1-1',name:'EC2 Control Portal License',description:'Annual SaaS portal license',startDate:'2025-07-01',endDate:'2026-06-30',value:12000,status:'active'},
+        {id:'ctr-c1-1',name:'EC2 Control Portal License',description:'Annual SaaS portal license',startDate:'2025-07-01',endDate:'2026-06-30',value:12000,status:'active',tasks:[
+          {id:'tsk-c1-1',name:'Monthly billing report',assignee:'Adarsh',dueDate:'2026-04-30',status:'in_progress',priority:'medium'},
+          {id:'tsk-c1-2',name:'Q2 portal update',assignee:'Adarsh',dueDate:'2026-06-30',status:'todo',priority:'low'},
+        ]},
       ],
       createdAt:'2025-07-01T00:00:00Z',
     },
@@ -49,6 +53,7 @@ const Customers = (function () {
       agreementStart:'2025-04-01', agreementEnd:'2026-03-31',
       billingType:'retainer', billingFrequency:'monthly',
       notes:'Domain + DNS management retainer',
+      signedBy:'Adarsh', accountManager:'Adarsh',
       milestones:[],
       invoices:[],
       payments:[
@@ -63,7 +68,9 @@ const Customers = (function () {
         {id:'pay-c2-9',date:'2025-12-04',amount:200,notes:''},
       ],
       contracts:[
-        {id:'ctr-c2-1',name:'Domain & DNS Management',description:'Monthly domain registrations and DNS configuration',startDate:'2025-04-01',endDate:'2026-03-31',value:2400,status:'active'},
+        {id:'ctr-c2-1',name:'Domain & DNS Management',description:'Monthly domain registrations and DNS configuration',startDate:'2025-04-01',endDate:'2026-03-31',value:2400,status:'active',tasks:[
+          {id:'tsk-c2-1',name:'Renew primary domain',assignee:'Adarsh',dueDate:'2026-03-25',status:'todo',priority:'high'},
+        ]},
       ],
       createdAt:'2025-04-01T00:00:00Z',
     },
@@ -76,6 +83,7 @@ const Customers = (function () {
       agreementStart:'2025-10-01', agreementEnd:'2026-09-30',
       billingType:'milestone', billingFrequency:null,
       notes:'Custom SaaS platform development — 5 milestone project',
+      signedBy:'Adarsh', accountManager:'Adarsh',
       milestones:[
         {id:'ms-c3-1',name:'Phase 1 \u2014 Requirements & Design',amount:3000,dueDate:'2025-11-30',paid:true, paidDate:'2025-11-28'},
         {id:'ms-c3-2',name:'Phase 2 \u2014 Backend Development',  amount:3000,dueDate:'2026-01-31',paid:true, paidDate:'2026-01-30'},
@@ -90,7 +98,11 @@ const Customers = (function () {
         {id:'pay-c3-3',date:'2026-03-12',amount:3000,notes:'Phase 3'},
       ],
       contracts:[
-        {id:'ctr-c3-1',name:'SaaS Platform Development',description:'Full-stack development — 5 milestone delivery plan',startDate:'2025-10-01',endDate:'2026-05-31',value:15000,status:'active'},
+        {id:'ctr-c3-1',name:'SaaS Platform Development',description:'Full-stack development — 5 milestone delivery plan',startDate:'2025-10-01',endDate:'2026-05-31',value:15000,status:'active',tasks:[
+          {id:'tsk-c3-1',name:'Phase 4 — Testing & QA',assignee:'Adarsh',dueDate:'2026-04-15',status:'todo',priority:'high'},
+          {id:'tsk-c3-2',name:'Phase 5 — Launch & Handover',assignee:'Adarsh',dueDate:'2026-05-31',status:'todo',priority:'medium'},
+          {id:'tsk-c3-3',name:'Deploy staging environment',assignee:'Adarsh',dueDate:'2026-04-01',status:'in_progress',priority:'high'},
+        ]},
       ],
       createdAt:'2025-10-01T00:00:00Z',
     },
@@ -103,6 +115,7 @@ const Customers = (function () {
       agreementStart:'2025-11-01', agreementEnd:'2026-10-31',
       billingType:'recurring', billingFrequency:'monthly',
       notes:'Monthly billing consultation + cloud advisory',
+      signedBy:'Adarsh', accountManager:'Adarsh',
       milestones:[],
       invoices:[],
       payments:[
@@ -112,7 +125,9 @@ const Customers = (function () {
         {id:'pay-c4-4',date:'2026-02-03',amount:50000,notes:''},
       ],
       contracts:[
-        {id:'ctr-c4-1',name:'Cloud Consulting Retainer',description:'Monthly cloud billing consultation and advisory',startDate:'2025-11-01',endDate:'2026-10-31',value:600000,status:'active'},
+        {id:'ctr-c4-1',name:'Cloud Consulting Retainer',description:'Monthly cloud billing consultation and advisory',startDate:'2025-11-01',endDate:'2026-10-31',value:600000,status:'active',tasks:[
+          {id:'tsk-c4-1',name:'Send overdue invoice reminder',assignee:'Adarsh',dueDate:'2026-04-05',status:'todo',priority:'high'},
+        ]},
       ],
       createdAt:'2025-11-01T00:00:00Z',
     },
@@ -277,6 +292,36 @@ const Customers = (function () {
     return ms;
   }
 
+  // ─── Task CRUD ────────────────────────────────────────────────────────
+
+  function addTask(customerId, contractId, fields) {
+    var ci = _data.findIndex(function (x) { return x.id === customerId; });
+    if (ci < 0) return;
+    var ctr = (_data[ci].contracts || []).find(function (c) { return c.id === contractId; });
+    if (!ctr) return;
+    if (!ctr.tasks) ctr.tasks = [];
+    ctr.tasks.push(Object.assign({ id: _uuid('tsk'), status: 'todo', priority: 'medium' }, fields));
+    _persist();
+  }
+
+  function updateTaskStatus(customerId, contractId, taskId, status) {
+    var ci = _data.findIndex(function (x) { return x.id === customerId; });
+    if (ci < 0) return;
+    var ctr = (_data[ci].contracts || []).find(function (c) { return c.id === contractId; });
+    if (!ctr) return;
+    var t = (ctr.tasks || []).find(function (t) { return t.id === taskId; });
+    if (t) { t.status = status; _persist(); }
+  }
+
+  function removeTask(customerId, contractId, taskId) {
+    var ci = _data.findIndex(function (x) { return x.id === customerId; });
+    if (ci < 0) return;
+    var ctr = (_data[ci].contracts || []).find(function (c) { return c.id === contractId; });
+    if (!ctr) return;
+    ctr.tasks = (ctr.tasks || []).filter(function (t) { return t.id !== taskId; });
+    _persist();
+  }
+
   // ─── UI state ─────────────────────────────────────────────────────────
   var _drawerCustId = null;
   var _search       = '';
@@ -286,10 +331,11 @@ const Customers = (function () {
   var _editId       = null;
 
   // inline-add form state within drawer
-  var _drawerAddPayOpen  = false;
-  var _drawerAddInvOpen  = false;
-  var _drawerAddMsOpen   = false;
-  var _drawerAddCtrOpen  = false;
+  var _drawerAddPayOpen    = false;
+  var _drawerAddInvOpen    = false;
+  var _drawerAddMsOpen     = false;
+  var _drawerAddCtrOpen    = false;
+  var _drawerTaskFormOpen  = {};  // contractId → bool
 
   // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -466,6 +512,8 @@ const Customers = (function () {
         _drField('Email', c.contactEmail ? '<a href="mailto:' + _esc(c.contactEmail) + '">' + _esc(c.contactEmail) + '</a>' : '\u2014', true) +
         _drField('Phone', c.contactPhone || '\u2014') +
         _drField('Form',  c.paymentForm  || '\u2014') +
+        _drField('Signed By', c.signedBy ? '<span class="cust-dr-signed">\u270d\ufe0f ' + _esc(c.signedBy) + '</span>' : '\u2014', true) +
+        _drField('Account Manager', c.accountManager ? '<span class="cust-dr-signed">\uD83D\uDC64 ' + _esc(c.accountManager) + '</span>' : '\u2014', true) +
       '</div>' +
     '</div>';
 
@@ -555,6 +603,8 @@ const Customers = (function () {
     return c.contracts.map(function (ctr) {
       var stCls  = { active: 'fm-badge--green', completed: 'fm-badge--gray', cancelled: 'fm-badge--red' }[ctr.status] || 'fm-badge--gray';
       var daysLeft = ctr.endDate ? Math.ceil((new Date(ctr.endDate) - new Date()) / 86400000) : null;
+      var tasks = ctr.tasks || [];
+      var tasksDone = tasks.filter(function (t) { return t.status === 'done'; }).length;
       return '<div class="cust-ctr-card">' +
         '<div class="cust-ctr-top">' +
           '<span class="cust-ctr-name">' + _esc(ctr.name) + '</span>' +
@@ -569,8 +619,58 @@ const Customers = (function () {
         (ctr.status === 'active' ? '<div class="cust-ctr-actions">' +
           '<button class="btn btn-xs btn-out" onclick="Customers.completeContract(\'' + _esc(c.id) + '\',\'' + _esc(ctr.id) + '\')">Mark Complete</button>' +
         '</div>' : '') +
+        // ── Tasks section ──
+        '<div class="cust-tasks-section">' +
+          '<div class="cust-tasks-hd">' +
+            '<span class="cust-tasks-lbl">Tasks' + (tasks.length ? ' \u00b7 ' + tasksDone + '/' + tasks.length + ' done' : '') + '</span>' +
+            '<button class="btn btn-xs btn-out" onclick="Customers.toggleAddTask(\'' + _esc(c.id) + '\',\'' + _esc(ctr.id) + '\')">+ Task</button>' +
+          '</div>' +
+          '<div id="dr-task-form-' + _esc(ctr.id) + '" style="display:none">' + _addTaskForm(c.id, ctr.id) + '</div>' +
+          (tasks.length ? '<div class="cust-task-list">' + tasks.map(function (t) {
+            var dotCls = t.status === 'done' ? 'done' : t.status === 'in_progress' ? 'in_progress' : '';
+            var due    = t.dueDate ? _fmtDate(t.dueDate) : '';
+            var overdue = t.status !== 'done' && t.dueDate && Math.ceil((new Date(t.dueDate) - new Date()) / 86400000) < 0;
+            return '<div class="cust-task-row">' +
+              '<div class="cust-task-dot ' + dotCls + '"></div>' +
+              '<div class="cust-task-body">' +
+                '<div class="cust-task-name' + (t.status === 'done' ? ' cust-task-name--done' : '') + '">' + _esc(t.name) + '</div>' +
+                '<div class="cust-task-meta">' +
+                  (t.assignee ? '\uD83D\uDC64\uFE0F ' + _esc(t.assignee) : '') +
+                  (due ? ' \u00b7 ' + (overdue ? '<span style="color:var(--red)">' + due + ' overdue</span>' : due) : '') +
+                  ' <span class="task-pri task-pri--' + (t.priority || 'medium') + '">' + (t.priority || 'medium') + '</span>' +
+                  ' <span class="task-st task-st--' + t.status + '">' + t.status.replace('_',' ') + '</span>' +
+                '</div>' +
+              '</div>' +
+              '<div class="cust-task-actions">' +
+                (t.status === 'todo'        ? '<button class="btn btn-xs btn-out" onclick="Customers.setTaskStatus(\'' + _esc(c.id) + '\',\'' + _esc(ctr.id) + '\',\'' + _esc(t.id) + '\',\'in_progress\')">Start</button>' : '') +
+                (t.status === 'in_progress' ? '<button class="btn btn-xs btn-out" onclick="Customers.setTaskStatus(\'' + _esc(c.id) + '\',\'' + _esc(ctr.id) + '\',\'' + _esc(t.id) + '\',\'done\')">Done</button>' : '') +
+                (t.status === 'done'        ? '<button class="btn btn-xs btn-out" onclick="Customers.setTaskStatus(\'' + _esc(c.id) + '\',\'' + _esc(ctr.id) + '\',\'' + _esc(t.id) + '\',\'todo\')">Reopen</button>' : '') +
+                '<button class="btn btn-xs btn-out fm-btn-del" onclick="Customers.deleteTask(\'' + _esc(c.id) + '\',\'' + _esc(ctr.id) + '\',\'' + _esc(t.id) + '\')">\u00d7</button>' +
+              '</div>' +
+            '</div>';
+          }).join('') + '</div>' : '<div class="fm-muted-sm">No tasks yet</div>') +
+        '</div>' +
       '</div>';
     }).join('');
+  }
+
+  function _addTaskForm(custId, contractId) {
+    return '<div class="dr-inline-form">' +
+      '<div class="dr-inline-grid">' +
+        '<div class="fg" style="padding:0;grid-column:1/-1"><label class="fl">Task Name</label><input class="finp" id="dr-task-name-' + _esc(contractId) + '" placeholder="e.g. Deploy staging"/></div>' +
+        '<div class="fg" style="padding:0"><label class="fl">Assignee</label><input class="finp" id="dr-task-assignee-' + _esc(contractId) + '" placeholder="Team member name"/></div>' +
+        '<div class="fg" style="padding:0"><label class="fl">Due Date</label><input class="finp" id="dr-task-due-' + _esc(contractId) + '" type="date"/></div>' +
+        '<div class="fg" style="padding:0"><label class="fl">Priority</label>' +
+          '<select class="finp" id="dr-task-pri-' + _esc(contractId) + '">' +
+            '<option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div class="dr-inline-actions">' +
+        '<button class="btn btn-xs btn-out" onclick="Customers.toggleAddTask(\'' + _esc(custId) + '\',\'' + _esc(contractId) + '\')">Cancel</button>' +
+        '<button class="btn btn-xs btn-blue" onclick="Customers.submitTask(\'' + _esc(custId) + '\',\'' + _esc(contractId) + '\')">Add Task</button>' +
+      '</div>' +
+    '</div>';
   }
 
   function _milestonesHtml(c) {
@@ -714,6 +814,35 @@ const Customers = (function () {
     if (el) el.style.display = _drawerAddCtrOpen ? '' : 'none';
   }
 
+  function toggleAddTask(custId, contractId) {
+    _drawerTaskFormOpen[contractId] = !_drawerTaskFormOpen[contractId];
+    var el = document.getElementById('dr-task-form-' + contractId);
+    if (el) el.style.display = _drawerTaskFormOpen[contractId] ? '' : 'none';
+  }
+
+  function submitTask(custId, contractId) {
+    var name     = _getVal('dr-task-name-'     + contractId);
+    var assignee = _getVal('dr-task-assignee-' + contractId);
+    var due      = _getVal('dr-task-due-'      + contractId);
+    var priority = _getVal('dr-task-pri-'      + contractId);
+    if (!name) { App.showToast('Enter a task name', 'err'); return; }
+    addTask(custId, contractId, { name: name, assignee: assignee, dueDate: due, priority: priority });
+    App.showToast('Task added', 'ok');
+    _drawerTaskFormOpen[contractId] = false;
+    _refreshDrawer();
+  }
+
+  function setTaskStatus(custId, contractId, taskId, status) {
+    updateTaskStatus(custId, contractId, taskId, status);
+    _refreshDrawer();
+  }
+
+  function deleteTask(custId, contractId, taskId) {
+    removeTask(custId, contractId, taskId);
+    App.showToast('Task removed', 'ok');
+    _refreshDrawer();
+  }
+
   // ─── Drawer submit actions ────────────────────────────────────────────
 
   function submitPayment() {
@@ -822,9 +951,11 @@ const Customers = (function () {
     _setVal('cust-m-pay-form',   c.paymentForm);
     _setVal('cust-m-ag-start',   c.agreementStart);
     _setVal('cust-m-ag-end',     c.agreementEnd);
-    _setVal('cust-m-billing',    c.billingType);
-    _setVal('cust-m-freq',       c.billingFrequency || 'monthly');
-    _setVal('cust-m-notes',      c.notes);
+    _setVal('cust-m-billing',      c.billingType);
+    _setVal('cust-m-freq',         c.billingFrequency || 'monthly');
+    _setVal('cust-m-signed-by',    c.signedBy);
+    _setVal('cust-m-account-mgr',  c.accountManager);
+    _setVal('cust-m-notes',        c.notes);
     _onCustBillingChange();
     _openOverlay('cust-overlay');
   }
@@ -838,7 +969,8 @@ const Customers = (function () {
 
   function _clearCustForm() {
     ['cust-m-name','cust-m-country','cust-m-contact','cust-m-email','cust-m-phone','cust-m-services',
-     'cust-m-contract-v','cust-m-paid','cust-m-due-date','cust-m-pay-form','cust-m-ag-start','cust-m-ag-end','cust-m-notes']
+     'cust-m-contract-v','cust-m-paid','cust-m-due-date','cust-m-pay-form','cust-m-signed-by','cust-m-account-mgr',
+     'cust-m-ag-start','cust-m-ag-end','cust-m-notes']
     .forEach(function (id) { _setVal(id, ''); });
     _setVal('cust-m-currency', 'USD');
     _setVal('cust-m-billing',  'recurring');
@@ -889,6 +1021,8 @@ const Customers = (function () {
       agreementEnd:  _getVal('cust-m-ag-end'),
       billingType:   billing,
       billingFrequency: (billing === 'recurring' || billing === 'retainer') ? freq : null,
+      signedBy:      _getVal('cust-m-signed-by'),
+      accountManager: _getVal('cust-m-account-mgr'),
       notes:         _getVal('cust-m-notes'),
     };
 
@@ -940,6 +1074,10 @@ const Customers = (function () {
     toggleAddInvoice:    toggleAddInvoice,
     toggleAddMilestone:  toggleAddMilestone,
     toggleAddContract:   toggleAddContract,
+    toggleAddTask:       toggleAddTask,
+    submitTask:          submitTask,
+    setTaskStatus:       setTaskStatus,
+    deleteTask:          deleteTask,
     submitPayment:       submitPayment,
     submitInvoice:       submitInvoice,
     submitMilestone:     submitMilestone,

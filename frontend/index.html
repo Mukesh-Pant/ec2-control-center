@@ -85,6 +85,7 @@
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+    <div class="modal-body">
     <div class="modal-grid">
       <div class="fg"><label class="fl" for="cust-m-name">Customer Name</label><input class="finp" id="cust-m-name" type="text" placeholder="e.g. Cloudmandap"/></div>
       <div class="fg"><label class="fl" for="cust-m-country">Country</label><input class="finp" id="cust-m-country" type="text" placeholder="e.g. Nepal"/></div>
@@ -92,6 +93,8 @@
       <div class="fg"><label class="fl" for="cust-m-email">Contact Email</label><input class="finp" id="cust-m-email" type="email" placeholder="email@company.com"/></div>
       <div class="fg"><label class="fl" for="cust-m-phone">Contact Phone</label><input class="finp" id="cust-m-phone" type="text" placeholder="+977-…"/></div>
       <div class="fg"><label class="fl" for="cust-m-pay-form">Payment Form</label><input class="finp" id="cust-m-pay-form" type="text" placeholder="Bank Transfer, eSewa…"/></div>
+      <div class="fg"><label class="fl" for="cust-m-signed-by">Signed By (Our Side)</label><input class="finp" id="cust-m-signed-by" type="text" placeholder="e.g. Adarsh"/></div>
+      <div class="fg"><label class="fl" for="cust-m-account-mgr">Account Manager</label><input class="finp" id="cust-m-account-mgr" type="text" placeholder="e.g. Adarsh"/></div>
       <div class="fg fg-wide"><label class="fl" for="cust-m-services">Services (comma-separated)</label><input class="finp" id="cust-m-services" type="text" placeholder="Billing Management, Software Development"/></div>
       <div class="fg"><label class="fl" for="cust-m-currency">Currency</label>
         <select class="finp" id="cust-m-currency">
@@ -124,6 +127,7 @@
       <div class="fg fg-wide"><label class="fl" for="cust-m-notes">Notes</label><input class="finp" id="cust-m-notes" type="text" placeholder="Optional notes…"/></div>
     </div>
     <div class="merr" id="cust-modal-err"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-out" onclick="Customers.closeCustModal()">Cancel</button>
       <button class="btn btn-blue" onclick="Customers.confirmCustSave()">Save Customer</button>
