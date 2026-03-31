@@ -305,10 +305,20 @@ def handle_stop(client, instance_id, region, account_id,
 # ─── Accounts: List ──────────────────────────────────────────────────────────
 
 def handle_accounts_list(event):
-    err = require_admin(event)
-    if err:
-        return err
-    accounts = get_all_accounts()
+    if is_admin(event):
+        # Admins see all accounts (enabled + disabled) for management
+        accounts = get_all_accounts()
+    else:
+        # Operators/viewers: return only their enabled assigned accounts
+        groups = get_caller_groups(event)
+        if not groups:
+            return error_response(403, 'Your account is pending approval. Contact an administrator.')
+        caller = get_caller(event)
+        allowed_ids = get_allowed_account_ids(caller)
+        if not allowed_ids:
+            return response(200, {'accounts': []})
+        all_enabled = get_accounts()
+        accounts = [a for a in all_enabled if a['accountId'] in allowed_ids]
     safe = [{
         'accountId':   a['accountId'],
         'accountName': a.get('accountName', a['accountId']),

@@ -872,13 +872,24 @@ def handle_labs_list(event):
         logger.exception('handle_labs_list DynamoDB error')
         return error_response(500, str(e))
 
-    # For labs still in provisioning state, poll EC2 and update if running
-    provisioning_labs = [lab for lab in labs if lab.get('status') == 'provisioning']
-    if provisioning_labs:
-        with ThreadPoolExecutor(max_workers=min(10, len(provisioning_labs))) as pool:
-            futures = {pool.submit(_maybe_update_provisioning_status, lab): lab for lab in provisioning_labs}
+    # Sync EC2 state for all active labs (provisioning, running, stopped)
+    # This catches: stop/start via Instances tab, external terminations, IP changes on restart
+    syncable = [
+        lab for lab in labs
+        if lab.get('status') in ('provisioning', 'running', 'stopped') and lab.get('instanceId')
+    ]
+    if syncable:
+        lab_idx = {lab.get('labId'): i for i, lab in enumerate(labs)}
+        with ThreadPoolExecutor(max_workers=min(10, len(syncable))) as pool:
+            futures = {pool.submit(_sync_lab_ec2_status, lab): lab for lab in syncable}
             for f in as_completed(futures):
-                pass  # results written back to DynamoDB inside the helper
+                try:
+                    updated = f.result()
+                    idx = lab_idx.get(updated.get('labId'))
+                    if idx is not None:
+                        labs[idx] = updated   # apply status changes to returned list
+                except Exception:
+                    pass
     updated_labs = labs
 
     # Serialise Decimal values for JSON
@@ -887,48 +898,108 @@ def handle_labs_list(event):
     return response(200, {'labs': serialised})
 
 
-def _maybe_update_provisioning_status(lab):
-    """If lab status is 'provisioning', check EC2 and update DynamoDB if now running."""
-    if lab.get('status') != 'provisioning':
+def _sync_lab_ec2_status(lab):
+    """Sync lab DynamoDB status with actual EC2 server state.
+
+    Handles all transitions:
+      provisioning → running         (server came up)
+      running      → stopped         (stopped via Servers tab or externally)
+      stopped      → running         (restarted; also refreshes public IP)
+      any active   → terminated      (terminated externally)
+    Called on every GET /labs for all labs with a server ID.
+    """
+    status = lab.get('status', '')
+    if status not in ('provisioning', 'running', 'stopped'):
         return lab
 
-    account_id  = lab.get('accountId', '')
-    region      = lab.get('region', 'ap-south-1')
     instance_id = lab.get('instanceId', '')
     lab_id      = lab.get('labId', '')
-
     if not instance_id or not lab_id:
         return lab
+
+    account_id = lab.get('accountId', '')
+    region     = lab.get('region', 'ap-south-1')
 
     try:
         creds = _get_member_creds(account_id)
         ec2   = _boto3_client('ec2', region, creds)
         desc  = ec2.describe_instances(InstanceIds=[instance_id])
+
         if not desc.get('Reservations'):
-            logger.warning("No Reservations for instance %s — possibly terminated", lab.get('instanceId'))
+            # Server not found in EC2 — terminated outside portal
+            logger.warning('_sync_lab_ec2_status: server %s not found, marking terminated', instance_id)
+            if status != 'terminated':
+                _get_labs_table().update_item(
+                    Key={'labId': lab_id},
+                    UpdateExpression='SET #st = :s',
+                    ExpressionAttributeNames={'#st': 'status'},
+                    ExpressionAttributeValues={':s': 'terminated'},
+                )
+                lab = dict(lab)
+                lab['status'] = 'terminated'
             return lab
-        inst  = desc['Reservations'][0]['Instances'][0]
-        state = inst.get('State', {}).get('Name', '')
-        if state == 'running':
-            public_ip  = inst.get('PublicIpAddress', '')
-            public_dns = inst.get('PublicDnsName', '')
-            # Update DynamoDB
+
+        inst       = desc['Reservations'][0]['Instances'][0]
+        ec2_state  = inst.get('State', {}).get('Name', '')
+        public_ip  = inst.get('PublicIpAddress', '') or ''
+        public_dns = inst.get('PublicDnsName', '') or ''
+
+        # Map EC2 state → lab status
+        if ec2_state == 'running':
+            new_status = 'running'
+        elif ec2_state in ('stopped', 'stopping'):
+            new_status = 'stopped'
+            # EIP address is preserved across stop/start; only clear IP for non-EIP servers
+            if not lab.get('elasticIp'):
+                public_ip  = ''
+                public_dns = ''
+        elif ec2_state in ('terminated', 'shutting-down'):
+            new_status = 'terminated'
+        else:
+            # pending / rebooting — transient, skip update
+            return lab
+
+        if new_status == status:
+            # No status change — but refresh IP if running (may have changed on restart)
+            if new_status == 'running' and public_ip and public_ip != lab.get('publicIp', ''):
+                _get_labs_table().update_item(
+                    Key={'labId': lab_id},
+                    UpdateExpression='SET publicIp = :ip, publicDns = :dns',
+                    ExpressionAttributeValues={':ip': public_ip, ':dns': public_dns},
+                )
+                lab = dict(lab)
+                lab['publicIp']  = public_ip
+                lab['publicDns'] = public_dns
+            return lab
+
+        # Persist status change
+        logger.info('_sync_lab_ec2_status: lab %s %s → %s', lab_id, status, new_status)
+        if new_status == 'terminated':
+            _get_labs_table().update_item(
+                Key={'labId': lab_id},
+                UpdateExpression='SET #st = :s',
+                ExpressionAttributeNames={'#st': 'status'},
+                ExpressionAttributeValues={':s': 'terminated'},
+            )
+        else:
             _get_labs_table().update_item(
                 Key={'labId': lab_id},
                 UpdateExpression='SET #st = :s, publicIp = :ip, publicDns = :dns',
                 ExpressionAttributeNames={'#st': 'status'},
                 ExpressionAttributeValues={
-                    ':s':   'running',
+                    ':s':   new_status,
                     ':ip':  public_ip,
                     ':dns': public_dns,
                 },
             )
-            lab = dict(lab)
-            lab['status']    = 'running'
-            lab['publicIp']  = public_ip
-            lab['publicDns'] = public_dns
+
+        lab = dict(lab)
+        lab['status']    = new_status
+        lab['publicIp']  = public_ip
+        lab['publicDns'] = public_dns
+
     except Exception as e:
-        logger.warning('_maybe_update_provisioning_status error for lab %s: %s', lab_id, e)
+        logger.warning('_sync_lab_ec2_status error for lab %s: %s', lab_id, e)
 
     return lab
 
@@ -1085,19 +1156,40 @@ def handle_labs_windows_password(event):
         return error_response(500, f'Password decryption failed: {str(e)}')
 
 
+def _purge_lab_record(lab, lab_id):
+    """Remove a lab DynamoDB record entirely and clean up any S3 key file.
+    Used for history records (already terminated/rejected) and cancelled pending requests.
+    """
+    # Try to delete .pem key from S3 (best-effort)
+    key_s3_key = lab.get('keyS3Key', '')
+    if key_s3_key and LABS_KEYS_BUCKET:
+        try:
+            _get_s3().delete_object(Bucket=LABS_KEYS_BUCKET, Key=key_s3_key)
+        except Exception as e:
+            logger.warning('_purge_lab_record: could not delete S3 key %s: %s', key_s3_key, e)
+    try:
+        _get_labs_table().delete_item(Key={'labId': lab_id})
+        logger.info('_purge_lab_record: deleted lab record %s', lab_id)
+    except ClientError as e:
+        logger.exception('_purge_lab_record DynamoDB delete_item error')
+        raise
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # DELETE /labs  — terminate a lab instance (admin only)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def handle_labs_delete(event):
-    """Terminate a lab EC2 instance and mark it as terminated in DynamoDB.
+    """Terminate a lab server and mark it as terminated in DynamoDB.
 
     Body: {labId}
-    Admin only.
+    Allowed: admin (any lab) OR the operator who originally created the lab.
     """
-    admin_guard = require_admin(event)
-    if admin_guard:
-        return admin_guard
+    guard = _require_operator_or_admin(event)
+    if guard:
+        return guard
+
+    caller_email = get_caller(event)
 
     try:
         body = json.loads(event.get('body') or '{}')
@@ -1118,6 +1210,35 @@ def handle_labs_delete(event):
     if not lab:
         return error_response(404, f'Lab {lab_id} not found.')
 
+    # Only admin or the lab owner may act on this lab
+    if not is_admin(event) and lab.get('userEmail') != caller_email:
+        return error_response(403, 'Only the server owner or an admin can do this.')
+
+    current_status = lab.get('status', '')
+
+    # ── History records: already terminated or rejected — just remove from DB
+    if current_status in ('terminated', 'rejected'):
+        try:
+            _purge_lab_record(lab, lab_id)
+        except ClientError as e:
+            return error_response(500, str(e))
+        return response(200, {'message': 'Server removed from history.'})
+
+    # ── Pending approval: owner cancels before admin acts — delete request + payment
+    if current_status == 'pending_approval':
+        payment_key = lab.get('paymentS3Key', '')
+        if payment_key and LABS_PAYMENTS_BUCKET:
+            try:
+                _get_s3().delete_object(Bucket=LABS_PAYMENTS_BUCKET, Key=payment_key)
+            except Exception as e:
+                logger.warning('handle_labs_delete: could not delete payment key %s: %s', payment_key, e)
+        try:
+            _purge_lab_record(lab, lab_id)
+        except ClientError as e:
+            return error_response(500, str(e))
+        return response(200, {'message': 'Server request cancelled.'})
+
+    # ── Active server (running / stopped / provisioning) — full EC2 terminate + cleanup
     account_id    = lab.get('accountId', '')
     region        = lab.get('region', 'ap-south-1')
     instance_id   = lab.get('instanceId', '')
@@ -1129,35 +1250,35 @@ def handle_labs_delete(event):
 
         if instance_id:
             ec2.terminate_instances(InstanceIds=[instance_id])
-            logger.info('handle_labs_delete: terminated instance %s', instance_id)
+            logger.info('handle_labs_delete: terminated server %s', instance_id)
 
         if allocation_id:
-            # Disassociate EIP before releasing — required if instance is still in shutting-down state
+            # Disassociate EIP before releasing
             try:
                 addr_resp = ec2.describe_addresses(AllocationIds=[allocation_id])
                 assoc_id  = addr_resp['Addresses'][0].get('AssociationId', '')
                 if assoc_id:
                     ec2.disassociate_address(AssociationId=assoc_id)
-                    logger.info('handle_labs_delete: disassociated EIP %s (assoc %s)', allocation_id, assoc_id)
             except Exception as e:
-                logger.warning('handle_labs_delete: could not disassociate EIP %s: %s', allocation_id, e)
+                logger.warning('handle_labs_delete: EIP disassociate failed %s: %s', allocation_id, e)
             try:
                 ec2.release_address(AllocationId=allocation_id)
-                logger.info('handle_labs_delete: released EIP %s', allocation_id)
             except Exception as e:
-                logger.warning('handle_labs_delete: could not release EIP %s: %s', allocation_id, e)
+                logger.warning('handle_labs_delete: EIP release failed %s: %s', allocation_id, e)
 
-        # Delete EC2 key pair in member account
+        # Delete key pair from member account
         try:
-            ec2.delete_key_pair(KeyName=lab['keyName'])
+            if lab.get('keyName'):
+                ec2.delete_key_pair(KeyName=lab['keyName'])
         except Exception as e:
-            logger.warning("Could not delete key pair %s: %s", lab['keyName'], e)
+            logger.warning('handle_labs_delete: key pair delete failed %s: %s', lab.get('keyName'), e)
 
         # Delete .pem from S3
         try:
-            _get_s3().delete_object(Bucket=LABS_KEYS_BUCKET, Key=lab['keyS3Key'])
+            if lab.get('keyS3Key') and LABS_KEYS_BUCKET:
+                _get_s3().delete_object(Bucket=LABS_KEYS_BUCKET, Key=lab['keyS3Key'])
         except Exception as e:
-            logger.warning("Could not delete .pem from S3 %s: %s", lab['keyS3Key'], e)
+            logger.warning('handle_labs_delete: S3 pem delete failed %s: %s', lab.get('keyS3Key'), e)
 
     except ClientError as e:
         logger.exception('handle_labs_delete EC2 error')
@@ -1171,7 +1292,7 @@ def handle_labs_delete(event):
             ExpressionAttributeValues={':s': 'terminated'},
         )
     except ClientError as e:
-        logger.exception('handle_labs_delete DynamoDB update_item error')
+        logger.exception('handle_labs_delete DynamoDB update error')
         return error_response(500, str(e))
 
-    return response(200, {'message': 'Lab terminated.'})
+    return response(200, {'message': 'Server terminated.'})

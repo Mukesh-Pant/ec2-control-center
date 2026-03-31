@@ -18,11 +18,12 @@ const Labs = (function () {
   var _confirmCb    = null;    // pending in-page confirm callback
   var _activeFilter = 'active'; // current filter pill: 'all'|'active'|'pending'|'history'
   var _expandedLabId = null;   // labId of currently expanded row, or null
+  var _guideOpen    = false;   // whether the "How it works" guide is expanded
 
-  var USD_TO_NPR = 135;
+  function _getNprRate() { return (window.NPR_RATE && window.NPR_RATE > 0) ? window.NPR_RATE : 135; }
   function _npmFmt(usd) {
     if (usd == null || usd <= 0) return '\u2014';
-    return 'NPR\u00a0' + (usd * USD_TO_NPR).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return 'NPR\u00a0' + (usd * _getNprRate()).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   // ─── Display maps
@@ -223,8 +224,58 @@ const Labs = (function () {
       else if (lab.status === 'terminated' || lab.status === 'rejected') counts.history++;
     });
 
-    // ── Auto-fallback: if default filter has nothing, show all
+    // ── Auto-fallback: if default filter has nothing, fall back to 'all'
     if (_activeFilter === 'active' && counts.active === 0) _activeFilter = 'all';
+
+    // ── Empty state (no servers at all): show full onboarding + guide expanded
+    if (activeLabs.length === 0) {
+      var html = [
+        '<div class="lbs-onboard">',
+        '  <div class="lbs-onboard-hero">',
+        '    <div class="lbs-onboard-icon">&#128187;</div>',
+        '    <h2 class="lbs-onboard-title">No servers yet</h2>',
+        '    <p class="lbs-onboard-desc">Provision a dedicated cloud server for your training or project. Your server is ready within minutes once payment is verified by our team.</p>',
+        '    <button class="btn btn-blue" onclick="Labs.startWizard()">',
+        '      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+        '      Create Your First Server',
+        '    </button>',
+        '  </div>',
+        '  ' + _renderGuide(true),
+        '</div>',
+      ].join('\n');
+      listEl.innerHTML = html;
+      return;
+    }
+
+    // ── Stats cards
+    var statsHtml = '<div class="lbs-stats-row">' +
+      '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-ico lbs-stat-ico--blue"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg></div>' +
+        '<div class="lbs-stat-val">' + counts.all + '</div>' +
+        '<div class="lbs-stat-lbl">Total Servers</div>' +
+      '</div>' +
+      '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-ico lbs-stat-ico--green"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>' +
+        '<div class="lbs-stat-val lbs-stat-green">' + counts.active + '</div>' +
+        '<div class="lbs-stat-lbl">Active</div>' +
+      '</div>' +
+      '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-ico lbs-stat-ico--amber"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>' +
+        '<div class="lbs-stat-val lbs-stat-amber">' + counts.pending + '</div>' +
+        '<div class="lbs-stat-lbl">Pending</div>' +
+      '</div>' +
+      '<div class="lbs-stat-card">' +
+        '<div class="lbs-stat-ico lbs-stat-ico--gray"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></div>' +
+        '<div class="lbs-stat-val lbs-stat-gray">' + (counts.history || 0) + '</div>' +
+        '<div class="lbs-stat-lbl">History</div>' +
+      '</div>' +
+    '</div>';
+
+    // ── Collapsible guide (always present, collapsed by default when servers exist)
+    var guideHtml = _renderGuide(_guideOpen);
+
+    // ── Filter bar
+    var html = statsHtml + guideHtml + _renderFilterBar(counts);
 
     // ── Filter visible labs
     var visible = activeLabs.filter(function (lab) {
@@ -235,44 +286,17 @@ const Labs = (function () {
       return true;
     });
 
-    // ── Build HTML
-    var statsHtml = '<div class="lbs-stats-row">' +
-      '<div class="lbs-stat-card">' +
-        '<div class="lbs-stat-val">' + counts.all + '</div>' +
-        '<div class="lbs-stat-lbl">Total Servers</div>' +
-      '</div>' +
-      '<div class="lbs-stat-card">' +
-        '<div class="lbs-stat-val lbs-stat-green">' + counts.active + '</div>' +
-        '<div class="lbs-stat-lbl">Active</div>' +
-      '</div>' +
-      '<div class="lbs-stat-card">' +
-        '<div class="lbs-stat-val lbs-stat-amber">' + counts.pending + '</div>' +
-        '<div class="lbs-stat-lbl">Pending Approval</div>' +
-      '</div>' +
-      '<div class="lbs-stat-card">' +
-        '<div class="lbs-stat-val lbs-stat-gray">' + (counts.history || 0) + '</div>' +
-        '<div class="lbs-stat-lbl">Archived</div>' +
-      '</div>' +
-    '</div>';
-    var html = statsHtml + _renderFilterBar(counts);
-
-    if (activeLabs.length === 0) {
-      html += '<div class="lbs-empty">No servers yet. Click &ldquo;New Server&rdquo; to get started.</div>';
-      listEl.innerHTML = html;
-      return;
-    }
-
     if (visible.length === 0) {
       var emptyMsg = {
-        active:  'No active labs. ',
-        pending: 'No labs awaiting approval.',
-        history: 'No terminated or rejected labs.',
-        all:     'No labs yet.',
-      }[_activeFilter] || 'No labs found.';
-      var switchLink = _activeFilter === 'active'
-        ? '<button class="lbs-pill" onclick="Labs._setFilter(\'all\')">View All<span class="lbs-pill-count">' + counts.all + '</span></button>'
+        active:  'No active servers right now.',
+        pending: 'No servers awaiting approval.',
+        history: 'No history yet.',
+        all:     'No servers found.',
+      }[_activeFilter] || 'No servers found.';
+      var switchLink = (_activeFilter !== 'all' && counts.all > 0)
+        ? ' <button class="lbs-pill" onclick="Labs._setFilter(\'all\')">View All<span class="lbs-pill-count">' + counts.all + '</span></button>'
         : '';
-      html += '<div class="lbs-empty">' + emptyMsg + ' ' + switchLink + '</div>';
+      html += '<div class="lbs-empty">' + emptyMsg + switchLink + '</div>';
       listEl.innerHTML = html;
       return;
     }
@@ -280,9 +304,9 @@ const Labs = (function () {
     html += '<table class="lbs-tbl">';
     html += '<thead class="lbs-tbl-head"><tr>';
     html += '<th></th>';
-    html += '<th>Lab Name</th>';
+    html += '<th>Server Name</th>';
     html += '<th>Platform</th>';
-    html += '<th>Instance</th>';
+    html += '<th>Server Type</th>';
     html += '<th>Status</th>';
     html += '<th>Account</th>';
     html += '<th>Region</th>';
@@ -293,6 +317,32 @@ const Labs = (function () {
     html += '</tbody></table>';
 
     listEl.innerHTML = html;
+  }
+
+  // ─── How it works guide (always rendered, collapsible)
+
+  function _renderGuide(open) {
+    var chevron = open ? '&#9650;' : '&#9660;';
+    var body = open
+      ? '<div class="lbs-how-works" style="margin-top:12px;">' +
+          '<div class="lbs-hw-steps">' +
+            '<div class="lbs-hw-step"><div class="lbs-hw-num">1</div><div><div class="lbs-hw-label">Configure</div><div class="lbs-hw-text">Choose your operating system, server size, storage, and the dates you need the server.</div></div></div>' +
+            '<div class="lbs-hw-step"><div class="lbs-hw-num">2</div><div><div class="lbs-hw-label">Pay</div><div class="lbs-hw-text">Review the estimated cost and complete payment via QR code. Upload a screenshot as proof.</div></div></div>' +
+            '<div class="lbs-hw-step"><div class="lbs-hw-num">3</div><div><div class="lbs-hw-label">Get approved</div><div class="lbs-hw-text">Our team verifies your payment (usually within minutes) and sets up your server automatically.</div></div></div>' +
+            '<div class="lbs-hw-step"><div class="lbs-hw-num">4</div><div><div class="lbs-hw-label">Connect</div><div class="lbs-hw-text">Download your key file and connect. Your server stays live until the expiry date.</div></div></div>' +
+          '</div>' +
+        '</div>'
+      : '';
+    return '<div class="lbs-guide-toggle" onclick="Labs._toggleGuide()">' +
+      '<span class="lbs-guide-toggle-lbl">&#128218; How it works</span>' +
+      '<span class="lbs-guide-toggle-chev">' + chevron + '</span>' +
+      '</div>' +
+      body;
+  }
+
+  function _toggleGuide() {
+    _guideOpen = !_guideOpen;
+    _renderLabsList();
   }
 
   // ─── Filter bar HTML
@@ -356,18 +406,56 @@ const Labs = (function () {
 
   function _confirmDelete(labId) {
     _showConfirm(
-      'Terminate Lab?',
-      'This will terminate the EC2 instance and release all associated resources. This cannot be undone.',
+      'Terminate Server?',
+      'This will permanently terminate this server and release all associated resources. This cannot be undone.',
       async function () {
         try {
           var res  = await API.deleteLabInstance({ labId: labId });
           var data = await res.json();
-          if (!res.ok) throw new Error(data.message || data.error || 'Delete failed');
-          App.showToast('Lab terminated', 'ok');
+          if (!res.ok) throw new Error(data.message || data.error || 'Terminate failed');
+          App.showToast('Server terminated', 'ok');
           _expandedLabId = null;
           await _loadActiveLabs();
         } catch (e) {
           App.showToast('Terminate error: ' + e.message, 'err');
+        }
+      }
+    );
+  }
+
+  function _confirmRemoveHistory(labId) {
+    _showConfirm(
+      'Remove from History?',
+      'This will remove this entry from your history. The server is already terminated so no resources will be affected.',
+      async function () {
+        try {
+          var res  = await API.deleteLabInstance({ labId: labId });
+          var data = await res.json();
+          if (!res.ok) throw new Error(data.message || data.error || 'Remove failed');
+          App.showToast('Removed from history', 'ok');
+          _expandedLabId = null;
+          await _loadActiveLabs();
+        } catch (e) {
+          App.showToast('Remove error: ' + e.message, 'err');
+        }
+      }
+    );
+  }
+
+  function _confirmCancelRequest(labId) {
+    _showConfirm(
+      'Cancel Server Request?',
+      'This will cancel your pending server request and delete your payment submission. This cannot be undone.',
+      async function () {
+        try {
+          var res  = await API.deleteLabInstance({ labId: labId });
+          var data = await res.json();
+          if (!res.ok) throw new Error(data.message || data.error || 'Cancel failed');
+          App.showToast('Server request cancelled', 'ok');
+          _expandedLabId = null;
+          await _loadActiveLabs();
+        } catch (e) {
+          App.showToast('Cancel error: ' + e.message, 'err');
         }
       }
     );
@@ -418,39 +506,44 @@ const Labs = (function () {
     var labIdEsc      = _esc(lab.labId);
     var role          = Auth.getRole();
     var isAdmin       = role === 'admin';
+    var callerEmail   = Auth.getEmail ? Auth.getEmail() : '';
+    var isOwner       = !!(callerEmail && (lab.userEmail === callerEmail || lab.callerEmail === callerEmail));
+    var canTerminate  = isAdmin || isOwner;
     var isWindows     = lab.platform === 'windows';
-    var platformLabel = PLATFORM_LABELS[lab.platform] || lab.platform;
+    var platformLabel = PLATFORM_LABELS[lab.platform] || lab.platform || '\u2014';
     var ip            = lab.publicIp || lab.publicDns || '';
     var costStr       = lab.estimatedCost != null ? _npmFmt(Number(lab.estimatedCost)) : '\u2014';
     var expiry        = lab.expiresAt ? _formatExpiry(lab.expiresAt) : '\u2014';
     var createdAt     = lab.createdAt ? new Date(lab.createdAt).toUTCString() : '\u2014';
     var storageStr    = lab.storageGb ? lab.storageGb + ' GB' : '\u2014';
 
-    // ── Elastic IP field
+    // ── Fixed IP display
     var eipValue;
     if (lab.elasticIp && lab.allocationId) {
-      eipValue = _esc(ip || '\u2014') + ' <span style="color:#5a7aa8;font-size:11px;">(alloc: ' + _esc(lab.allocationId) + ')</span>';
+      eipValue = _esc(ip || '\u2014') + ' <span style="color:var(--ink3);font-size:11px;">(fixed)</span>';
     } else if (lab.elasticIp) {
       eipValue = 'Requested';
     } else {
-      eipValue = 'Not requested';
+      eipValue = 'Dynamic (changes on restart)';
     }
 
-    // ── Lab Info section (always shown)
+    // ── Server Info section (always shown)
+    var stateLabel = STATUS_LABELS[lab.status] || lab.status || '\u2014';
+    var stateClass = STATUS_CLASSES[lab.status] || 'lbs-badge--gray';
     var infoItems = [
-      { label: 'Lab ID',        value: '<code style="font-size:12px;user-select:all;">' + labIdEsc + '</code>' },
-      { label: 'Instance ID',   value: _esc(lab.instanceId || '\u2014') },
+      { label: 'Server ID',     value: '<code style="font-size:12px;user-select:all;">' + labIdEsc + '</code>' },
+      { label: 'State',         value: '<span class="lbs-badge ' + stateClass + '">' + _esc(stateLabel) + '</span>' },
       { label: 'Created',       value: _esc(createdAt) },
       { label: 'Estimated Cost',value: _esc(costStr) },
       { label: 'Public IP',     value: _esc(ip || '\u2014') },
-      { label: 'Elastic IP',    value: eipValue },
+      { label: 'Fixed IP',      value: eipValue },
       { label: 'Platform',      value: _esc(platformLabel) },
-      { label: 'Instance Type', value: _esc(lab.instanceType || '\u2014') },
+      { label: 'Server Type',   value: _esc(lab.instanceType || '\u2014') },
       { label: 'Storage',       value: _esc(storageStr) },
       { label: 'Expires',       value: _esc(expiry) },
     ];
     if (isAdmin) {
-      infoItems.splice(3, 0, { label: 'Submitted by', value: _esc(lab.userEmail || lab.callerEmail || '\u2014') });
+      infoItems.splice(2, 0, { label: 'Submitted by', value: _esc(lab.userEmail || lab.callerEmail || '\u2014') });
     }
 
     var infoHtml = infoItems.map(function (item) {
@@ -463,7 +556,7 @@ const Labs = (function () {
     var html = '<div class="lbs-detail-panel">' +
       '<button class="lbs-detail-close" onclick="Labs._toggleRowDetail(\'' + labIdEsc + '\')" title="Close">\u2715</button>' +
       '<div class="lbs-detail-section">' +
-        '<div class="lbs-detail-section-title">Lab Info</div>' +
+        '<div class="lbs-detail-section-title">Server Details</div>' +
         '<div class="lbs-detail-info-grid">' + infoHtml + '</div>' +
       '</div>';
 
@@ -476,36 +569,72 @@ const Labs = (function () {
         connHtml =
           '<button class="btn btn-sm btn-outline" onclick="Labs._downloadRdp(\'' + labIdEsc + '\')">Download RDP File</button>' +
           '<button class="btn btn-sm btn-outline" onclick="Labs._getWindowsPassword(\'' + labIdEsc + '\')">Get Windows Password</button>' +
-          '<div id="lbs-win-pass-' + labIdEsc + '" style="display:none;margin-top:10px;padding:10px;background:#141820;border-radius:6px;border:1px solid rgba(126,179,255,.15);"></div>';
+          '<div id="lbs-win-pass-' + labIdEsc + '" class="lbs-code-block" style="display:none;margin-top:10px;"></div>';
       } else {
         connHtml =
           '<div class="lbs-code-block" style="margin-bottom:10px;">' + _esc(sshCmd) + '</div>' +
-          '<button class="btn btn-sm btn-outline" onclick="Labs.downloadKeypair(\'' + labIdEsc + '\')">Download Keypair (.pem)</button>';
+          '<button class="btn btn-sm btn-outline" onclick="Labs.downloadKeypair(\'' + labIdEsc + '\')">Download Key File (.pem)</button>';
       }
       html += '<div class="lbs-detail-section">' +
-        '<div class="lbs-detail-section-title">' + (isWindows ? 'RDP Connection' : 'SSH Connection') + '</div>' +
+        '<div class="lbs-detail-section-title">' + (isWindows ? 'Remote Desktop Connection' : 'SSH Connection') + '</div>' +
         '<div class="lbs-detail-actions">' + connHtml + '</div>' +
         '</div>';
 
       // ── Actions section
-      var actionBtns = '<button class="btn btn-sm btn-outline" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Lab Info (.txt)</button>';
-      if (isAdmin) {
-        actionBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Lab</button>';
+      var actionBtns = '<button class="btn btn-sm btn-outline" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Connection Info (.txt)</button>';
+      if (canTerminate) {
+        actionBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>';
       }
       html += '<div class="lbs-detail-section">' +
-        '<div class="lbs-detail-section-title">Actions</div>' +
+        '<div class="lbs-detail-section-title">Manage Server</div>' +
         '<div class="lbs-detail-actions">' + actionBtns + '</div>' +
         '</div>';
     }
 
-    // ── Provisioning status
+    // ── Stopped server info
+    if (lab.status === 'stopped') {
+      var stopNote = isOwner || isAdmin
+        ? 'Your server is stopped. To restart it, go to the <b>Servers</b> tab and click Start on this server. The status here updates automatically when it comes back online.'
+        : 'This server is currently stopped. Only the server owner or an admin can restart it from the Servers tab.';
+      html += '<div class="lbs-detail-section">' +
+        '<div class="lbs-detail-section-title">Server Stopped</div>' +
+        '<div class="lbs-verification-notice">' +
+          '<div class="lbs-verification-icon" style="font-size:22px;">&#9646;&#9646;</div>' +
+          '<div>' +
+            '<h4 class="lbs-verification-title">Server is currently stopped</h4>' +
+            '<p class="lbs-verification-msg">' + stopNote + '</p>' +
+          '</div>' +
+        '</div>';
+      if (canTerminate) {
+        html += '<div class="lbs-detail-actions" style="margin-top:12px;">' +
+          '<button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>' +
+          '</div>';
+      }
+      html += '</div>';
+    }
+
+    // ── Setting up status
     if (lab.status === 'provisioning') {
       html += '<div class="lbs-detail-section">' +
-        '<div class="lbs-provision-step lbs-provision-step--active">Provisioning \u2014 EC2 instance is being prepared&hellip;</div>' +
+        '<div class="lbs-prov-card">' +
+          '<div class="lbs-prov-header">' +
+            '<div class="lbs-prov-spinner"></div>' +
+            '<div>' +
+              '<div class="lbs-prov-title">Setting up your server&hellip;</div>' +
+              '<div class="lbs-prov-sub">This typically takes 2&ndash;5 minutes. Status updates automatically.</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="lbs-pv-timeline">' +
+            '<div class="lbs-pv-step lbs-pv-done"><span class="lbs-pv-dot"></span><span>Payment verified &amp; approved</span></div>' +
+            '<div class="lbs-pv-step lbs-pv-active"><span class="lbs-pv-dot"></span><span>Creating server resources (key, network, storage)</span></div>' +
+            '<div class="lbs-pv-step"><span class="lbs-pv-dot"></span><span>Configuring network &amp; security</span></div>' +
+            '<div class="lbs-pv-step"><span class="lbs-pv-dot"></span><span>Launching your server</span></div>' +
+          '</div>' +
+        '</div>' +
         '</div>';
-      if (isAdmin) {
+      if (canTerminate) {
         html += '<div class="lbs-detail-section">' +
-          '<div class="lbs-detail-actions"><button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Lab</button></div>' +
+          '<div class="lbs-detail-actions"><button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Cancel &amp; Terminate</button></div>' +
           '</div>';
       }
     }
@@ -513,25 +642,46 @@ const Labs = (function () {
     // ── Pending approval actions
     if (lab.status === 'pending_approval') {
       if (isAdmin) {
+        var costMeta  = lab.estimatedCost != null ? ' &middot; ' + _esc(_npmFmt(Number(lab.estimatedCost))) : '';
+        var submitter = _esc(lab.userEmail || lab.callerEmail || '\u2014');
         html += '<div class="lbs-detail-section">' +
-          '<div class="lbs-detail-section-title">Admin Actions</div>' +
-          '<div class="lbs-detail-actions">' +
-            '<button class="btn btn-sm btn-outline" onclick="Labs._viewPayment(\'' + labIdEsc + '\')">View Payment</button>' +
-            '<button class="btn btn-sm btn-blue" onclick="Labs._approveLab(\'' + labIdEsc + '\')">Approve</button>' +
-            '<button class="btn btn-sm btn-danger" onclick="Labs._rejectLab(\'' + labIdEsc + '\')">Reject</button>' +
+          '<div class="lbs-detail-section-title">Payment Review</div>' +
+          '<div class="lbs-review-card">' +
+            '<div class="lbs-review-top">' +
+              '<span class="lbs-review-badge">&#9679; Awaiting Your Review</span>' +
+              '<span class="lbs-review-meta">Submitted by ' + submitter + costMeta + '</span>' +
+            '</div>' +
+            '<div class="lbs-review-actions">' +
+              '<button class="btn btn-sm btn-outline" onclick="Labs._viewPayment(\'' + labIdEsc + '\')">&#128247; View Payment Screenshot</button>' +
+              '<button class="btn btn-sm btn-success" onclick="Labs._approveLab(\'' + labIdEsc + '\')">&#10003; Approve &amp; Provision</button>' +
+              '<button class="btn btn-sm btn-danger" onclick="Labs._rejectLab(\'' + labIdEsc + '\')">&#10007; Reject</button>' +
+            '</div>' +
           '</div>' +
           '</div>';
       } else {
+        var cancelBtn = isOwner
+          ? '<div class="lbs-detail-actions" style="margin-top:12px;"><button class="btn btn-sm btn-outline" onclick="Labs._confirmCancelRequest(\'' + labIdEsc + '\')">Cancel Request</button></div>'
+          : '';
         html += '<div class="lbs-detail-section">' +
           '<div class="lbs-verification-notice">' +
             '<div class="lbs-verification-icon">&#128269;</div>' +
             '<div>' +
               '<h4 class="lbs-verification-title">Payment Verification in Progress</h4>' +
-              '<p class="lbs-verification-msg">Your payment is being reviewed by our team. Your server will be provisioned automatically once the payment is confirmed. This typically takes a few minutes.</p>' +
+              '<p class="lbs-verification-msg">Your payment is being reviewed by our team. Your server will be set up automatically once payment is confirmed &mdash; this usually takes a few minutes. The status will change to <b>Setting Up</b> once approved.</p>' +
             '</div>' +
           '</div>' +
+          cancelBtn +
           '</div>';
       }
+    }
+
+    // ── History records: allow removal
+    if (lab.status === 'terminated' || lab.status === 'rejected') {
+      html += '<div class="lbs-detail-section">' +
+        '<div class="lbs-detail-actions">' +
+          '<button class="btn btn-sm btn-outline" onclick="Labs._confirmRemoveHistory(\'' + labIdEsc + '\')">Remove from History</button>' +
+        '</div>' +
+        '</div>';
     }
 
     html += '</div>'; // close lbs-detail-panel
@@ -666,12 +816,12 @@ const Labs = (function () {
       '  </div>',
       '  <div class="lbs-wizard-body">',
       '    <div class="lbs-form-row">',
-      '      <label class="lbs-label">Lab Name <span class="lbs-help-text">(optional — used as EC2 instance name)</span></label>',
+      '      <label class="lbs-label">Server Name <span class="lbs-help-text">(optional)</span></label>',
       '      <input type="text" id="lbs-s1-name" class="lbs-input" maxlength="100"',
       '             placeholder="e.g. my-dev-server" value="' + nameVal + '">',
       '    </div>',
       '    <div class="lbs-form-row">',
-      '      <label class="lbs-label">AWS Account</label>',
+      '      <label class="lbs-label">Account</label>',
       '      <select id="lbs-s1-account" class="lbs-select">' + accountOptions + '</select>',
       '    </div>',
       '    <div class="lbs-form-row">',
@@ -683,7 +833,7 @@ const Labs = (function () {
       '      <div class="lbs-platform-grid">' + platformCards + '</div>',
       '    </div>',
       '    <div class="lbs-form-row">',
-      '      <label class="lbs-label">Instance Type</label>',
+      '      <label class="lbs-label">Server Type</label>',
       '      <select id="lbs-s1-instance" class="lbs-select">' + instanceGroupHtml + '</select>',
       '    </div>',
       '    <div class="lbs-form-row">',
@@ -711,6 +861,20 @@ const Labs = (function () {
       '        </div>',
       '      </div>',
       '      <p id="lbs-s1-duration-preview" class="lbs-help-text" style="margin-top:4px;"></p>',
+      '    </div>',
+      '    <div class="lbs-form-row">',
+      '      <label class="lbs-label">Daily Uptime</label>',
+      '      <div class="lbs-uptime-row">',
+      '        <select id="lbs-s1-uptime" class="lbs-select" style="max-width:180px;" onchange="Labs._onDateRangeChange()">',
+      '          <option value="4"'  + (wizardConfig.hoursPerDay ===  4 ? ' selected' : '') + '>4 hrs/day</option>',
+      '          <option value="6"'  + (wizardConfig.hoursPerDay ===  6 ? ' selected' : '') + '>6 hrs/day</option>',
+      '          <option value="8"'  + (wizardConfig.hoursPerDay ===  8 ? ' selected' : '') + '>8 hrs/day (business hours)</option>',
+      '          <option value="12"' + (wizardConfig.hoursPerDay === 12 ? ' selected' : '') + '>12 hrs/day</option>',
+      '          <option value="16"' + (wizardConfig.hoursPerDay === 16 ? ' selected' : '') + '>16 hrs/day</option>',
+      '          <option value="24"' + (!wizardConfig.hoursPerDay || wizardConfig.hoursPerDay === 24 ? ' selected' : '') + '>24 hrs/day — always on (default)</option>',
+      '        </select>',
+      '        <span class="lbs-help-text" style="margin-top:0;">Uptime is <b>24 hrs/day</b> by default. Choose a lower value if you plan to shut the server down between sessions — it reduces your estimated cost.</span>',
+      '      </div>',
       '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Network Options</label>',
@@ -754,6 +918,8 @@ const Labs = (function () {
     if (!startEl || !endEl || !preview) return;
     var start = startEl.value;
     var end   = endEl.value;
+    var uptimeEl    = document.getElementById('lbs-s1-uptime');
+    var hoursPerDay = uptimeEl ? (parseInt(uptimeEl.value, 10) || 24) : 24;
     if (start && end) {
       var days = Math.round((new Date(end) - new Date(start)) / 86400000);
       if (days <= 0) {
@@ -761,7 +927,8 @@ const Labs = (function () {
         preview.style.color = 'var(--red)';
       } else {
         preview.style.color = '';
-        preview.textContent = start + ' \u2192 ' + end + ' \u2014 ' + days + ' day' + (days === 1 ? '' : 's') + ' (' + (days * 24).toLocaleString() + ' hours)';
+        var totalHours = days * hoursPerDay;
+        preview.textContent = start + ' \u2192 ' + end + ' \u2014 ' + days + ' day' + (days === 1 ? '' : 's') + ' \u00d7 ' + hoursPerDay + ' hrs/day = ' + totalHours.toLocaleString() + ' total hours';
       }
     } else {
       preview.textContent = '';
@@ -864,18 +1031,18 @@ const Labs = (function () {
     var startDate     = ((document.getElementById('lbs-s1-start-date') || {}).value || '').trim();
     var endDate       = ((document.getElementById('lbs-s1-end-date')   || {}).value || '').trim();
     var totalDays     = startDate && endDate ? Math.round((new Date(endDate) - new Date(startDate)) / 86400000) : 0;
-    var hoursPerDay   = 24;
+    var hoursPerDay   = parseInt((document.getElementById('lbs-s1-uptime') || {}).value || '24', 10) || 24;
     var months        = Math.max(1, Math.ceil(totalDays / 30));
-    var durationHours = totalDays * 24;
+    var durationHours = totalDays * hoursPerDay;
 
     var platform = '';
     var radios   = document.querySelectorAll('input[name="lbs-platform"]');
     radios.forEach(function (r) { if (r.checked) platform = r.value; });
 
-    if (!accountId)     { App.showToast('Select an AWS account', 'err');   return false; }
+    if (!accountId)     { App.showToast('Select an account', 'err');   return false; }
     if (!region)        { App.showToast('Select a region', 'err');         return false; }
     if (!platform)      { App.showToast('Select a platform', 'err');       return false; }
-    if (!instanceType)  { App.showToast('Select an instance type', 'err'); return false; }
+    if (!instanceType)  { App.showToast('Select a server type', 'err'); return false; }
     var minStorage = platform === 'windows' ? 35 : 8;
     if (!storageGb || storageGb < minStorage || storageGb > 500) {
       App.showToast('Storage must be between ' + minStorage + ' and 500 GB', 'err'); return false;
@@ -932,11 +1099,14 @@ const Labs = (function () {
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-body">',
-      '    <div id="lbs-pricing-content"><div class="lbs-loading">Fetching pricing from AWS Price List API…</div></div>',
+      '    <div id="lbs-pricing-content"><div class="lbs-loading">Fetching pricing…</div></div>',
       '  </div>',
       '  <div class="lbs-wizard-footer">',
       '    <button class="btn btn-outline" onclick="Labs.prevStep()">Back</button>',
-      '    <button class="btn btn-blue" id="lbs-s2-next" style="display:none" onclick="Labs.nextStep()">Confirm &amp; Proceed to Payment</button>',
+      '    <div style="display:flex;gap:8px;align-items:center;">',
+      '      <button id="lbs-s2-dl-bill" class="btn btn-outline" style="display:none;" onclick="Labs._downloadBill()">&#8681; Download Bill (NPR)</button>',
+      '      <button id="lbs-s2-next" class="btn btn-blue" style="display:none;" onclick="Labs.nextStep()">Continue to Payment</button>',
+      '    </div>',
       '  </div>',
       '</div>',
     ].join('\n');
@@ -964,6 +1134,7 @@ const Labs = (function () {
       var months      = wizardConfig.months;
       var durationHours = wizardConfig.durationHours;
       wizardConfig.estimatedCost = b.totalUsd;
+      wizardConfig.priceBreakdown = b;
 
       var startDate     = wizardConfig.startDate || '';
       var endDate       = wizardConfig.endDate   || '';
@@ -971,7 +1142,7 @@ const Labs = (function () {
       var durationLabel = startDate + ' \u2192 ' + endDate + ' (' + totalDays + ' days, ' + durationHours.toLocaleString() + ' hrs)';
 
       var rows = [
-        '<tr><td>' + _esc(wizardConfig.instanceType) + ' EC2</td>' +
+        '<tr><td>' + _esc(wizardConfig.instanceType || '\u2014') + ' (server)</td>' +
           '<td>$' + b.ec2Hourly.toFixed(4) + '/hr</td>' +
           '<td>' + _npmFmt(b.ec2Cost) + '</td></tr>',
         '<tr><td>EBS gp3 (' + _esc(String(wizardConfig.storageGb)) + ' GB)</td>' +
@@ -1000,13 +1171,13 @@ const Labs = (function () {
         '    </tr>',
         '  </tfoot>',
         '</table>',
-        '<p class="lbs-pricing-source">Rates from AWS Price List API · Verify with AWS Pricing Calculator below</p>',
+        '<p class="lbs-pricing-source">Live pricing · Verify with the AWS Pricing Calculator below</p>',
         '<div class="lbs-calc-hint">',
         '  <p class="lbs-calc-hint-title">Your configuration for AWS Pricing Calculator:</p>',
         '  <ul class="lbs-calc-hint-list">',
         '    <li>Region: ' + _esc(regionLabel) + '</li>',
         '    <li>Operating System: ' + _esc(osLabel) + '</li>',
-        '    <li>Instance Type: ' + _esc(wizardConfig.instanceType) + '</li>',
+        '    <li>Server Type: ' + _esc(wizardConfig.instanceType || '\u2014') + '</li>',
         '    <li>Duration: ' + _esc(String(totalDays)) + ' days (' + _esc(startDate) + ' \u2192 ' + _esc(endDate) + ')</li>',
         '    <li>EBS: ' + _esc(String(wizardConfig.storageGb)) + ' GB gp3</li>',
         '  </ul>',
@@ -1016,12 +1187,92 @@ const Labs = (function () {
         '</div>',
       ].join('\n');
 
+      // Store breakdown reference for bill download
+      var dlBtn = document.getElementById('lbs-s2-dl-bill');
+      if (dlBtn) dlBtn.style.display = '';
       var nextBtn = document.getElementById('lbs-s2-next');
       if (nextBtn) nextBtn.style.display = '';
     } catch (e) {
       contentEl.innerHTML = '<div class="lbs-err">Failed to fetch pricing: ' + _esc(e.message) + '</div>';
       App.showToast('Pricing error: ' + e.message, 'err');
     }
+  }
+
+  // ─── Download Bill as text file (NPR)
+
+  function _downloadBill() {
+    var b       = wizardConfig.priceBreakdown;
+    var rate    = _getNprRate();
+    var config  = wizardConfig;
+    if (!b) { App.showToast('Pricing not loaded yet', 'err'); return; }
+
+    var REGIONS_MAP = {};
+    (REGIONS || []).forEach(function (r) { REGIONS_MAP[r.value] = r.label; });
+    var regionLabel = REGIONS_MAP[config.region] || config.region || '—';
+    var osLabel     = config.platform === 'windows' ? 'Windows Server' : 'Linux (Ubuntu)';
+    var startDate   = config.startDate || '—';
+    var endDate     = config.endDate   || '—';
+    var totalDays   = config.totalDays || 0;
+
+    function nprLine(usd) {
+      if (!usd || usd <= 0) return '—';
+      return 'NPR ' + (usd * rate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    var sep  = '═══════════════════════════════════════════════';
+    var sep2 = '───────────────────────────────────────────────';
+    var lines = [
+      'SERVER BILLING ESTIMATE',
+      sep,
+      'Generated:      ' + new Date().toUTCString(),
+      'Exchange Rate:  1 USD = NPR ' + rate.toFixed(2) + ' (live mid-market rate)',
+      '',
+      'CONFIGURATION',
+      sep2,
+      'Server Name:    ' + (config.labName || '(not named)'),
+      'Account:        ' + (config.accountId || '—'),
+      'Region:         ' + regionLabel,
+      'Operating System: ' + osLabel,
+      'Server Type:    ' + (config.instanceType || '—'),
+      'Storage:        ' + (config.storageGb || '—') + ' GB (gp3 SSD)',
+      'Fixed IP:       ' + (config.elasticIp ? 'Yes' : 'No'),
+      'Daily Uptime:   ' + (config.hoursPerDay || 24) + ' hrs/day',
+      'Duration:       ' + startDate + ' \u2192 ' + endDate + ' (' + totalDays + ' days, ' + ((config.durationHours || 0).toLocaleString()) + ' total hrs)',
+      '',
+      'COST BREAKDOWN',
+      sep2,
+      ('Server (' + (config.instanceType || '') + ')').padEnd(25) +
+        ('$' + b.ec2Hourly.toFixed(4) + '/hr').padEnd(18) +
+        nprLine(b.ec2Cost),
+      ('Storage (' + (config.storageGb || '') + ' GB gp3)').padEnd(25) +
+        ('$' + b.ebsPerGbMonth.toFixed(4) + '/GB-mo').padEnd(18) +
+        nprLine(b.ebsCost),
+    ];
+
+    if (config.elasticIp) {
+      lines.push(
+        'Fixed IP (Elastic IP)'.padEnd(25) +
+          ('$' + b.eipHourly.toFixed(4) + '/hr').padEnd(18) +
+          nprLine(b.eipCost)
+      );
+    }
+
+    lines = lines.concat([
+      sep2,
+      'TOTAL ESTIMATE'.padEnd(25) + ''.padEnd(18) + nprLine(b.totalUsd),
+      sep,
+      '',
+      'Note: This is an estimate based on on-demand pricing.',
+      'Actual costs may vary. Rates from AWS Price List.',
+      'NPR conversion uses a live mid-market rate and is indicative only.',
+    ]);
+
+    var content = lines.join('\n');
+    var fname   = 'server-bill-' + (config.instanceType || 'estimate').replace('.', '') + '-' + startDate + '.txt';
+    var url     = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
+    var a       = document.createElement('a');
+    a.href = url; a.download = fname; a.click();
+    URL.revokeObjectURL(url);
   }
 
   // ─── Step 3: Payment
@@ -1045,14 +1296,14 @@ const Labs = (function () {
       '  <div class="lbs-wizard-body">',
       '    <div class="lbs-payment-amount"><span style="font-size:13px;font-weight:400;color:var(--ink3);display:block;margin-bottom:4px;">Amount Due</span>' + _esc(totalStr) + '</div>',
       '    <div class="lbs-qr-wrap">',
-      '      <img src="PaymentQR.jpeg" alt="Payment QR Code" class="lbs-qr-img">',
+      '      <img src="PaymentQR.png" alt="Payment QR Code" class="lbs-qr-img">',
       '    </div>',
       '    <div class="lbs-form-row" style="margin-top:16px;">',
       '      <label class="lbs-label">Upload Payment Screenshot (JPG / PNG, max 5 MB)</label>',
       '      <input type="file" id="lbs-s3-screenshot" accept="image/jpeg,image/png,image/webp" onchange="Labs._onScreenshotChange()">',
       '    </div>',
       '    <div id="lbs-s3-preview" style="display:none; margin-top:8px;">',
-      '      <img id="lbs-s3-preview-img" style="max-width:200px; max-height:200px; border-radius:6px; border:1px solid #444;">',
+      '      <img id="lbs-s3-preview-img" style="max-width:200px; max-height:200px; border-radius:6px; border:1px solid var(--bd2);">',
       '    </div>',
       '    <p id="lbs-s3-status" class="lbs-help-text"></p>',
       '    <button class="btn btn-blue" id="lbs-s3-submit" onclick="Labs.submitPayment()" style="margin-top:8px;">',
@@ -1196,7 +1447,7 @@ const Labs = (function () {
   async function _approveLab(labId) {
     _showConfirm(
       'Approve Lab Request?',
-      'This will start provisioning the EC2 instance for this lab. The user will be charged.',
+      'This will provision the server for this user. The user will be charged.',
       async function () {
         try {
           var res  = await API.provisionLab({ action: 'approve', labId: labId });
@@ -1217,7 +1468,7 @@ const Labs = (function () {
   async function _rejectLab(labId) {
     _showConfirm(
       'Reject Lab Request?',
-      'This will reject the lab request. No EC2 instance will be launched.',
+      'This will reject this server request. No server will be provisioned.',
       async function () {
         try {
           var res  = await API.provisionLab({ action: 'reject', labId: labId });
@@ -1273,7 +1524,7 @@ const Labs = (function () {
             _pollTimer = null;
             activeLabs = labs;
             _renderLabsList();
-            App.showToast('Lab provisioning failed. Check AWS console for details.', 'err');
+            App.showToast('Server setup failed. Please contact support if this persists.', 'err');
             return;  // stop polling
           }
           _schedule();
@@ -1313,7 +1564,7 @@ const Labs = (function () {
           '  <div class="lbs-info-label">RDP Connection</div>',
           '  <button class="btn btn-outline btn-sm" onclick="Labs._downloadRdp(\'' + labIdEsc + '\')">Download RDP File</button>',
           '  <button class="btn btn-outline btn-sm" onclick="Labs._getWindowsPassword(\'' + labIdEsc + '\')" style="margin-left:8px;">Get Windows Password</button>',
-          '  <div id="lbs-win-pass" style="display:none; margin-top:10px; padding:10px; background:#1e2430; border-radius:6px;"></div>',
+          '  <div id="lbs-win-pass-' + labIdEsc + '" class="lbs-code-block" style="display:none;margin-top:10px;"></div>',
           '</div>',
         ].join('\n')
       : [
@@ -1333,15 +1584,15 @@ const Labs = (function () {
       '    <div class="lbs-info-grid">',
       '      <div class="lbs-info-row"><b>Lab ID:</b> <code>' + labIdEsc + '</code></div>',
       '      <div class="lbs-info-row"><b>Lab Name:</b> '      + _esc(displayName)          + '</div>',
-      '      <div class="lbs-info-row"><b>Instance ID:</b> <code>' + _esc(lab.instanceId || '—') + '</code></div>',
+      '      <div class="lbs-info-row"><b>Server ID:</b> <code>' + _esc(lab.instanceId || '—') + '</code></div>',
       '      <div class="lbs-info-row"><b>Platform:</b> '      + _esc(platformLabel)        + '</div>',
-      '      <div class="lbs-info-row"><b>Instance:</b> '      + _esc(lab.instanceType)     + '</div>',
+      '      <div class="lbs-info-row"><b>Server Type:</b> ' + _esc(lab.instanceType || '—') + '</div>',
       '      <div class="lbs-info-row"><b>Region:</b> '        + _esc(lab.region)           + '</div>',
       '      <div class="lbs-info-row"><b>Public IP:</b> '     + _esc(ip)                   + '</div>',
       '      <div class="lbs-info-row"><b>Estimated Cost:</b> '+ _esc(costStr)              + '</div>',
       '      <div class="lbs-info-row"><b>Expires:</b> '       + _esc(expiry)               + '</div>',
       '    </div>',
-      '    <p class="lbs-help-text" style="margin-top:8px;">This instance also appears in the <b>Instances</b> tab as <b>' + _esc(displayName) + '</b> — click Refresh All there to see it.</p>',
+      '    <p class="lbs-help-text" style="margin-top:8px;">Your server is now live. You can also find it in the <b>Servers</b> tab.</p>',
       '    ' + connectionHtml,
       '    <div style="margin-top:16px;">',
       '      <button class="btn btn-outline btn-sm" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Lab Info (.txt)</button>',
@@ -1384,16 +1635,16 @@ const Labs = (function () {
 
   async function _getWindowsPassword(labId) {
     var passEl = document.getElementById('lbs-win-pass-' + labId);
-    if (passEl) { passEl.style.display = ''; passEl.innerHTML = '<span style="color:#fff;">Retrieving password\u2026</span>'; }
+    if (passEl) { passEl.style.display = ''; passEl.innerHTML = '<span style="color:var(--ink3);">Retrieving password\u2026</span>'; }
     try {
       var res  = await API.getLabWindowsPassword(labId);
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to get Windows password');
       if (passEl) {
-        passEl.innerHTML = '<b style="color:#fff;">Password:</b> <code style="user-select:all; font-size:15px;">' + _esc(data.password) + '</code>';
+        passEl.innerHTML = '<b style="color:var(--ink2);">Password:</b> <code style="user-select:all; font-size:15px;">' + _esc(data.password) + '</code>';
       }
     } catch (e) {
-      if (passEl) passEl.innerHTML = '<span style="color:#fff;">Error: ' + _esc(e.message) + ' (password may not be ready \u2014 wait 4+ minutes after launch)</span>';
+      if (passEl) passEl.innerHTML = '<span style="color:var(--ink3);">Error: ' + _esc(e.message) + ' (password may not be ready \u2014 wait 4+ minutes after launch)</span>';
       App.showToast('Password retrieval failed: ' + e.message, 'err');
     }
   }
@@ -1418,11 +1669,11 @@ const Labs = (function () {
       : ['SSH Command:    ssh -i keypair.pem ' + sshUser + '@' + (ip || '—')].join('\n');
 
     var content = [
-      'EC2 Lab Connection Info',
+      'Server Connection Info',
       '═══════════════════════════════════════',
       'Lab ID:         ' + (labId || '—'),
       'Platform:       ' + (PLATFORM_LABELS[platform] || platform || '—'),
-      'Instance Type:  ' + ((lab && lab.instanceType) || wizardConfig.instanceType || '—'),
+      'Server Type:    ' + ((lab && lab.instanceType) || wizardConfig.instanceType || '—'),
       'Region:         ' + ((lab && lab.region)       || wizardConfig.region       || '—'),
       'Public IP:      ' + (ip || '—'),
       'Estimated Cost: ' + costStr,
@@ -1473,8 +1724,12 @@ const Labs = (function () {
     _loadNetworkOptions: _loadNetworkOptions,
     _onVpcChange:        _onVpcChange,
     _onScreenshotChange: _onScreenshotChange,
-    _confirmDelete:      _confirmDelete,
-    _downloadRdp:        _downloadRdp,
+    _confirmDelete:        _confirmDelete,
+    _confirmRemoveHistory: _confirmRemoveHistory,
+    _confirmCancelRequest: _confirmCancelRequest,
+    _toggleGuide:          _toggleGuide,
+    _downloadBill:         _downloadBill,
+    _downloadRdp:          _downloadRdp,
     _getWindowsPassword: _getWindowsPassword,
   };
 

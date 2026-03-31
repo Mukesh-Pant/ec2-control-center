@@ -1208,17 +1208,20 @@
           <div id="lbs-header">
             <div class="ph">
               <div class="ph-l">
-                <h1 class="ph-title">EC2 Labs</h1>
-                <p class="ph-sub">Self-service EC2 instances for hands-on training — provisioned on approval</p>
+                <h1 class="ph-title">My Servers</h1>
+                <p class="ph-sub">Provision and manage your dedicated cloud servers — ready when you are</p>
               </div>
               <div class="ph-r">
-                <button class="btn btn-out" id="lbs-btn-refresh" onclick="Labs.refresh()" title="Refresh labs status">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                <button class="btn btn-out btn-sm" id="lbs-btn-refresh" onclick="Labs.refresh()" title="Refresh">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                   Refresh
                 </button>
-                <button class="btn btn-blue" id="lbs-btn-new" onclick="Labs.startWizard()">
-                  <svg viewBox="0 0 24 24" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></
-                  New Lab
+                <button class="lbs-cta-btn" id="lbs-btn-new" onclick="Labs.startWizard()">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                    <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
+                    <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+                  </svg>
+                  Create Your Server
                 </button>
               </div>
             </div>

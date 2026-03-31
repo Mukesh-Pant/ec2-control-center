@@ -5,10 +5,10 @@
 
 const Billing = (function () {
 
-  var USD_TO_NPR = 135;
+  function _getNprRate() { return (window.NPR_RATE && window.NPR_RATE > 0) ? window.NPR_RATE : 135; }
   function _npr(usd) {
     if (!usd || usd <= 0) return '—';
-    return 'NPR\u00a0' + (usd * USD_TO_NPR).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return 'NPR\u00a0' + (usd * _getNprRate()).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   // ─── Daily Summary (per-instance from audit logs) ─────────────────────────────
@@ -95,7 +95,7 @@ const Billing = (function () {
       '</table>' +
       '<div class="daily-disclaimer">&#9432;&nbsp; Estimates use live on-demand Linux pricing from AWS Price List API (region-specific). ' +
       'Actual charges depend on your pricing tier, EBS volumes, and data transfer. ' +
-      '(1 USD = NPR 135, indicative rate)</div>';
+      '(1 USD = NPR\u00a0' + _getNprRate().toFixed(0) + ' · live mid-market rate)</div>';
   }
 
   // ─── Today's Session Estimate (live pricing from /pricing) ────────────────────
@@ -165,7 +165,7 @@ const Billing = (function () {
     wrap.innerHTML = rows +
       '<div class="bill-disclaimer">ℹ Live on-demand Linux pricing via AWS Price List API (region-specific). ' +
       'Actual charges depend on your pricing tier, EBS volumes, and data transfer. ' +
-      '(1 USD = NPR 135, indicative rate)</div>';
+      '(1 USD = NPR\u00a0' + _getNprRate().toFixed(0) + ' · live mid-market rate)</div>';
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────

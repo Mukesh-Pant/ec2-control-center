@@ -270,8 +270,27 @@ const App = (function () {
 
   // ─── Init ──────────────────────────────────────────────────────────────────
 
+  // ─── Live NPR exchange rate ────────────────────────────────────────────────
+
+  function _fetchNprRate() {
+    // Use open.er-api.com free tier — no key needed, rate is USD base
+    fetch('https://open.er-api.com/v6/latest/USD')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (d && d.rates && d.rates.NPR > 0) {
+          window.NPR_RATE = d.rates.NPR;
+          // Update rate display labels if any exist on page
+          document.querySelectorAll('.npr-rate-label').forEach(function (el) {
+            el.textContent = '1 USD = NPR\u00a0' + d.rates.NPR.toFixed(0) + ' (live)';
+          });
+        }
+      })
+      .catch(function () { /* keep default 135 fallback */ });
+  }
+
   function init() {
     _initExtensionDetection();
+    _fetchNprRate();
     Audit.init();
     Billing.init();
     Accounts.init();
