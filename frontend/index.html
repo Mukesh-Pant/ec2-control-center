@@ -17,7 +17,7 @@
 
 <!-- ════════ MODAL: Vendor Add / Edit ════════ -->
 <div class="overlay" id="vnd-overlay">
-  <div class="modal">
+  <div class="modal modal-wide">
     <div class="modal-stripe"></div>
     <div class="modal-hd">
       <div>
@@ -28,9 +28,11 @@
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+    <div class="modal-body">
     <div class="modal-grid">
       <div class="fg"><label class="fl" for="vnd-m-name">Vendor Name</label><input class="finp" id="vnd-m-name" type="text" placeholder="e.g. Anthropic"/></div>
       <div class="fg"><label class="fl" for="vnd-m-category">Category</label><input class="finp" id="vnd-m-category" type="text" placeholder="e.g. AI Services"/></div>
+      <div class="fg fg-wide"><label class="fl" for="vnd-m-services">Services Offered <span style="color:var(--ink4);font-weight:400">(comma-separated)</span></label><input class="finp" id="vnd-m-services" type="text" placeholder="e.g. LLM API, Image Generation, Embeddings"/></div>
       <div class="fg"><label class="fl" for="vnd-m-currency">Currency</label>
         <select class="finp" id="vnd-m-currency">
           <option value="USD">USD — US Dollar</option>
@@ -62,7 +64,11 @@
       </div>
       <div class="fg"><label class="fl" for="vnd-m-start">Agreement Start</label><input class="finp" id="vnd-m-start" type="date"/></div>
       <div class="fg"><label class="fl" for="vnd-m-end">Agreement End</label><input class="finp" id="vnd-m-end" type="date"/></div>
+      <div class="fg"><label class="fl" for="vnd-m-contact">Contact Name</label><input class="finp" id="vnd-m-contact" type="text" placeholder="Vendor contact person"/></div>
+      <div class="fg"><label class="fl" for="vnd-m-email">Contact Email</label><input class="finp" id="vnd-m-email" type="email" placeholder="support@vendor.com"/></div>
+      <div class="fg"><label class="fl" for="vnd-m-phone">Contact Phone</label><input class="finp" id="vnd-m-phone" type="text" placeholder="+1-800-…"/></div>
       <div class="fg fg-wide"><label class="fl" for="vnd-m-notes">Notes</label><input class="finp" id="vnd-m-notes" type="text" placeholder="Optional notes…"/></div>
+    </div>
     </div>
     <div class="merr" id="vnd-modal-err"></div>
     <div class="modal-actions">
@@ -1478,18 +1484,18 @@
               </select>
             </div>
           </div>
-          <div class="fm-table-wrap">
-            <table class="fm-table">
-              <thead>
-                <tr>
-                  <th>Vendor</th><th>Category</th><th>Amount</th>
-                  <th>Billing</th><th>Agreement Period</th><th>Status</th><th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="vnd-tbody"></tbody>
-            </table>
-          </div>
+          <div class="vnd-card-grid" id="vnd-card-grid"></div>
         </div>
+
+        <!-- Vendor detail drawer -->
+        <div class="vnd-drawer" id="vnd-drawer">
+          <div class="vnd-drawer-topbar">
+            <span class="vnd-drawer-label">Vendor Detail</span>
+            <button class="vnd-drawer-close" onclick="Vendors.closeDrawer()" title="Close">&times;</button>
+          </div>
+          <div id="vnd-drawer-body"></div>
+        </div>
+        <div class="vnd-drawer-backdrop" id="vnd-drawer-backdrop" onclick="Vendors.closeDrawer()"></div>
       </div><!-- /#pv-vendors -->
 
       <!-- ══════ CUSTOMERS ══════ -->
@@ -1570,18 +1576,7 @@
               </select>
             </div>
           </div>
-          <div class="fm-table-wrap">
-            <table class="fm-table">
-              <thead>
-                <tr>
-                  <th>Customer</th><th>Services</th><th>Contract Value</th>
-                  <th>Paid</th><th>Due</th><th>Status</th><th>Next Due</th>
-                  <th>Billing</th><th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="cust-tbody"></tbody>
-            </table>
-          </div>
+          <div class="cust-card-grid" id="cust-card-grid"></div>
         </div>
 
         <!-- Customer detail drawer -->

@@ -336,6 +336,7 @@ const Customers = (function () {
   var _drawerAddMsOpen     = false;
   var _drawerAddCtrOpen    = false;
   var _drawerTaskFormOpen  = {};  // contractId → bool
+  var _pendingInvProof     = null; // { data, name, type }
 
   // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -376,7 +377,7 @@ const Customers = (function () {
 
   function _render() {
     _renderStats();
-    _renderTable();
+    _renderCards();
   }
 
   function _renderStats() {
@@ -424,46 +425,60 @@ const Customers = (function () {
     });
   }
 
-  function _renderTable() {
-    var tbody = document.getElementById('cust-tbody');
-    if (!tbody) return;
+  function _renderCards() {
+    var grid = document.getElementById('cust-card-grid');
+    if (!grid) return;
     var list = _getFiltered();
     if (!list.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="fm-empty-cell"><div class="empty"><div class="empty-ico">\uD83E\uDDD1\u200D\uD83D\uDCBC</div><p class="empty-t">No customers found</p></div></td></tr>';
+      grid.innerHTML = '<div class="empty" style="padding:48px 0"><div class="empty-ico">\uD83E\uDDD1\u200D\uD83D\uDCBC</div><p class="empty-t">No customers found</p></div>';
       return;
     }
-    tbody.innerHTML = list.map(_custRowHtml).join('');
+    grid.innerHTML = list.map(_custCardHtml).join('');
   }
 
-  function _custRowHtml(c) {
-    var rowCls = c.paymentStatus === 'overdue' ? 'fm-row--red' : '';
-    var svcs   = (c.services || []).slice(0, 2).map(function (s) { return '<span class="fm-svc-chip">' + _esc(s) + '</span>'; }).join('');
-    if (c.services && c.services.length > 2) svcs += '<span class="fm-svc-chip more">+' + (c.services.length - 2) + '</span>';
-    var dueAmt = FinSettings.fmtAmt(c.amountDue, c.currency);
-    var dueDate = c.nextDueDate ? _fmtDate(c.nextDueDate) : '\u2014';
+  function _custCardHtml(c) {
+    var pct  = c.contractValue > 0 ? Math.min(100, Math.round(c.amountPaid / c.contractValue * 100)) : 0;
+    var svcs = (c.services || []).slice(0, 3).map(function (s) { return '<span class="fm-svc-chip">' + _esc(s) + '</span>'; }).join('');
+    if ((c.services || []).length > 3) svcs += '<span class="fm-svc-chip more">+' + (c.services.length - 3) + '</span>';
+    var daysLeft = c.nextDueDate ? Math.ceil((new Date(c.nextDueDate) - new Date()) / 86400000) : null;
+    var dueLbl = c.nextDueDate
+      ? (daysLeft !== null && daysLeft < 0 ? '<span class="cust-card-due-lbl overdue">Overdue ' + Math.abs(daysLeft) + 'd</span>'
+        : '<span class="cust-card-due-lbl">Due ' + _fmtDate(c.nextDueDate) + '</span>')
+      : '';
+    var cardCls = c.paymentStatus === 'overdue' ? 'cust-card--overdue' : c.paymentStatus === 'due' ? 'cust-card--due' : '';
 
-    return '<tr class="fm-row ' + rowCls + ' cust-row" onclick="Customers.openDrawer(\'' + _esc(c.id) + '\')">' +
-      '<td><span class="fm-name">' + _esc(c.name) + '</span><span class="fm-country">' + _esc(c.country) + '</span></td>' +
-      '<td><div class="fm-svcs">' + svcs + '</div></td>' +
-      '<td class="fm-cell-amt">' + FinSettings.fmtWithNpr(c.contractValue, c.currency) + '</td>' +
-      '<td class="fm-cell-amt">' + FinSettings.fmtAmt(c.amountPaid, c.currency) + '</td>' +
-      '<td class="fm-cell-amt ' + _dueAmtClass(c) + '">' + dueAmt + '</td>' +
-      '<td>' + _payBadge(c.paymentStatus) + '</td>' +
-      '<td>' + dueDate + '</td>' +
-      '<td>' + _esc(c.billingType.charAt(0).toUpperCase() + c.billingType.slice(1)) + '</td>' +
-      '<td class="fm-cell-actions" onclick="event.stopPropagation()">' +
-        '<button class="btn btn-xs btn-out" onclick="Customers.openEditModal(\'' + _esc(c.id) + '\')">Edit</button>' +
-        '<button class="btn btn-xs btn-out fm-btn-del" onclick="Customers.confirmDelete(\'' + _esc(c.id) + '\')">Delete</button>' +
-      '</td>' +
-    '</tr>';
+    return '<div class="cust-card ' + cardCls + '" onclick="Customers.openDrawer(\'' + _esc(c.id) + '\')">' +
+      '<div class="cust-card-top">' +
+        '<div>' +
+          '<div class="cust-card-name">' + _esc(c.name) + '</div>' +
+          '<div class="cust-card-meta">' + _esc(c.country) + ' &middot; ' + _esc(c.billingType) + '</div>' +
+        '</div>' +
+        _payBadge(c.paymentStatus) +
+      '</div>' +
+      (svcs ? '<div class="cust-card-svcs">' + svcs + '</div>' : '') +
+      '<div class="cust-card-progress">' +
+        '<div class="cust-card-prog-bar"><div class="cust-card-prog-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="cust-card-prog-lbl">' +
+          '<span>' + FinSettings.fmtAmt(c.amountPaid, c.currency) + ' paid</span>' +
+          '<span>' + pct + '% of ' + FinSettings.fmtAmt(c.contractValue, c.currency) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cust-card-footer">' +
+        dueLbl +
+        '<div class="cust-card-actions" onclick="event.stopPropagation()">' +
+          '<button class="btn btn-xs btn-out" onclick="Customers.openEditModal(\'' + _esc(c.id) + '\')">Edit</button>' +
+          '<button class="btn btn-xs btn-out fm-btn-del" onclick="Customers.confirmDelete(\'' + _esc(c.id) + '\')">Delete</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
   }
 
   // ─── Filters ──────────────────────────────────────────────────────────
 
-  function onSearch(val)           { _search    = val; _renderTable(); }
-  function onFilterStatus(val)     { _fStatus   = val; _renderTable(); }
-  function onFilterBillingType(val){ _fBilling  = val; _renderTable(); }
-  function onFilterCurrency(val)   { _fCurrency = val; _renderTable(); }
+  function onSearch(val)           { _search    = val; _renderCards(); }
+  function onFilterStatus(val)     { _fStatus   = val; _renderCards(); }
+  function onFilterBillingType(val){ _fBilling  = val; _renderCards(); }
+  function onFilterCurrency(val)   { _fCurrency = val; _renderCards(); }
 
   // ─── Customer Drawer ──────────────────────────────────────────────────
 
@@ -707,11 +722,17 @@ const Customers = (function () {
 
   function _invoicesHtml(c) {
     var invs = (c.invoices || []).slice().sort(function (a, b) { return b.issueDate > a.issueDate ? 1 : -1; });
-    if (!invs.length) return '<div class="fm-muted-sm">No invoices issued</div>';
+    if (!invs.length) return '<div class="fm-muted-sm">No invoices issued. Click &quot;+ Invoice&quot; to add one.</div>';
     var ST = { draft:'fm-badge--gray', sent:'fm-badge--blue', paid:'fm-badge--green', cancelled:'fm-badge--red' };
     return '<div class="cust-inv-list">' + invs.map(function (inv) {
       return '<div class="cust-inv-row">' +
-        '<div class="cust-inv-meta"><span class="cust-inv-date">' + _fmtDate(inv.issueDate) + '</span><span class="fm-badge ' + (ST[inv.status] || 'fm-badge--gray') + '">' + inv.status + '</span></div>' +
+        '<div class="cust-inv-meta" style="flex-direction:column;align-items:flex-start;gap:3px">' +
+          '<span class="cust-inv-date">' + _fmtDate(inv.issueDate) + '</span>' +
+          '<span class="fm-badge ' + (ST[inv.status] || 'fm-badge--gray') + '">' + inv.status + (inv.paidDate ? ' \u00b7 ' + _fmtDate(inv.paidDate) : '') + '</span>' +
+          (inv.proofData ? '<span class="inv-proof-link" onclick="Customers._viewInvProof(\'' + _esc(c.id) + '\',\'' + _esc(inv.id) + '\')">' +
+            '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
+            ' View Proof</span>' : '') +
+        '</div>' +
         '<div class="cust-inv-amt">' + FinSettings.fmtAmt(inv.amount, c.currency) + '</div>' +
         '<div class="cust-inv-actions">' +
           (inv.status === 'draft'     ? '<button class="btn btn-xs btn-out" onclick="Customers.setInvStatus(\'' + _esc(c.id) + '\',\'' + _esc(inv.id) + '\',\'sent\')">Send</button>' : '') +
@@ -720,6 +741,20 @@ const Customers = (function () {
         '</div>' +
       '</div>';
     }).join('') + '</div>';
+  }
+
+  function _viewInvProof(custId, invoiceId) {
+    var c = _data.find(function (x) { return x.id === custId; });
+    if (!c) return;
+    var inv = (c.invoices || []).find(function (i) { return i.id === invoiceId; });
+    if (!inv || !inv.proofData) return;
+    var win = window.open('', '_blank');
+    if (!win) return;
+    if (inv.proofType && inv.proofType.startsWith('image/')) {
+      win.document.write('<!DOCTYPE html><html><body style="margin:0;background:#111;display:flex;justify-content:center"><img src="' + inv.proofData + '" style="max-width:100%"/></body></html>');
+    } else {
+      win.location = inv.proofData;
+    }
   }
 
   // ── Inline add forms ──
@@ -743,7 +778,16 @@ const Customers = (function () {
       '<div class="dr-inline-grid">' +
         '<div class="fg" style="padding:0"><label class="fl">Issue Date</label><input class="finp" id="dr-inv-date" type="date" value="' + new Date().toISOString().slice(0,10) + '"/></div>' +
         '<div class="fg" style="padding:0"><label class="fl">Amount</label><input class="finp" id="dr-inv-amount" type="number" min="0" placeholder="0.00"/></div>' +
-        '<div class="fg" style="padding:0;grid-column:1/-1"><label class="fl">Notes</label><input class="finp" id="dr-inv-notes" placeholder="Optional"/></div>' +
+        '<div class="fg" style="padding:0;grid-column:1/-1"><label class="fl">Notes</label><input class="finp" id="dr-inv-notes" placeholder="Optional description"/></div>' +
+        '<div class="fg inv-proof-row" style="padding:0">' +
+          '<label class="fl">Proof of Invoice / Contract <span style="color:var(--ink4);font-weight:400">(Photo or PDF &mdash; max 2&thinsp;MB)</span></label>' +
+          '<label class="inv-proof-label" for="dr-inv-proof-file">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>' +
+            'Choose proof file' +
+          '</label>' +
+          '<input class="inv-proof-input" type="file" id="dr-inv-proof-file" accept="image/*,.pdf" onchange="Customers._onInvProofChange(this)"/>' +
+          '<div class="inv-proof-name" id="dr-inv-proof-name"></div>' +
+        '</div>' +
       '</div>' +
       '<div class="dr-inline-actions">' +
         '<button class="btn btn-xs btn-out" onclick="Customers.toggleAddInvoice()">Cancel</button>' +
@@ -859,12 +903,32 @@ const Customers = (function () {
     if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();
   }
 
+  function _onInvProofChange(input) {
+    var file = input.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { App.showToast('File exceeds 2 MB limit', 'err'); input.value = ''; return; }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      _pendingInvProof = { data: e.target.result, name: file.name, type: file.type };
+      var nameEl = document.getElementById('dr-inv-proof-name');
+      if (nameEl) nameEl.textContent = '\u2713 ' + file.name;
+    };
+    reader.readAsDataURL(file);
+  }
+
   function submitInvoice() {
     var date = _getVal('dr-inv-date');
     var amt  = parseFloat(_getVal('dr-inv-amount'));
     var note = _getVal('dr-inv-notes');
     if (isNaN(amt) || amt <= 0) { App.showToast('Enter a valid amount', 'err'); return; }
-    addInvoice(_drawerCustId, { issueDate: date, amount: amt, notes: note });
+    var fields = { issueDate: date, amount: amt, notes: note };
+    if (_pendingInvProof) {
+      fields.proofData = _pendingInvProof.data;
+      fields.proofName = _pendingInvProof.name;
+      fields.proofType = _pendingInvProof.type;
+    }
+    addInvoice(_drawerCustId, fields);
+    _pendingInvProof = null;
     App.showToast('Invoice issued', 'ok');
     _drawerAddInvOpen = false;
     _refreshDrawer();
@@ -1069,6 +1133,9 @@ const Customers = (function () {
     onFilterBillingType: onFilterBillingType,
     onFilterCurrency:    onFilterCurrency,
     onCustBillingChange: onCustBillingChange,
+    // Proof helpers
+    _onInvProofChange:   _onInvProofChange,
+    _viewInvProof:       _viewInvProof,
     // Drawer actions
     toggleAddPayment:    toggleAddPayment,
     toggleAddInvoice:    toggleAddInvoice,

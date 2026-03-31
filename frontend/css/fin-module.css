@@ -424,3 +424,130 @@
 
 /* ════════ DRAWER SIGNED-BY HIGHLIGHT ════════ */
 .cust-dr-signed { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--blue); background: var(--bdim); padding: 2px 8px; border-radius: 99px; }
+
+/* ════════ VENDOR CARDS ════════ */
+.vnd-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 14px; padding: 16px;
+}
+.vnd-card {
+  background: var(--white); border: 1.5px solid var(--bd);
+  border-radius: var(--rlg); padding: 16px;
+  cursor: pointer; transition: box-shadow .15s, border-color .15s;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.vnd-card:hover { box-shadow: var(--shm); border-color: var(--bd2); }
+.vnd-card--expiring { border-left: 3px solid var(--amber); }
+.vnd-card--expired  { border-left: 3px solid var(--red); }
+.vnd-card-top { display: flex; align-items: flex-start; gap: 11px; }
+.vnd-card-avatar {
+  width: 40px; height: 40px; border-radius: var(--r);
+  background: var(--bdim); color: var(--blue);
+  display: grid; place-items: center;
+  font-size: 17px; font-weight: 800; flex-shrink: 0; text-transform: uppercase;
+}
+.vnd-card-info { flex: 1; min-width: 0; }
+.vnd-card-name { font-size: 14.5px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vnd-card-cat  { font-size: 12px; color: var(--ink3); margin-top: 2px; }
+.vnd-card-svcs { display: flex; flex-wrap: wrap; gap: 4px; }
+.vnd-card-footer {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 8px;
+  padding-top: 8px; border-top: 1px solid var(--bg2);
+}
+.vnd-card-amt     { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--ink); }
+.vnd-card-billing { font-size: 11px; color: var(--ink4); margin-top: 2px; }
+.vnd-card-expiry  { font-size: 11px; color: var(--ink4); text-align: right; }
+.vnd-card-actions { display: flex; gap: 5px; justify-content: flex-end; }
+
+/* ════════ VENDOR DRAWER ════════ */
+.vnd-drawer {
+  position: fixed; top: var(--th); right: 0; bottom: 0;
+  width: 500px; max-width: 100vw;
+  background: var(--white); box-shadow: var(--shl);
+  border-left: 1px solid var(--bd);
+  display: flex; flex-direction: column;
+  transform: translateX(105%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  z-index: 50; overflow: hidden;
+}
+.vnd-drawer.open { transform: translateX(0); }
+.vnd-drawer-backdrop {
+  display: none; position: fixed; inset: 0;
+  background: rgba(13,27,62,.35); z-index: 49;
+  backdrop-filter: blur(1px);
+}
+.vnd-drawer-backdrop.open { display: block; }
+.vnd-drawer-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--bd); flex-shrink: 0;
+}
+.vnd-drawer-label { font-size: 13px; font-weight: 700; color: var(--ink); }
+.vnd-drawer-close {
+  width: 30px; height: 30px; background: none; border: none;
+  border-radius: var(--rsm); cursor: pointer; color: var(--ink3);
+  display: grid; place-items: center; font-size: 18px; transition: color .15s;
+}
+.vnd-drawer-close:hover { color: var(--ink); }
+#vnd-drawer-body { flex: 1; overflow-y: auto; padding-bottom: 24px; }
+
+/* ════════ CUSTOMER CARDS ════════ */
+.cust-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px; padding: 16px;
+}
+.cust-card {
+  background: var(--white); border: 1.5px solid var(--bd);
+  border-radius: var(--rlg); padding: 16px;
+  cursor: pointer; transition: box-shadow .15s, border-color .15s;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cust-card:hover { box-shadow: var(--shm); border-color: var(--bd2); }
+.cust-card--overdue { border-left: 3px solid var(--red); }
+.cust-card--due     { border-left: 3px solid var(--amber); }
+.cust-card-top  { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.cust-card-name { font-size: 15px; font-weight: 700; color: var(--ink); }
+.cust-card-meta { font-size: 12px; color: var(--ink3); margin-top: 2px; }
+.cust-card-svcs { display: flex; flex-wrap: wrap; gap: 4px; }
+.cust-card-progress { margin-top: 2px; }
+.cust-card-prog-bar  { height: 6px; background: var(--bg2); border-radius: 99px; overflow: hidden; }
+.cust-card-prog-fill { height: 100%; background: linear-gradient(90deg, var(--green2), var(--cyan2)); border-radius: 99px; transition: width .4s; }
+.cust-card-prog-lbl  { font-size: 11px; color: var(--ink3); margin-top: 4px; display: flex; justify-content: space-between; }
+.cust-card-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 8px; border-top: 1px solid var(--bg2); gap: 8px;
+}
+.cust-card-due-lbl { font-size: 12px; color: var(--ink4); }
+.cust-card-due-lbl.overdue { color: var(--red); font-weight: 700; }
+.cust-card-actions { display: flex; gap: 5px; }
+
+/* ════════ PROOF / FILE UPLOAD ════════ */
+.inv-proof-row { grid-column: 1 / -1; }
+.inv-proof-input { display: none; }
+.inv-proof-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border: 1.5px dashed var(--bd2);
+  border-radius: var(--rsm); cursor: pointer;
+  font-size: 12.5px; color: var(--ink3); font-family: var(--sans);
+  transition: border-color .15s, color .15s, background .15s;
+  background: var(--bg); margin-top: 3px;
+}
+.inv-proof-label:hover { border-color: var(--blue2); color: var(--blue); background: var(--bdim); }
+.inv-proof-name { font-size: 11.5px; color: var(--green); margin-top: 4px; font-weight: 600; }
+.inv-proof-link {
+  font-size: 11.5px; color: var(--blue); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+.inv-proof-link:hover { text-decoration: underline; }
+
+/* ════════ RESPONSIVE (fin additions) ════════ */
+@media (max-width: 900px) {
+  .vnd-card-grid  { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); padding: 12px; }
+  .cust-card-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); padding: 12px; }
+}
+@media (max-width: 600px) {
+  .vnd-drawer  { width: 100vw; }
+  .vnd-card-grid  { grid-template-columns: 1fr; padding: 10px; }
+  .cust-card-grid { grid-template-columns: 1fr; padding: 10px; }
+}
