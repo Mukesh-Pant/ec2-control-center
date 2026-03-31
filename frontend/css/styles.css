@@ -2786,6 +2786,19 @@ code {
   font-size: 14px; color: var(--ink3); margin: 0 auto 22px;
   line-height: 1.6; max-width: 480px;
 }
+/* ── My Servers — collapsible guide toggle ── */
+.lbs-guide-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; margin: 10px 0 4px;
+  background: var(--bdim); border: 1px solid var(--bd);
+  border-radius: var(--r); cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--ink2);
+  user-select: none; transition: background .15s;
+}
+.lbs-guide-toggle:hover { background: var(--bg2); }
+.lbs-guide-toggle-lbl { display: flex; align-items: center; gap: 6px; }
+.lbs-guide-toggle-chev { font-size: 10px; color: var(--ink4); }
+
 .lbs-how-works {
   background: var(--white); border: 1px solid var(--bd);
   border-radius: var(--rlg); padding: 20px 24px; box-shadow: var(--sh);

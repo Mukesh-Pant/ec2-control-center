@@ -18,6 +18,7 @@ const Labs = (function () {
   var _confirmCb    = null;    // pending in-page confirm callback
   var _activeFilter = 'active'; // current filter pill: 'all'|'active'|'pending'|'history'
   var _expandedLabId = null;   // labId of currently expanded row, or null
+  var _guideOpen    = false;   // whether the "How it works" guide is expanded
 
   function _getNprRate() { return (window.NPR_RATE && window.NPR_RATE > 0) ? window.NPR_RATE : 135; }
   function _npmFmt(usd) {
@@ -223,21 +224,12 @@ const Labs = (function () {
       else if (lab.status === 'terminated' || lab.status === 'rejected') counts.history++;
     });
 
-    // ── Auto-fallback: if default filter has nothing, show all
+    // ── Auto-fallback: if default filter has nothing, fall back to 'all'
     if (_activeFilter === 'active' && counts.active === 0) _activeFilter = 'all';
 
-    // ── Filter visible labs
-    var visible = activeLabs.filter(function (lab) {
-      if (_activeFilter === 'all')     return true;
-      if (_activeFilter === 'active')  return lab.status === 'running' || lab.status === 'provisioning';
-      if (_activeFilter === 'pending') return lab.status === 'pending_approval';
-      if (_activeFilter === 'history') return lab.status === 'terminated' || lab.status === 'rejected';
-      return true;
-    });
-
-    // ── Build HTML
+    // ── Empty state (no servers at all): show full onboarding + guide expanded
     if (activeLabs.length === 0) {
-      html += [
+      var html = [
         '<div class="lbs-onboard">',
         '  <div class="lbs-onboard-hero">',
         '    <div class="lbs-onboard-icon">&#128187;</div>',
@@ -248,21 +240,14 @@ const Labs = (function () {
         '      Create Your First Server',
         '    </button>',
         '  </div>',
-        '  <div class="lbs-how-works">',
-        '    <div class="lbs-hw-heading">How it works</div>',
-        '    <div class="lbs-hw-steps">',
-        '      <div class="lbs-hw-step"><div class="lbs-hw-num">1</div><div><div class="lbs-hw-label">Configure</div><div class="lbs-hw-text">Choose your operating system, server size, storage, and the dates you need the server.</div></div></div>',
-        '      <div class="lbs-hw-step"><div class="lbs-hw-num">2</div><div><div class="lbs-hw-label">Pay</div><div class="lbs-hw-text">Review the estimated cost and complete payment via QR code. Upload a screenshot as proof.</div></div></div>',
-        '      <div class="lbs-hw-step"><div class="lbs-hw-num">3</div><div><div class="lbs-hw-label">Get approved</div><div class="lbs-hw-text">Our team verifies your payment (usually a few minutes) and provisions your server automatically.</div></div></div>',
-        '      <div class="lbs-hw-step"><div class="lbs-hw-num">4</div><div><div class="lbs-hw-label">Connect</div><div class="lbs-hw-text">Download your key pair and connect via SSH (Linux) or RDP (Windows). Your server stays live until the expiry date.</div></div></div>',
-        '    </div>',
-        '  </div>',
+        '  ' + _renderGuide(true),
         '</div>',
       ].join('\n');
       listEl.innerHTML = html;
       return;
     }
 
+    // ── Stats cards
     var statsHtml = '<div class="lbs-stats-row">' +
       '<div class="lbs-stat-card">' +
         '<div class="lbs-stat-ico lbs-stat-ico--blue"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg></div>' +
@@ -277,27 +262,41 @@ const Labs = (function () {
       '<div class="lbs-stat-card">' +
         '<div class="lbs-stat-ico lbs-stat-ico--amber"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>' +
         '<div class="lbs-stat-val lbs-stat-amber">' + counts.pending + '</div>' +
-        '<div class="lbs-stat-lbl">Pending Approval</div>' +
+        '<div class="lbs-stat-lbl">Pending</div>' +
       '</div>' +
       '<div class="lbs-stat-card">' +
         '<div class="lbs-stat-ico lbs-stat-ico--gray"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></div>' +
         '<div class="lbs-stat-val lbs-stat-gray">' + (counts.history || 0) + '</div>' +
-        '<div class="lbs-stat-lbl">Archived</div>' +
+        '<div class="lbs-stat-lbl">History</div>' +
       '</div>' +
     '</div>';
-    var html = statsHtml + _renderFilterBar(counts);
+
+    // ── Collapsible guide (always present, collapsed by default when servers exist)
+    var guideHtml = _renderGuide(_guideOpen);
+
+    // ── Filter bar
+    var html = statsHtml + guideHtml + _renderFilterBar(counts);
+
+    // ── Filter visible labs
+    var visible = activeLabs.filter(function (lab) {
+      if (_activeFilter === 'all')     return true;
+      if (_activeFilter === 'active')  return lab.status === 'running' || lab.status === 'provisioning';
+      if (_activeFilter === 'pending') return lab.status === 'pending_approval';
+      if (_activeFilter === 'history') return lab.status === 'terminated' || lab.status === 'rejected';
+      return true;
+    });
 
     if (visible.length === 0) {
       var emptyMsg = {
-        active:  'No active labs. ',
-        pending: 'No labs awaiting approval.',
-        history: 'No terminated or rejected labs.',
-        all:     'No labs yet.',
-      }[_activeFilter] || 'No labs found.';
-      var switchLink = _activeFilter === 'active'
-        ? '<button class="lbs-pill" onclick="Labs._setFilter(\'all\')">View All<span class="lbs-pill-count">' + counts.all + '</span></button>'
+        active:  'No active servers right now.',
+        pending: 'No servers awaiting approval.',
+        history: 'No history yet.',
+        all:     'No servers found.',
+      }[_activeFilter] || 'No servers found.';
+      var switchLink = (_activeFilter !== 'all' && counts.all > 0)
+        ? ' <button class="lbs-pill" onclick="Labs._setFilter(\'all\')">View All<span class="lbs-pill-count">' + counts.all + '</span></button>'
         : '';
-      html += '<div class="lbs-empty">' + emptyMsg + ' ' + switchLink + '</div>';
+      html += '<div class="lbs-empty">' + emptyMsg + switchLink + '</div>';
       listEl.innerHTML = html;
       return;
     }
@@ -318,6 +317,32 @@ const Labs = (function () {
     html += '</tbody></table>';
 
     listEl.innerHTML = html;
+  }
+
+  // ─── How it works guide (always rendered, collapsible)
+
+  function _renderGuide(open) {
+    var chevron = open ? '&#9650;' : '&#9660;';
+    var body = open
+      ? '<div class="lbs-how-works" style="margin-top:12px;">' +
+          '<div class="lbs-hw-steps">' +
+            '<div class="lbs-hw-step"><div class="lbs-hw-num">1</div><div><div class="lbs-hw-label">Configure</div><div class="lbs-hw-text">Choose your operating system, server size, storage, and the dates you need the server.</div></div></div>' +
+            '<div class="lbs-hw-step"><div class="lbs-hw-num">2</div><div><div class="lbs-hw-label">Pay</div><div class="lbs-hw-text">Review the estimated cost and complete payment via QR code. Upload a screenshot as proof.</div></div></div>' +
+            '<div class="lbs-hw-step"><div class="lbs-hw-num">3</div><div><div class="lbs-hw-label">Get approved</div><div class="lbs-hw-text">Our team verifies your payment (usually within minutes) and sets up your server automatically.</div></div></div>' +
+            '<div class="lbs-hw-step"><div class="lbs-hw-num">4</div><div><div class="lbs-hw-label">Connect</div><div class="lbs-hw-text">Download your key file and connect. Your server stays live until the expiry date.</div></div></div>' +
+          '</div>' +
+        '</div>'
+      : '';
+    return '<div class="lbs-guide-toggle" onclick="Labs._toggleGuide()">' +
+      '<span class="lbs-guide-toggle-lbl">&#128218; How it works</span>' +
+      '<span class="lbs-guide-toggle-chev">' + chevron + '</span>' +
+      '</div>' +
+      body;
+  }
+
+  function _toggleGuide() {
+    _guideOpen = !_guideOpen;
+    _renderLabsList();
   }
 
   // ─── Filter bar HTML
@@ -381,18 +406,56 @@ const Labs = (function () {
 
   function _confirmDelete(labId) {
     _showConfirm(
-      'Terminate Lab?',
+      'Terminate Server?',
       'This will permanently terminate this server and release all associated resources. This cannot be undone.',
       async function () {
         try {
           var res  = await API.deleteLabInstance({ labId: labId });
           var data = await res.json();
-          if (!res.ok) throw new Error(data.message || data.error || 'Delete failed');
-          App.showToast('Lab terminated', 'ok');
+          if (!res.ok) throw new Error(data.message || data.error || 'Terminate failed');
+          App.showToast('Server terminated', 'ok');
           _expandedLabId = null;
           await _loadActiveLabs();
         } catch (e) {
           App.showToast('Terminate error: ' + e.message, 'err');
+        }
+      }
+    );
+  }
+
+  function _confirmRemoveHistory(labId) {
+    _showConfirm(
+      'Remove from History?',
+      'This will remove this entry from your history. The server is already terminated so no resources will be affected.',
+      async function () {
+        try {
+          var res  = await API.deleteLabInstance({ labId: labId });
+          var data = await res.json();
+          if (!res.ok) throw new Error(data.message || data.error || 'Remove failed');
+          App.showToast('Removed from history', 'ok');
+          _expandedLabId = null;
+          await _loadActiveLabs();
+        } catch (e) {
+          App.showToast('Remove error: ' + e.message, 'err');
+        }
+      }
+    );
+  }
+
+  function _confirmCancelRequest(labId) {
+    _showConfirm(
+      'Cancel Server Request?',
+      'This will cancel your pending server request and delete your payment submission. This cannot be undone.',
+      async function () {
+        try {
+          var res  = await API.deleteLabInstance({ labId: labId });
+          var data = await res.json();
+          if (!res.ok) throw new Error(data.message || data.error || 'Cancel failed');
+          App.showToast('Server request cancelled', 'ok');
+          _expandedLabId = null;
+          await _loadActiveLabs();
+        } catch (e) {
+          App.showToast('Cancel error: ' + e.message, 'err');
         }
       }
     );
@@ -596,6 +659,9 @@ const Labs = (function () {
           '</div>' +
           '</div>';
       } else {
+        var cancelBtn = isOwner
+          ? '<div class="lbs-detail-actions" style="margin-top:12px;"><button class="btn btn-sm btn-outline" onclick="Labs._confirmCancelRequest(\'' + labIdEsc + '\')">Cancel Request</button></div>'
+          : '';
         html += '<div class="lbs-detail-section">' +
           '<div class="lbs-verification-notice">' +
             '<div class="lbs-verification-icon">&#128269;</div>' +
@@ -604,8 +670,18 @@ const Labs = (function () {
               '<p class="lbs-verification-msg">Your payment is being reviewed by our team. Your server will be set up automatically once payment is confirmed &mdash; this usually takes a few minutes. The status will change to <b>Setting Up</b> once approved.</p>' +
             '</div>' +
           '</div>' +
+          cancelBtn +
           '</div>';
       }
+    }
+
+    // ── History records: allow removal
+    if (lab.status === 'terminated' || lab.status === 'rejected') {
+      html += '<div class="lbs-detail-section">' +
+        '<div class="lbs-detail-actions">' +
+          '<button class="btn btn-sm btn-outline" onclick="Labs._confirmRemoveHistory(\'' + labIdEsc + '\')">Remove from History</button>' +
+        '</div>' +
+        '</div>';
     }
 
     html += '</div>'; // close lbs-detail-panel
@@ -1010,7 +1086,10 @@ const Labs = (function () {
       '  </div>',
       '  <div class="lbs-wizard-footer">',
       '    <button class="btn btn-outline" onclick="Labs.prevStep()">Back</button>',
-      '    <button class="btn btn-blue" id="lbs-s2-next" style="display:none" onclick="Labs.nextStep()">Confirm &amp; Proceed to Payment</button>',
+      '    <div style="display:flex;gap:8px;align-items:center;">',
+      '      <button id="lbs-s2-dl-bill" class="btn btn-outline" style="display:none;" onclick="Labs._downloadBill()">&#8681; Download Bill (NPR)</button>',
+      '      <button id="lbs-s2-next" class="btn btn-blue" style="display:none;" onclick="Labs.nextStep()">Continue to Payment</button>',
+      '    </div>',
       '  </div>',
       '</div>',
     ].join('\n');
@@ -1038,6 +1117,7 @@ const Labs = (function () {
       var months      = wizardConfig.months;
       var durationHours = wizardConfig.durationHours;
       wizardConfig.estimatedCost = b.totalUsd;
+      wizardConfig.priceBreakdown = b;
 
       var startDate     = wizardConfig.startDate || '';
       var endDate       = wizardConfig.endDate   || '';
@@ -1090,12 +1170,91 @@ const Labs = (function () {
         '</div>',
       ].join('\n');
 
+      // Store breakdown reference for bill download
+      var dlBtn = document.getElementById('lbs-s2-dl-bill');
+      if (dlBtn) dlBtn.style.display = '';
       var nextBtn = document.getElementById('lbs-s2-next');
       if (nextBtn) nextBtn.style.display = '';
     } catch (e) {
       contentEl.innerHTML = '<div class="lbs-err">Failed to fetch pricing: ' + _esc(e.message) + '</div>';
       App.showToast('Pricing error: ' + e.message, 'err');
     }
+  }
+
+  // ─── Download Bill as text file (NPR)
+
+  function _downloadBill() {
+    var b       = wizardConfig.priceBreakdown;
+    var rate    = _getNprRate();
+    var config  = wizardConfig;
+    if (!b) { App.showToast('Pricing not loaded yet', 'err'); return; }
+
+    var REGIONS_MAP = {};
+    (REGIONS || []).forEach(function (r) { REGIONS_MAP[r.value] = r.label; });
+    var regionLabel = REGIONS_MAP[config.region] || config.region || '—';
+    var osLabel     = config.platform === 'windows' ? 'Windows Server' : 'Linux (Ubuntu)';
+    var startDate   = config.startDate || '—';
+    var endDate     = config.endDate   || '—';
+    var totalDays   = config.totalDays || 0;
+
+    function nprLine(usd) {
+      if (!usd || usd <= 0) return '—';
+      return 'NPR ' + (usd * rate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    var sep  = '═══════════════════════════════════════════════';
+    var sep2 = '───────────────────────────────────────────────';
+    var lines = [
+      'SERVER BILLING ESTIMATE',
+      sep,
+      'Generated:      ' + new Date().toUTCString(),
+      'Exchange Rate:  1 USD = NPR ' + rate.toFixed(2) + ' (live mid-market rate)',
+      '',
+      'CONFIGURATION',
+      sep2,
+      'Server Name:    ' + (config.labName || '(not named)'),
+      'Account:        ' + (config.accountId || '—'),
+      'Region:         ' + regionLabel,
+      'Operating System: ' + osLabel,
+      'Server Type:    ' + (config.instanceType || '—'),
+      'Storage:        ' + (config.storageGb || '—') + ' GB (gp3 SSD)',
+      'Fixed IP:       ' + (config.elasticIp ? 'Yes' : 'No'),
+      'Duration:       ' + startDate + ' → ' + endDate + ' (' + totalDays + ' days)',
+      '',
+      'COST BREAKDOWN',
+      sep2,
+      ('Server (' + (config.instanceType || '') + ')').padEnd(25) +
+        ('$' + b.ec2Hourly.toFixed(4) + '/hr').padEnd(18) +
+        nprLine(b.ec2Cost),
+      ('Storage (' + (config.storageGb || '') + ' GB gp3)').padEnd(25) +
+        ('$' + b.ebsPerGbMonth.toFixed(4) + '/GB-mo').padEnd(18) +
+        nprLine(b.ebsCost),
+    ];
+
+    if (config.elasticIp) {
+      lines.push(
+        'Fixed IP (Elastic IP)'.padEnd(25) +
+          ('$' + b.eipHourly.toFixed(4) + '/hr').padEnd(18) +
+          nprLine(b.eipCost)
+      );
+    }
+
+    lines = lines.concat([
+      sep2,
+      'TOTAL ESTIMATE'.padEnd(25) + ''.padEnd(18) + nprLine(b.totalUsd),
+      sep,
+      '',
+      'Note: This is an estimate based on on-demand pricing.',
+      'Actual costs may vary. Rates from AWS Price List.',
+      'NPR conversion uses a live mid-market rate and is indicative only.',
+    ]);
+
+    var content = lines.join('\n');
+    var fname   = 'server-bill-' + (config.instanceType || 'estimate').replace('.', '') + '-' + startDate + '.txt';
+    var url     = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
+    var a       = document.createElement('a');
+    a.href = url; a.download = fname; a.click();
+    URL.revokeObjectURL(url);
   }
 
   // ─── Step 3: Payment
@@ -1547,8 +1706,12 @@ const Labs = (function () {
     _loadNetworkOptions: _loadNetworkOptions,
     _onVpcChange:        _onVpcChange,
     _onScreenshotChange: _onScreenshotChange,
-    _confirmDelete:      _confirmDelete,
-    _downloadRdp:        _downloadRdp,
+    _confirmDelete:        _confirmDelete,
+    _confirmRemoveHistory: _confirmRemoveHistory,
+    _confirmCancelRequest: _confirmCancelRequest,
+    _toggleGuide:          _toggleGuide,
+    _downloadBill:         _downloadBill,
+    _downloadRdp:          _downloadRdp,
     _getWindowsPassword: _getWindowsPassword,
   };
 

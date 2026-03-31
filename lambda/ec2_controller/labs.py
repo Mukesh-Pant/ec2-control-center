@@ -1156,6 +1156,25 @@ def handle_labs_windows_password(event):
         return error_response(500, f'Password decryption failed: {str(e)}')
 
 
+def _purge_lab_record(lab, lab_id):
+    """Remove a lab DynamoDB record entirely and clean up any S3 key file.
+    Used for history records (already terminated/rejected) and cancelled pending requests.
+    """
+    # Try to delete .pem key from S3 (best-effort)
+    key_s3_key = lab.get('keyS3Key', '')
+    if key_s3_key and LABS_KEYS_BUCKET:
+        try:
+            _get_s3().delete_object(Bucket=LABS_KEYS_BUCKET, Key=key_s3_key)
+        except Exception as e:
+            logger.warning('_purge_lab_record: could not delete S3 key %s: %s', key_s3_key, e)
+    try:
+        _get_labs_table().delete_item(Key={'labId': lab_id})
+        logger.info('_purge_lab_record: deleted lab record %s', lab_id)
+    except ClientError as e:
+        logger.exception('_purge_lab_record DynamoDB delete_item error')
+        raise
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # DELETE /labs  — terminate a lab instance (admin only)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1191,10 +1210,35 @@ def handle_labs_delete(event):
     if not lab:
         return error_response(404, f'Lab {lab_id} not found.')
 
-    # Only admin or the lab owner may terminate
+    # Only admin or the lab owner may act on this lab
     if not is_admin(event) and lab.get('userEmail') != caller_email:
-        return error_response(403, 'Only the server owner or an admin can terminate this server.')
+        return error_response(403, 'Only the server owner or an admin can do this.')
 
+    current_status = lab.get('status', '')
+
+    # ── History records: already terminated or rejected — just remove from DB
+    if current_status in ('terminated', 'rejected'):
+        try:
+            _purge_lab_record(lab, lab_id)
+        except ClientError as e:
+            return error_response(500, str(e))
+        return response(200, {'message': 'Server removed from history.'})
+
+    # ── Pending approval: owner cancels before admin acts — delete request + payment
+    if current_status == 'pending_approval':
+        payment_key = lab.get('paymentS3Key', '')
+        if payment_key and LABS_PAYMENTS_BUCKET:
+            try:
+                _get_s3().delete_object(Bucket=LABS_PAYMENTS_BUCKET, Key=payment_key)
+            except Exception as e:
+                logger.warning('handle_labs_delete: could not delete payment key %s: %s', payment_key, e)
+        try:
+            _purge_lab_record(lab, lab_id)
+        except ClientError as e:
+            return error_response(500, str(e))
+        return response(200, {'message': 'Server request cancelled.'})
+
+    # ── Active server (running / stopped / provisioning) — full EC2 terminate + cleanup
     account_id    = lab.get('accountId', '')
     region        = lab.get('region', 'ap-south-1')
     instance_id   = lab.get('instanceId', '')
@@ -1206,35 +1250,35 @@ def handle_labs_delete(event):
 
         if instance_id:
             ec2.terminate_instances(InstanceIds=[instance_id])
-            logger.info('handle_labs_delete: terminated instance %s', instance_id)
+            logger.info('handle_labs_delete: terminated server %s', instance_id)
 
         if allocation_id:
-            # Disassociate EIP before releasing — required if instance is still in shutting-down state
+            # Disassociate EIP before releasing
             try:
                 addr_resp = ec2.describe_addresses(AllocationIds=[allocation_id])
                 assoc_id  = addr_resp['Addresses'][0].get('AssociationId', '')
                 if assoc_id:
                     ec2.disassociate_address(AssociationId=assoc_id)
-                    logger.info('handle_labs_delete: disassociated EIP %s (assoc %s)', allocation_id, assoc_id)
             except Exception as e:
-                logger.warning('handle_labs_delete: could not disassociate EIP %s: %s', allocation_id, e)
+                logger.warning('handle_labs_delete: EIP disassociate failed %s: %s', allocation_id, e)
             try:
                 ec2.release_address(AllocationId=allocation_id)
-                logger.info('handle_labs_delete: released EIP %s', allocation_id)
             except Exception as e:
-                logger.warning('handle_labs_delete: could not release EIP %s: %s', allocation_id, e)
+                logger.warning('handle_labs_delete: EIP release failed %s: %s', allocation_id, e)
 
-        # Delete EC2 key pair in member account
+        # Delete key pair from member account
         try:
-            ec2.delete_key_pair(KeyName=lab['keyName'])
+            if lab.get('keyName'):
+                ec2.delete_key_pair(KeyName=lab['keyName'])
         except Exception as e:
-            logger.warning("Could not delete key pair %s: %s", lab['keyName'], e)
+            logger.warning('handle_labs_delete: key pair delete failed %s: %s', lab.get('keyName'), e)
 
         # Delete .pem from S3
         try:
-            _get_s3().delete_object(Bucket=LABS_KEYS_BUCKET, Key=lab['keyS3Key'])
+            if lab.get('keyS3Key') and LABS_KEYS_BUCKET:
+                _get_s3().delete_object(Bucket=LABS_KEYS_BUCKET, Key=lab['keyS3Key'])
         except Exception as e:
-            logger.warning("Could not delete .pem from S3 %s: %s", lab['keyS3Key'], e)
+            logger.warning('handle_labs_delete: S3 pem delete failed %s: %s', lab.get('keyS3Key'), e)
 
     except ClientError as e:
         logger.exception('handle_labs_delete EC2 error')
@@ -1248,7 +1292,7 @@ def handle_labs_delete(event):
             ExpressionAttributeValues={':s': 'terminated'},
         )
     except ClientError as e:
-        logger.exception('handle_labs_delete DynamoDB update_item error')
+        logger.exception('handle_labs_delete DynamoDB update error')
         return error_response(500, str(e))
 
-    return response(200, {'message': 'Lab terminated.'})
+    return response(200, {'message': 'Server terminated.'})
