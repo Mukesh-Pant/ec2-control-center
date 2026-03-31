@@ -872,13 +872,24 @@ def handle_labs_list(event):
         logger.exception('handle_labs_list DynamoDB error')
         return error_response(500, str(e))
 
-    # For labs still in provisioning state, poll EC2 and update if running
-    provisioning_labs = [lab for lab in labs if lab.get('status') == 'provisioning']
-    if provisioning_labs:
-        with ThreadPoolExecutor(max_workers=min(10, len(provisioning_labs))) as pool:
-            futures = {pool.submit(_maybe_update_provisioning_status, lab): lab for lab in provisioning_labs}
+    # Sync EC2 state for all active labs (provisioning, running, stopped)
+    # This catches: stop/start via Instances tab, external terminations, IP changes on restart
+    syncable = [
+        lab for lab in labs
+        if lab.get('status') in ('provisioning', 'running', 'stopped') and lab.get('instanceId')
+    ]
+    if syncable:
+        lab_idx = {lab.get('labId'): i for i, lab in enumerate(labs)}
+        with ThreadPoolExecutor(max_workers=min(10, len(syncable))) as pool:
+            futures = {pool.submit(_sync_lab_ec2_status, lab): lab for lab in syncable}
             for f in as_completed(futures):
-                pass  # results written back to DynamoDB inside the helper
+                try:
+                    updated = f.result()
+                    idx = lab_idx.get(updated.get('labId'))
+                    if idx is not None:
+                        labs[idx] = updated   # apply status changes to returned list
+                except Exception:
+                    pass
     updated_labs = labs
 
     # Serialise Decimal values for JSON
@@ -887,48 +898,108 @@ def handle_labs_list(event):
     return response(200, {'labs': serialised})
 
 
-def _maybe_update_provisioning_status(lab):
-    """If lab status is 'provisioning', check EC2 and update DynamoDB if now running."""
-    if lab.get('status') != 'provisioning':
+def _sync_lab_ec2_status(lab):
+    """Sync lab DynamoDB status with actual EC2 server state.
+
+    Handles all transitions:
+      provisioning → running         (server came up)
+      running      → stopped         (stopped via Servers tab or externally)
+      stopped      → running         (restarted; also refreshes public IP)
+      any active   → terminated      (terminated externally)
+    Called on every GET /labs for all labs with a server ID.
+    """
+    status = lab.get('status', '')
+    if status not in ('provisioning', 'running', 'stopped'):
         return lab
 
-    account_id  = lab.get('accountId', '')
-    region      = lab.get('region', 'ap-south-1')
     instance_id = lab.get('instanceId', '')
     lab_id      = lab.get('labId', '')
-
     if not instance_id or not lab_id:
         return lab
+
+    account_id = lab.get('accountId', '')
+    region     = lab.get('region', 'ap-south-1')
 
     try:
         creds = _get_member_creds(account_id)
         ec2   = _boto3_client('ec2', region, creds)
         desc  = ec2.describe_instances(InstanceIds=[instance_id])
+
         if not desc.get('Reservations'):
-            logger.warning("No Reservations for instance %s — possibly terminated", lab.get('instanceId'))
+            # Server not found in EC2 — terminated outside portal
+            logger.warning('_sync_lab_ec2_status: server %s not found, marking terminated', instance_id)
+            if status != 'terminated':
+                _get_labs_table().update_item(
+                    Key={'labId': lab_id},
+                    UpdateExpression='SET #st = :s',
+                    ExpressionAttributeNames={'#st': 'status'},
+                    ExpressionAttributeValues={':s': 'terminated'},
+                )
+                lab = dict(lab)
+                lab['status'] = 'terminated'
             return lab
-        inst  = desc['Reservations'][0]['Instances'][0]
-        state = inst.get('State', {}).get('Name', '')
-        if state == 'running':
-            public_ip  = inst.get('PublicIpAddress', '')
-            public_dns = inst.get('PublicDnsName', '')
-            # Update DynamoDB
+
+        inst       = desc['Reservations'][0]['Instances'][0]
+        ec2_state  = inst.get('State', {}).get('Name', '')
+        public_ip  = inst.get('PublicIpAddress', '') or ''
+        public_dns = inst.get('PublicDnsName', '') or ''
+
+        # Map EC2 state → lab status
+        if ec2_state == 'running':
+            new_status = 'running'
+        elif ec2_state in ('stopped', 'stopping'):
+            new_status = 'stopped'
+            # EIP address is preserved across stop/start; only clear IP for non-EIP servers
+            if not lab.get('elasticIp'):
+                public_ip  = ''
+                public_dns = ''
+        elif ec2_state in ('terminated', 'shutting-down'):
+            new_status = 'terminated'
+        else:
+            # pending / rebooting — transient, skip update
+            return lab
+
+        if new_status == status:
+            # No status change — but refresh IP if running (may have changed on restart)
+            if new_status == 'running' and public_ip and public_ip != lab.get('publicIp', ''):
+                _get_labs_table().update_item(
+                    Key={'labId': lab_id},
+                    UpdateExpression='SET publicIp = :ip, publicDns = :dns',
+                    ExpressionAttributeValues={':ip': public_ip, ':dns': public_dns},
+                )
+                lab = dict(lab)
+                lab['publicIp']  = public_ip
+                lab['publicDns'] = public_dns
+            return lab
+
+        # Persist status change
+        logger.info('_sync_lab_ec2_status: lab %s %s → %s', lab_id, status, new_status)
+        if new_status == 'terminated':
+            _get_labs_table().update_item(
+                Key={'labId': lab_id},
+                UpdateExpression='SET #st = :s',
+                ExpressionAttributeNames={'#st': 'status'},
+                ExpressionAttributeValues={':s': 'terminated'},
+            )
+        else:
             _get_labs_table().update_item(
                 Key={'labId': lab_id},
                 UpdateExpression='SET #st = :s, publicIp = :ip, publicDns = :dns',
                 ExpressionAttributeNames={'#st': 'status'},
                 ExpressionAttributeValues={
-                    ':s':   'running',
+                    ':s':   new_status,
                     ':ip':  public_ip,
                     ':dns': public_dns,
                 },
             )
-            lab = dict(lab)
-            lab['status']    = 'running'
-            lab['publicIp']  = public_ip
-            lab['publicDns'] = public_dns
+
+        lab = dict(lab)
+        lab['status']    = new_status
+        lab['publicIp']  = public_ip
+        lab['publicDns'] = public_dns
+
     except Exception as e:
-        logger.warning('_maybe_update_provisioning_status error for lab %s: %s', lab_id, e)
+        logger.warning('_sync_lab_ec2_status error for lab %s: %s', lab_id, e)
 
     return lab
 
@@ -1090,14 +1161,16 @@ def handle_labs_windows_password(event):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def handle_labs_delete(event):
-    """Terminate a lab EC2 instance and mark it as terminated in DynamoDB.
+    """Terminate a lab server and mark it as terminated in DynamoDB.
 
     Body: {labId}
-    Admin only.
+    Allowed: admin (any lab) OR the operator who originally created the lab.
     """
-    admin_guard = require_admin(event)
-    if admin_guard:
-        return admin_guard
+    guard = _require_operator_or_admin(event)
+    if guard:
+        return guard
+
+    caller_email = get_caller(event)
 
     try:
         body = json.loads(event.get('body') or '{}')
@@ -1117,6 +1190,10 @@ def handle_labs_delete(event):
     lab = db_resp.get('Item')
     if not lab:
         return error_response(404, f'Lab {lab_id} not found.')
+
+    # Only admin or the lab owner may terminate
+    if not is_admin(event) and lab.get('userEmail') != caller_email:
+        return error_response(403, 'Only the server owner or an admin can terminate this server.')
 
     account_id    = lab.get('accountId', '')
     region        = lab.get('region', 'ap-south-1')

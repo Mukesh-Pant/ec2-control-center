@@ -251,7 +251,7 @@ const Labs = (function () {
         '  <div class="lbs-how-works">',
         '    <div class="lbs-hw-heading">How it works</div>',
         '    <div class="lbs-hw-steps">',
-        '      <div class="lbs-hw-step"><div class="lbs-hw-num">1</div><div><div class="lbs-hw-label">Configure</div><div class="lbs-hw-text">Choose your OS, instance type, storage, and the dates you need the server.</div></div></div>',
+        '      <div class="lbs-hw-step"><div class="lbs-hw-num">1</div><div><div class="lbs-hw-label">Configure</div><div class="lbs-hw-text">Choose your operating system, server size, storage, and the dates you need the server.</div></div></div>',
         '      <div class="lbs-hw-step"><div class="lbs-hw-num">2</div><div><div class="lbs-hw-label">Pay</div><div class="lbs-hw-text">Review the estimated cost and complete payment via QR code. Upload a screenshot as proof.</div></div></div>',
         '      <div class="lbs-hw-step"><div class="lbs-hw-num">3</div><div><div class="lbs-hw-label">Get approved</div><div class="lbs-hw-text">Our team verifies your payment (usually a few minutes) and provisions your server automatically.</div></div></div>',
         '      <div class="lbs-hw-step"><div class="lbs-hw-num">4</div><div><div class="lbs-hw-label">Connect</div><div class="lbs-hw-text">Download your key pair and connect via SSH (Linux) or RDP (Windows). Your server stays live until the expiry date.</div></div></div>',
@@ -307,7 +307,7 @@ const Labs = (function () {
     html += '<th></th>';
     html += '<th>Server Name</th>';
     html += '<th>Platform</th>';
-    html += '<th>Instance</th>';
+    html += '<th>Server Type</th>';
     html += '<th>Status</th>';
     html += '<th>Account</th>';
     html += '<th>Region</th>';
@@ -382,7 +382,7 @@ const Labs = (function () {
   function _confirmDelete(labId) {
     _showConfirm(
       'Terminate Lab?',
-      'This will terminate the EC2 instance and release all associated resources. This cannot be undone.',
+      'This will permanently terminate this server and release all associated resources. This cannot be undone.',
       async function () {
         try {
           var res  = await API.deleteLabInstance({ labId: labId });
@@ -443,42 +443,44 @@ const Labs = (function () {
     var labIdEsc      = _esc(lab.labId);
     var role          = Auth.getRole();
     var isAdmin       = role === 'admin';
+    var callerEmail   = Auth.getEmail ? Auth.getEmail() : '';
+    var isOwner       = !!(callerEmail && (lab.userEmail === callerEmail || lab.callerEmail === callerEmail));
+    var canTerminate  = isAdmin || isOwner;
     var isWindows     = lab.platform === 'windows';
-    var platformLabel = PLATFORM_LABELS[lab.platform] || lab.platform;
+    var platformLabel = PLATFORM_LABELS[lab.platform] || lab.platform || '\u2014';
     var ip            = lab.publicIp || lab.publicDns || '';
     var costStr       = lab.estimatedCost != null ? _npmFmt(Number(lab.estimatedCost)) : '\u2014';
     var expiry        = lab.expiresAt ? _formatExpiry(lab.expiresAt) : '\u2014';
     var createdAt     = lab.createdAt ? new Date(lab.createdAt).toUTCString() : '\u2014';
     var storageStr    = lab.storageGb ? lab.storageGb + ' GB' : '\u2014';
 
-    // ── Elastic IP field
+    // ── Fixed IP display
     var eipValue;
     if (lab.elasticIp && lab.allocationId) {
-      eipValue = _esc(ip || '\u2014') + ' <span style="color:var(--ink3);font-size:11px;">(alloc: ' + _esc(lab.allocationId) + ')</span>';
+      eipValue = _esc(ip || '\u2014') + ' <span style="color:var(--ink3);font-size:11px;">(fixed)</span>';
     } else if (lab.elasticIp) {
       eipValue = 'Requested';
     } else {
-      eipValue = 'Not requested';
+      eipValue = 'Dynamic (changes on restart)';
     }
 
-    // ── Lab Info section (always shown)
-    var stateLabel = STATUS_LABELS[lab.status] || lab.status;
+    // ── Server Info section (always shown)
+    var stateLabel = STATUS_LABELS[lab.status] || lab.status || '\u2014';
     var stateClass = STATUS_CLASSES[lab.status] || 'lbs-badge--gray';
     var infoItems = [
-      { label: 'Lab ID',        value: '<code style="font-size:12px;user-select:all;">' + labIdEsc + '</code>' },
-      { label: 'Instance ID',   value: _esc(lab.instanceId || '\u2014') },
+      { label: 'Server ID',     value: '<code style="font-size:12px;user-select:all;">' + labIdEsc + '</code>' },
       { label: 'State',         value: '<span class="lbs-badge ' + stateClass + '">' + _esc(stateLabel) + '</span>' },
       { label: 'Created',       value: _esc(createdAt) },
       { label: 'Estimated Cost',value: _esc(costStr) },
       { label: 'Public IP',     value: _esc(ip || '\u2014') },
-      { label: 'Elastic IP',    value: eipValue },
+      { label: 'Fixed IP',      value: eipValue },
       { label: 'Platform',      value: _esc(platformLabel) },
-      { label: 'Instance Type', value: _esc(lab.instanceType || '\u2014') },
+      { label: 'Server Type',   value: _esc(lab.instanceType || '\u2014') },
       { label: 'Storage',       value: _esc(storageStr) },
       { label: 'Expires',       value: _esc(expiry) },
     ];
     if (isAdmin) {
-      infoItems.splice(3, 0, { label: 'Submitted by', value: _esc(lab.userEmail || lab.callerEmail || '\u2014') });
+      infoItems.splice(2, 0, { label: 'Submitted by', value: _esc(lab.userEmail || lab.callerEmail || '\u2014') });
     }
 
     var infoHtml = infoItems.map(function (item) {
@@ -508,17 +510,16 @@ const Labs = (function () {
       } else {
         connHtml =
           '<div class="lbs-code-block" style="margin-bottom:10px;">' + _esc(sshCmd) + '</div>' +
-          '<button class="btn btn-sm btn-outline" onclick="Labs.downloadKeypair(\'' + labIdEsc + '\')">Download Keypair (.pem)</button>';
+          '<button class="btn btn-sm btn-outline" onclick="Labs.downloadKeypair(\'' + labIdEsc + '\')">Download Key File (.pem)</button>';
       }
       html += '<div class="lbs-detail-section">' +
-        '<div class="lbs-detail-section-title">' + (isWindows ? 'RDP Connection' : 'SSH Connection') + '</div>' +
+        '<div class="lbs-detail-section-title">' + (isWindows ? 'Remote Desktop Connection' : 'SSH Connection') + '</div>' +
         '<div class="lbs-detail-actions">' + connHtml + '</div>' +
         '</div>';
 
       // ── Actions section
-      var actionBtns = '<button class="btn btn-sm btn-outline" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Lab Info (.txt)</button>';
-      actionBtns += ' <a class="btn btn-sm btn-outline" href="#" onclick="App.go(\'instances\');return false;">View in Instances Tab</a>';
-      if (isAdmin) {
+      var actionBtns = '<button class="btn btn-sm btn-outline" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Connection Info (.txt)</button>';
+      if (canTerminate) {
         actionBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>';
       }
       html += '<div class="lbs-detail-section">' +
@@ -527,7 +528,29 @@ const Labs = (function () {
         '</div>';
     }
 
-    // ── Provisioning status
+    // ── Stopped server info
+    if (lab.status === 'stopped') {
+      var stopNote = isOwner || isAdmin
+        ? 'Your server is stopped. To restart it, go to the <b>Servers</b> tab and click Start on this server. The status here updates automatically when it comes back online.'
+        : 'This server is currently stopped. Only the server owner or an admin can restart it from the Servers tab.';
+      html += '<div class="lbs-detail-section">' +
+        '<div class="lbs-detail-section-title">Server Stopped</div>' +
+        '<div class="lbs-verification-notice">' +
+          '<div class="lbs-verification-icon" style="font-size:22px;">&#9646;&#9646;</div>' +
+          '<div>' +
+            '<h4 class="lbs-verification-title">Server is currently stopped</h4>' +
+            '<p class="lbs-verification-msg">' + stopNote + '</p>' +
+          '</div>' +
+        '</div>';
+      if (canTerminate) {
+        html += '<div class="lbs-detail-actions" style="margin-top:12px;">' +
+          '<button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>' +
+          '</div>';
+      }
+      html += '</div>';
+    }
+
+    // ── Setting up status
     if (lab.status === 'provisioning') {
       html += '<div class="lbs-detail-section">' +
         '<div class="lbs-prov-card">' +
@@ -540,15 +563,15 @@ const Labs = (function () {
           '</div>' +
           '<div class="lbs-pv-timeline">' +
             '<div class="lbs-pv-step lbs-pv-done"><span class="lbs-pv-dot"></span><span>Payment verified &amp; approved</span></div>' +
-            '<div class="lbs-pv-step lbs-pv-active"><span class="lbs-pv-dot"></span><span>Creating server resources (key pair, network, storage)</span></div>' +
+            '<div class="lbs-pv-step lbs-pv-active"><span class="lbs-pv-dot"></span><span>Creating server resources (key, network, storage)</span></div>' +
             '<div class="lbs-pv-step"><span class="lbs-pv-dot"></span><span>Configuring network &amp; security</span></div>' +
-            '<div class="lbs-pv-step"><span class="lbs-pv-dot"></span><span>Launching EC2 instance</span></div>' +
+            '<div class="lbs-pv-step"><span class="lbs-pv-dot"></span><span>Launching your server</span></div>' +
           '</div>' +
         '</div>' +
         '</div>';
-      if (isAdmin) {
+      if (canTerminate) {
         html += '<div class="lbs-detail-section">' +
-          '<div class="lbs-detail-actions"><button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button></div>' +
+          '<div class="lbs-detail-actions"><button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Cancel &amp; Terminate</button></div>' +
           '</div>';
       }
     }
@@ -578,7 +601,7 @@ const Labs = (function () {
             '<div class="lbs-verification-icon">&#128269;</div>' +
             '<div>' +
               '<h4 class="lbs-verification-title">Payment Verification in Progress</h4>' +
-              '<p class="lbs-verification-msg">Your payment is being reviewed by our team. Your server will be provisioned automatically once payment is confirmed &mdash; this usually takes a few minutes. You\'ll see the status change to <b>Provisioning</b> here.</p>' +
+              '<p class="lbs-verification-msg">Your payment is being reviewed by our team. Your server will be set up automatically once payment is confirmed &mdash; this usually takes a few minutes. The status will change to <b>Setting Up</b> once approved.</p>' +
             '</div>' +
           '</div>' +
           '</div>';
@@ -717,12 +740,12 @@ const Labs = (function () {
       '  </div>',
       '  <div class="lbs-wizard-body">',
       '    <div class="lbs-form-row">',
-      '      <label class="lbs-label">Lab Name <span class="lbs-help-text">(optional — used as EC2 instance name)</span></label>',
+      '      <label class="lbs-label">Server Name <span class="lbs-help-text">(optional)</span></label>',
       '      <input type="text" id="lbs-s1-name" class="lbs-input" maxlength="100"',
       '             placeholder="e.g. my-dev-server" value="' + nameVal + '">',
       '    </div>',
       '    <div class="lbs-form-row">',
-      '      <label class="lbs-label">AWS Account</label>',
+      '      <label class="lbs-label">Account</label>',
       '      <select id="lbs-s1-account" class="lbs-select">' + accountOptions + '</select>',
       '    </div>',
       '    <div class="lbs-form-row">',
@@ -734,7 +757,7 @@ const Labs = (function () {
       '      <div class="lbs-platform-grid">' + platformCards + '</div>',
       '    </div>',
       '    <div class="lbs-form-row">',
-      '      <label class="lbs-label">Instance Type</label>',
+      '      <label class="lbs-label">Server Type</label>',
       '      <select id="lbs-s1-instance" class="lbs-select">' + instanceGroupHtml + '</select>',
       '    </div>',
       '    <div class="lbs-form-row">',
@@ -923,10 +946,10 @@ const Labs = (function () {
     var radios   = document.querySelectorAll('input[name="lbs-platform"]');
     radios.forEach(function (r) { if (r.checked) platform = r.value; });
 
-    if (!accountId)     { App.showToast('Select an AWS account', 'err');   return false; }
+    if (!accountId)     { App.showToast('Select an account', 'err');   return false; }
     if (!region)        { App.showToast('Select a region', 'err');         return false; }
     if (!platform)      { App.showToast('Select a platform', 'err');       return false; }
-    if (!instanceType)  { App.showToast('Select an instance type', 'err'); return false; }
+    if (!instanceType)  { App.showToast('Select a server type', 'err'); return false; }
     var minStorage = platform === 'windows' ? 35 : 8;
     if (!storageGb || storageGb < minStorage || storageGb > 500) {
       App.showToast('Storage must be between ' + minStorage + ' and 500 GB', 'err'); return false;
@@ -983,7 +1006,7 @@ const Labs = (function () {
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-body">',
-      '    <div id="lbs-pricing-content"><div class="lbs-loading">Fetching pricing from AWS Price List API…</div></div>',
+      '    <div id="lbs-pricing-content"><div class="lbs-loading">Fetching pricing…</div></div>',
       '  </div>',
       '  <div class="lbs-wizard-footer">',
       '    <button class="btn btn-outline" onclick="Labs.prevStep()">Back</button>',
@@ -1022,7 +1045,7 @@ const Labs = (function () {
       var durationLabel = startDate + ' \u2192 ' + endDate + ' (' + totalDays + ' days, ' + durationHours.toLocaleString() + ' hrs)';
 
       var rows = [
-        '<tr><td>' + _esc(wizardConfig.instanceType) + ' EC2</td>' +
+        '<tr><td>' + _esc(wizardConfig.instanceType || '\u2014') + ' (server)</td>' +
           '<td>$' + b.ec2Hourly.toFixed(4) + '/hr</td>' +
           '<td>' + _npmFmt(b.ec2Cost) + '</td></tr>',
         '<tr><td>EBS gp3 (' + _esc(String(wizardConfig.storageGb)) + ' GB)</td>' +
@@ -1051,13 +1074,13 @@ const Labs = (function () {
         '    </tr>',
         '  </tfoot>',
         '</table>',
-        '<p class="lbs-pricing-source">Rates from AWS Price List API · Verify with AWS Pricing Calculator below</p>',
+        '<p class="lbs-pricing-source">Live pricing · Verify with the AWS Pricing Calculator below</p>',
         '<div class="lbs-calc-hint">',
         '  <p class="lbs-calc-hint-title">Your configuration for AWS Pricing Calculator:</p>',
         '  <ul class="lbs-calc-hint-list">',
         '    <li>Region: ' + _esc(regionLabel) + '</li>',
         '    <li>Operating System: ' + _esc(osLabel) + '</li>',
-        '    <li>Instance Type: ' + _esc(wizardConfig.instanceType) + '</li>',
+        '    <li>Server Type: ' + _esc(wizardConfig.instanceType || '\u2014') + '</li>',
         '    <li>Duration: ' + _esc(String(totalDays)) + ' days (' + _esc(startDate) + ' \u2192 ' + _esc(endDate) + ')</li>',
         '    <li>EBS: ' + _esc(String(wizardConfig.storageGb)) + ' GB gp3</li>',
         '  </ul>',
@@ -1247,7 +1270,7 @@ const Labs = (function () {
   async function _approveLab(labId) {
     _showConfirm(
       'Approve Lab Request?',
-      'This will start provisioning the EC2 instance for this lab. The user will be charged.',
+      'This will provision the server for this user. The user will be charged.',
       async function () {
         try {
           var res  = await API.provisionLab({ action: 'approve', labId: labId });
@@ -1268,7 +1291,7 @@ const Labs = (function () {
   async function _rejectLab(labId) {
     _showConfirm(
       'Reject Lab Request?',
-      'This will reject the lab request. No EC2 instance will be launched.',
+      'This will reject this server request. No server will be provisioned.',
       async function () {
         try {
           var res  = await API.provisionLab({ action: 'reject', labId: labId });
@@ -1324,7 +1347,7 @@ const Labs = (function () {
             _pollTimer = null;
             activeLabs = labs;
             _renderLabsList();
-            App.showToast('Lab provisioning failed. Check AWS console for details.', 'err');
+            App.showToast('Server setup failed. Please contact support if this persists.', 'err');
             return;  // stop polling
           }
           _schedule();
@@ -1384,15 +1407,15 @@ const Labs = (function () {
       '    <div class="lbs-info-grid">',
       '      <div class="lbs-info-row"><b>Lab ID:</b> <code>' + labIdEsc + '</code></div>',
       '      <div class="lbs-info-row"><b>Lab Name:</b> '      + _esc(displayName)          + '</div>',
-      '      <div class="lbs-info-row"><b>Instance ID:</b> <code>' + _esc(lab.instanceId || '—') + '</code></div>',
+      '      <div class="lbs-info-row"><b>Server ID:</b> <code>' + _esc(lab.instanceId || '—') + '</code></div>',
       '      <div class="lbs-info-row"><b>Platform:</b> '      + _esc(platformLabel)        + '</div>',
-      '      <div class="lbs-info-row"><b>Instance:</b> '      + _esc(lab.instanceType)     + '</div>',
+      '      <div class="lbs-info-row"><b>Server Type:</b> ' + _esc(lab.instanceType || '—') + '</div>',
       '      <div class="lbs-info-row"><b>Region:</b> '        + _esc(lab.region)           + '</div>',
       '      <div class="lbs-info-row"><b>Public IP:</b> '     + _esc(ip)                   + '</div>',
       '      <div class="lbs-info-row"><b>Estimated Cost:</b> '+ _esc(costStr)              + '</div>',
       '      <div class="lbs-info-row"><b>Expires:</b> '       + _esc(expiry)               + '</div>',
       '    </div>',
-      '    <p class="lbs-help-text" style="margin-top:8px;">This instance also appears in the <b>Instances</b> tab as <b>' + _esc(displayName) + '</b> — click Refresh All there to see it.</p>',
+      '    <p class="lbs-help-text" style="margin-top:8px;">Your server is now live. You can also find it in the <b>Servers</b> tab.</p>',
       '    ' + connectionHtml,
       '    <div style="margin-top:16px;">',
       '      <button class="btn btn-outline btn-sm" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Lab Info (.txt)</button>',
@@ -1469,11 +1492,11 @@ const Labs = (function () {
       : ['SSH Command:    ssh -i keypair.pem ' + sshUser + '@' + (ip || '—')].join('\n');
 
     var content = [
-      'EC2 Lab Connection Info',
+      'Server Connection Info',
       '═══════════════════════════════════════',
       'Lab ID:         ' + (labId || '—'),
       'Platform:       ' + (PLATFORM_LABELS[platform] || platform || '—'),
-      'Instance Type:  ' + ((lab && lab.instanceType) || wizardConfig.instanceType || '—'),
+      'Server Type:    ' + ((lab && lab.instanceType) || wizardConfig.instanceType || '—'),
       'Region:         ' + ((lab && lab.region)       || wizardConfig.region       || '—'),
       'Public IP:      ' + (ip || '—'),
       'Estimated Cost: ' + costStr,
