@@ -322,6 +322,24 @@ const Customers = (function () {
     _persist();
   }
 
+  // ─── Constants ────────────────────────────────────────────────────────
+  var PAYMENT_METHODS = [
+    'Bank Transfer','SWIFT Transfer','Wire Transfer',
+    'Credit Card','Debit Card',
+    'eSewa','Fonepay','Khalti','IME Pay',
+    'PayPal','Stripe','Razorpay',
+    'UPI','NEFT / RTGS','Cheque','Cash','Crypto',
+  ];
+
+  var DEFAULT_SERVICES = [
+    'Software Development','Web Development','Mobile Development',
+    'Cloud Infrastructure','Billing Management','Consulting',
+    'UI / UX Design','DevOps','QA & Testing',
+    'Domain & DNS Management','Email Service','Data Analytics',
+    'Security Audit','SEO & Marketing','Content Writing',
+    'HR & Payroll','Training & Workshops','Technical Support',
+  ];
+
   // ─── UI state ─────────────────────────────────────────────────────────
   var _drawerCustId = null;
   var _search       = '';
@@ -329,6 +347,7 @@ const Customers = (function () {
   var _fBilling     = 'all';
   var _fCurrency    = 'all';
   var _editId       = null;
+  var _editServices = []; // tag picker state for modal
 
   // inline-add form state within drawer
   var _drawerAddPayOpen    = false;
@@ -509,24 +528,48 @@ const Customers = (function () {
 
   function _drawerHtml(c) {
     var pct = c.contractValue > 0 ? Math.min(100, Math.round(c.amountPaid / c.contractValue * 100)) : 0;
-    var contractsDue = Math.ceil((new Date(c.agreementEnd) - new Date()) / 86400000);
-
+    var agDays = c.agreementEnd ? Math.ceil((new Date(c.agreementEnd) - new Date()) / 86400000) : null;
+    var initial = (c.name || '?').charAt(0).toUpperCase();
     var html = '';
 
-    // ── Header strip ──
-    html += '<div class="cust-dr-hd">' +
-      '<div class="cust-dr-name">' + _esc(c.name) + '</div>' +
-      '<div class="cust-dr-meta">' + _esc(c.country) + ' \u00b7 ' + _esc(c.billingType) + '</div>' +
+    // ── Hero strip ──
+    var agNote = '';
+    if (agDays !== null) {
+      if (agDays < 0) agNote = ' &middot; <span style="color:var(--red)">Expired ' + Math.abs(agDays) + 'd ago</span>';
+      else if (agDays <= 60) agNote = ' &middot; <span style="color:var(--amber)">' + agDays + 'd left</span>';
+    }
+    html += '<div style="display:flex;align-items:center;gap:16px;padding:18px 22px 16px;background:linear-gradient(135deg,#f8faff,#eef3ff);border-bottom:1px solid var(--bd)">' +
+      '<div style="width:52px;height:52px;border-radius:14px;flex-shrink:0;background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;display:grid;place-items:center;font-size:22px;font-weight:800;box-shadow:0 4px 12px rgba(36,96,224,.3)">' + _esc(initial) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:20px;font-weight:800;color:var(--ink)">' + _esc(c.name) + '</div>' +
+        '<div style="font-size:13px;color:var(--ink3);margin-top:3px">' + _esc(c.country) + ' &middot; ' + _esc(c.billingType) + agNote + '</div>' +
+      '</div>' +
+      _payBadge(c.paymentStatus) +
     '</div>';
 
-    // ── Contact ──
+    // ── Amount trio ──
     html += '<div class="cust-dr-section">' +
-      '<div class="cust-dr-sec-title">Contact</div>' +
+      '<div class="cust-dr-sec-title">Financial Summary</div>' +
+      '<div class="cust-amounts-row">' +
+        '<div class="cust-amt-card"><div class="cust-amt-card-lbl">Contract Value</div><div class="cust-amt-card-val">' + FinSettings.fmtAmt(c.contractValue, c.currency) + '</div></div>' +
+        '<div class="cust-amt-card"><div class="cust-amt-card-lbl">Amount Paid</div><div class="cust-amt-card-val green">' + FinSettings.fmtAmt(c.amountPaid, c.currency) + '</div></div>' +
+        '<div class="cust-amt-card"><div class="cust-amt-card-lbl">Outstanding</div><div class="cust-amt-card-val ' + (c.paymentStatus === 'overdue' ? 'red' : c.paymentStatus === 'due' ? 'amber' : '') + '">' + FinSettings.fmtAmt(c.amountDue, c.currency) + '</div></div>' +
+      '</div>' +
+      '<div class="cust-progress-wrap">' +
+        '<div class="cust-progress-bar"><div class="cust-progress-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="cust-progress-lbl"><span>' + pct + '% collected</span><span>Next due: ' + _fmtDate(c.nextDueDate) + '</span></div>' +
+      '</div>' +
+    '</div>';
+
+    // ── Contact & agreement ──
+    html += '<div class="cust-dr-section">' +
+      '<div class="cust-dr-sec-title">Contact &amp; Agreement</div>' +
       '<div class="cust-dr-grid">' +
-        _drField('Name',  c.contactName  || '\u2014') +
+        _drField('Contact Name', c.contactName || '\u2014') +
         _drField('Email', c.contactEmail ? '<a href="mailto:' + _esc(c.contactEmail) + '">' + _esc(c.contactEmail) + '</a>' : '\u2014', true) +
         _drField('Phone', c.contactPhone || '\u2014') +
-        _drField('Form',  c.paymentForm  || '\u2014') +
+        _drField('Payment Method', c.paymentForm || '\u2014') +
+        _drField('Agreement', _fmtDate(c.agreementStart) + ' \u2013 ' + _fmtDate(c.agreementEnd)) +
         _drField('Signed By', c.signedBy ? '<span class="cust-dr-signed">\u270d\ufe0f ' + _esc(c.signedBy) + '</span>' : '\u2014', true) +
         _drField('Account Manager', c.accountManager ? '<span class="cust-dr-signed">\uD83D\uDC64 ' + _esc(c.accountManager) + '</span>' : '\u2014', true) +
       '</div>' +
@@ -534,28 +577,12 @@ const Customers = (function () {
 
     // ── Services ──
     var svcChips = (c.services || []).map(function (s) { return '<span class="fm-svc-chip">' + _esc(s) + '</span>'; }).join('');
-    html += '<div class="cust-dr-section">' +
-      '<div class="cust-dr-sec-title">Services Provided</div>' +
-      '<div class="fm-svcs">' + (svcChips || '<span class="fm-muted">None listed</span>') + '</div>' +
-    '</div>';
-
-    // ── Payment summary ──
-    html += '<div class="cust-dr-section">' +
-      '<div class="cust-dr-sec-title">Payment Summary</div>' +
-      '<div class="cust-dr-grid">' +
-        _drField('Contract Value', FinSettings.fmtWithNpr(c.contractValue, c.currency), true) +
-        _drField('Amount Paid',    FinSettings.fmtWithNpr(c.amountPaid,    c.currency), true) +
-        _drField('Amount Due',     FinSettings.fmtWithNpr(c.amountDue,     c.currency), true) +
-        _drField('Next Due Date',  _fmtDate(c.nextDueDate)) +
-        _drField('Status',         _payBadge(c.paymentStatus), true) +
-        _drField('Agreement', _fmtDate(c.agreementStart) + ' \u2013 ' + _fmtDate(c.agreementEnd) +
-          (contractsDue >= 0 && contractsDue <= 60 ? ' <span class="fm-chip ' + (contractsDue <= 7 ? 'red' : 'amber') + '">' + contractsDue + 'd left</span>' : ''), true) +
-      '</div>' +
-      '<div class="cust-progress-wrap">' +
-        '<div class="cust-progress-bar"><div class="cust-progress-fill" style="width:' + pct + '%"></div></div>' +
-        '<div class="cust-progress-lbl">' + pct + '% paid \u00b7 ' + FinSettings.fmtAmt(c.amountPaid, c.currency) + ' of ' + FinSettings.fmtAmt(c.contractValue, c.currency) + '</div>' +
-      '</div>' +
-    '</div>';
+    if (svcChips) {
+      html += '<div class="cust-dr-section">' +
+        '<div class="cust-dr-sec-title">Services Provided</div>' +
+        '<div class="fm-svcs">' + svcChips + '</div>' +
+      '</div>';
+    }
 
     // ── Contracts / Projects ──
     html += '<div class="cust-dr-section">' +
@@ -581,7 +608,7 @@ const Customers = (function () {
     html += '<div class="cust-dr-section">' +
       '<div class="cust-dr-sec-hd">' +
         '<div class="cust-dr-sec-title">Payment History</div>' +
-        '<button class="btn btn-xs btn-out" onclick="Customers.toggleAddPayment()">Record Payment</button>' +
+        '<button class="btn btn-xs btn-out" onclick="Customers.toggleAddPayment()">+ Record</button>' +
       '</div>' +
       '<div id="dr-add-pay-form" style="display:none">' + _addPaymentForm() + '</div>' +
       '<div id="dr-payments-list">' + _paymentsHtml(c) + '</div>' +
@@ -710,14 +737,27 @@ const Customers = (function () {
 
   function _paymentsHtml(c) {
     var pays = (c.payments || []).slice().sort(function (a, b) { return b.date > a.date ? 1 : -1; });
-    if (!pays.length) return '<div class="fm-muted-sm">No payments recorded</div>';
-    return '<div class="cust-pay-list">' + pays.map(function (p) {
-      return '<div class="cust-pay-row">' +
-        '<div class="cust-pay-date">' + _fmtDate(p.date) + '</div>' +
-        '<div class="cust-pay-amt">' + FinSettings.fmtAmt(p.amount, c.currency) + '</div>' +
-        '<div class="cust-pay-note">' + _esc(p.notes || '') + '</div>' +
+    if (!pays.length) return '<div class="fm-muted-sm">No payments recorded yet.</div>';
+    return pays.map(function (p) {
+      return '<div class="fin-dr-hist-row">' +
+        '<div class="fin-dr-hist-date">' + _fmtDate(p.date) + '</div>' +
+        '<div class="fin-dr-hist-amt">' + FinSettings.fmtAmt(p.amount, c.currency) + '</div>' +
+        '<div class="fin-dr-hist-note">' + _esc(p.notes || '') + '</div>' +
+        '<button class="fin-dr-del-btn" onclick="Customers.deletePayment(\'' + _esc(c.id) + '\',\'' + _esc(p.id) + '\')" title="Delete">&times;</button>' +
       '</div>';
-    }).join('') + '</div>';
+    }).join('');
+  }
+
+  function deletePayment(custId, payId) {
+    if (!window.confirm('Delete this payment record?')) return;
+    var idx = _data.findIndex(function (x) { return x.id === custId; });
+    if (idx < 0) return;
+    _data[idx].payments = (_data[idx].payments || []).filter(function (p) { return p.id !== payId; });
+    _data[idx].amountPaid = _data[idx].payments.reduce(function (s, p) { return s + p.amount; }, 0);
+    _persist();
+    App.showToast('Payment deleted', 'ok');
+    _refreshDrawer();
+    _render();
   }
 
   function _invoicesHtml(c) {
@@ -988,12 +1028,56 @@ const Customers = (function () {
     if (c) _renderDrawer(c);
   }
 
+  // ─── Tag picker (customer services) ─────────────────────────────────
+
+  function _renderCustTagPicker() {
+    var container = document.getElementById('cust-m-tags');
+    if (!container) return;
+    container.innerHTML = _editServices.map(function (s, i) {
+      return '<span class="tag-pill">' + _esc(s) +
+        '<button class="tag-pill-del" onclick="Customers._removeCustTag(' + i + ')" type="button">&times;</button>' +
+      '</span>';
+    }).join('');
+  }
+
+  function _removeCustTag(i) { _editServices.splice(i, 1); _renderCustTagPicker(); }
+
+  function addCustTagFromDropdown() {
+    var sel = document.getElementById('cust-m-svc-sel');
+    if (!sel) return;
+    var val = sel.value;
+    if (val === '__custom__') {
+      var custom = (_getVal('cust-m-svc-custom') || '').trim();
+      if (!custom) return;
+      if (_editServices.indexOf(custom) < 0) { _editServices.push(custom); _renderCustTagPicker(); }
+      _setVal('cust-m-svc-custom', '');
+    } else if (val && _editServices.indexOf(val) < 0) {
+      _editServices.push(val);
+      _renderCustTagPicker();
+      sel.value = '';
+    }
+  }
+
+  function onCustSvcSelChange() {
+    var sel = document.getElementById('cust-m-svc-sel');
+    var row = document.getElementById('cust-m-svc-custom-row');
+    if (row) row.style.display = (sel && sel.value === '__custom__') ? '' : 'none';
+  }
+
+  function onCustPaymentChange() {
+    var sel = document.getElementById('cust-m-pay-form');
+    var row = document.getElementById('cust-m-pay-custom-row');
+    if (row) row.style.display = (sel && sel.value === '__custom__') ? '' : 'none';
+  }
+
   // ─── Customer Add / Edit Modal ────────────────────────────────────────
 
   function openAddModal() {
     _editId = null;
+    _editServices = [];
     _clearCustForm();
     _setElRaw('cust-modal-title', 'Add Customer');
+    _renderCustTagPicker();
     _openOverlay('cust-overlay');
   }
 
@@ -1001,26 +1085,35 @@ const Customers = (function () {
     var c = getById(id);
     if (!c) return;
     _editId = id;
+    _editServices = (c.services || []).slice();
     _setElRaw('cust-modal-title', 'Edit Customer');
     _setVal('cust-m-name',       c.name);
     _setVal('cust-m-country',    c.country);
     _setVal('cust-m-contact',    c.contactName);
     _setVal('cust-m-email',      c.contactEmail);
     _setVal('cust-m-phone',      c.contactPhone);
-    _setVal('cust-m-services',   (c.services || []).join(', '));
     _setVal('cust-m-currency',   c.currency);
     _setVal('cust-m-contract-v', c.contractValue);
     _setVal('cust-m-paid',       c.amountPaid);
     _setVal('cust-m-due-date',   c.nextDueDate);
-    _setVal('cust-m-pay-form',   c.paymentForm);
     _setVal('cust-m-ag-start',   c.agreementStart);
     _setVal('cust-m-ag-end',     c.agreementEnd);
-    _setVal('cust-m-billing',      c.billingType);
-    _setVal('cust-m-freq',         c.billingFrequency || 'monthly');
-    _setVal('cust-m-signed-by',    c.signedBy);
-    _setVal('cust-m-account-mgr',  c.accountManager);
-    _setVal('cust-m-notes',        c.notes);
+    _setVal('cust-m-billing',    c.billingType);
+    _setVal('cust-m-freq',       c.billingFrequency || 'monthly');
+    _setVal('cust-m-signed-by',  c.signedBy);
+    _setVal('cust-m-account-mgr', c.accountManager);
+    _setVal('cust-m-notes',      c.notes);
+
+    // Payment method dropdown
+    var pm = c.paymentForm || '';
+    var isCustomPm = pm && PAYMENT_METHODS.indexOf(pm) < 0;
+    _setVal('cust-m-pay-form', isCustomPm ? '__custom__' : pm);
+    var custRow = document.getElementById('cust-m-pay-custom-row');
+    if (custRow) custRow.style.display = isCustomPm ? '' : 'none';
+    if (isCustomPm) _setVal('cust-m-pay-custom', pm);
+
     _onCustBillingChange();
+    _renderCustTagPicker();
     _openOverlay('cust-overlay');
   }
 
@@ -1032,15 +1125,21 @@ const Customers = (function () {
   }
 
   function _clearCustForm() {
-    ['cust-m-name','cust-m-country','cust-m-contact','cust-m-email','cust-m-phone','cust-m-services',
-     'cust-m-contract-v','cust-m-paid','cust-m-due-date','cust-m-pay-form','cust-m-signed-by','cust-m-account-mgr',
-     'cust-m-ag-start','cust-m-ag-end','cust-m-notes']
+    ['cust-m-name','cust-m-country','cust-m-contact','cust-m-email','cust-m-phone',
+     'cust-m-contract-v','cust-m-paid','cust-m-due-date','cust-m-signed-by','cust-m-account-mgr',
+     'cust-m-ag-start','cust-m-ag-end','cust-m-notes','cust-m-svc-custom','cust-m-pay-custom']
     .forEach(function (id) { _setVal(id, ''); });
     _setVal('cust-m-currency', 'USD');
     _setVal('cust-m-billing',  'recurring');
     _setVal('cust-m-freq',     'monthly');
+    _setVal('cust-m-pay-form', '');
+    _setVal('cust-m-svc-sel',  '');
     var err = document.getElementById('cust-modal-err');
     if (err) err.textContent = '';
+    var custPayRow = document.getElementById('cust-m-pay-custom-row');
+    if (custPayRow) custPayRow.style.display = 'none';
+    var custSvcRow = document.getElementById('cust-m-svc-custom-row');
+    if (custSvcRow) custSvcRow.style.display = 'none';
     _onCustBillingChange();
   }
 
@@ -1063,11 +1162,11 @@ const Customers = (function () {
     var paid    = parseFloat(_getVal('cust-m-paid') || '0');
     var billing = _getVal('cust-m-billing');
     var freq    = _getVal('cust-m-freq');
-    var svcsRaw = _getVal('cust-m-services');
-    var services = svcsRaw ? svcsRaw.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+    var pmSel   = _getVal('cust-m-pay-form');
+    var payForm = pmSel === '__custom__' ? _getVal('cust-m-pay-custom') : pmSel;
 
-    if (!name)           { err('Customer name is required');     return; }
-    if (!country)        { err('Country is required');           return; }
+    if (!name)               { err('Customer name is required');     return; }
+    if (!country)            { err('Country is required');           return; }
     if (isNaN(cv) || cv < 0) { err('Enter a valid contract value'); return; }
 
     var fields = {
@@ -1075,12 +1174,12 @@ const Customers = (function () {
       contactName:   _getVal('cust-m-contact'),
       contactEmail:  _getVal('cust-m-email'),
       contactPhone:  _getVal('cust-m-phone'),
-      services,
+      services:      _editServices.slice(),
       currency:      _getVal('cust-m-currency'),
       contractValue: cv,
       amountPaid:    isNaN(paid) ? 0 : paid,
       nextDueDate:   _getVal('cust-m-due-date'),
-      paymentForm:   _getVal('cust-m-pay-form'),
+      paymentForm:   payForm,
       agreementStart: _getVal('cust-m-ag-start'),
       agreementEnd:  _getVal('cust-m-ag-end'),
       billingType:   billing,
@@ -1136,6 +1235,13 @@ const Customers = (function () {
     // Proof helpers
     _onInvProofChange:   _onInvProofChange,
     _viewInvProof:       _viewInvProof,
+    // Payment delete
+    deletePayment:       deletePayment,
+    // Tag picker
+    _removeCustTag:      _removeCustTag,
+    addCustTagFromDropdown: addCustTagFromDropdown,
+    onCustSvcSelChange:  onCustSvcSelChange,
+    onCustPaymentChange: onCustPaymentChange,
     // Drawer actions
     toggleAddPayment:    toggleAddPayment,
     toggleAddInvoice:    toggleAddInvoice,

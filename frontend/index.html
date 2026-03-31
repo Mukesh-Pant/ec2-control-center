@@ -31,20 +31,60 @@
     <div class="modal-body">
     <div class="modal-grid">
       <div class="fg"><label class="fl" for="vnd-m-name">Vendor Name</label><input class="finp" id="vnd-m-name" type="text" placeholder="e.g. Anthropic"/></div>
-      <div class="fg"><label class="fl" for="vnd-m-category">Category</label><input class="finp" id="vnd-m-category" type="text" placeholder="e.g. AI Services"/></div>
-      <div class="fg fg-wide"><label class="fl" for="vnd-m-services">Services Offered <span style="color:var(--ink4);font-weight:400">(comma-separated)</span></label><input class="finp" id="vnd-m-services" type="text" placeholder="e.g. LLM API, Image Generation, Embeddings"/></div>
+      <div class="fg"><label class="fl" for="vnd-m-category">Category</label>
+        <select class="finp" id="vnd-m-category">
+          <option value="">— Select category —</option>
+          <option>AI Services</option><option>Cloud Infrastructure</option><option>AI Tools</option>
+          <option>HR &amp; Payroll</option><option>Cloud / Productivity</option>
+          <option>Security</option><option>Analytics</option><option>Communication</option>
+          <option>Finance &amp; Payments</option><option>Design Tools</option>
+          <option>Marketing</option><option>Domain &amp; Hosting</option><option>Other</option>
+        </select>
+      </div>
+      <!-- Services tag picker -->
+      <div class="fg fg-wide">
+        <label class="fl">Services Offered</label>
+        <div class="tag-picker">
+          <div class="tag-picker-tags" id="vnd-m-tags"></div>
+          <div class="tag-picker-input-row">
+            <select class="finp" id="vnd-m-svc-sel" onchange="Vendors.onSvcSelChange()">
+              <option value="">— Pick a service to add —</option>
+              <option>Cloud Compute</option><option>Cloud Storage</option><option>CDN</option>
+              <option>Database</option><option>Serverless</option><option>AI / LLM API</option>
+              <option>Machine Learning</option><option>AI Code Editor</option>
+              <option>HR Management</option><option>Payroll Processing</option><option>Recruitment</option>
+              <option>Email Service</option><option>Communication</option><option>Analytics</option>
+              <option>Monitoring</option><option>Security / WAF</option><option>Domain &amp; DNS</option>
+              <option>Payment Gateway</option><option>Software Development</option>
+              <option>Consulting</option><option>Billing Management</option>
+              <option value="__custom__">+ Add custom…</option>
+            </select>
+            <button class="btn btn-xs btn-out" type="button" onclick="Vendors.addTagFromDropdown()">Add</button>
+          </div>
+          <div class="fg" id="vnd-m-svc-custom-row" style="display:none;padding:6px 0 0">
+            <input class="finp" id="vnd-m-svc-custom" placeholder="Type custom service name…"/>
+          </div>
+        </div>
+      </div>
+      <!-- Currency + Amount -->
       <div class="fg"><label class="fl" for="vnd-m-currency">Currency</label>
         <select class="finp" id="vnd-m-currency">
-          <option value="USD">USD — US Dollar</option>
-          <option value="NPR">NPR — Nepali Rupee</option>
-          <option value="INR">INR — Indian Rupee</option>
+          <option value="USD">USD — US Dollar</option><option value="EUR">EUR — Euro</option>
+          <option value="GBP">GBP — British Pound</option><option value="AED">AED — UAE Dirham</option>
+          <option value="SAR">SAR — Saudi Riyal</option><option value="SGD">SGD — Singapore Dollar</option>
+          <option value="AUD">AUD — Australian Dollar</option><option value="CAD">CAD — Canadian Dollar</option>
+          <option value="JPY">JPY — Japanese Yen</option><option value="CNY">CNY — Chinese Yuan</option>
+          <option value="NPR">NPR — Nepali Rupee</option><option value="INR">INR — Indian Rupee</option>
+          <option value="PKR">PKR — Pakistani Rupee</option><option value="BDT">BDT — Bangladeshi Taka</option>
+          <option value="QAR">QAR — Qatari Riyal</option>
         </select>
       </div>
       <div class="fg"><label class="fl" for="vnd-m-amount">Amount</label><input class="finp" id="vnd-m-amount" type="number" min="0" step="0.01" placeholder="0.00"/></div>
+      <!-- Billing -->
       <div class="fg"><label class="fl" for="vnd-m-billing-type">Billing Type</label>
         <select class="finp" id="vnd-m-billing-type" onchange="Vendors.onBillingTypeChange()">
           <option value="recurring">Recurring</option>
-          <option value="irregular">Irregular</option>
+          <option value="irregular">Irregular / Usage-based</option>
           <option value="one-time">One-Time</option>
         </select>
       </div>
@@ -55,7 +95,20 @@
           <option value="yearly">Yearly</option>
         </select>
       </div>
-      <div class="fg"><label class="fl" for="vnd-m-payment-form">Payment Form</label><input class="finp" id="vnd-m-payment-form" type="text" placeholder="Credit Card, Bank Transfer…"/></div>
+      <!-- Payment method dropdown -->
+      <div class="fg"><label class="fl" for="vnd-m-payment-form">Payment Method</label>
+        <select class="finp" id="vnd-m-payment-form" onchange="Vendors.onPaymentChange()">
+          <option value="">— Select —</option>
+          <option>Credit Card</option><option>Debit Card</option><option>Bank Transfer</option>
+          <option>SWIFT Transfer</option><option>Wire Transfer</option><option>PayPal</option>
+          <option>Stripe</option><option>eSewa</option><option>Fonepay</option>
+          <option>UPI</option><option>NEFT / RTGS</option><option>Cheque</option>
+          <option>Cash</option><option>Crypto</option>
+          <option value="__custom__">Other (type below)…</option>
+        </select>
+      </div>
+      <div class="fg" id="vnd-m-payment-custom-row" style="display:none"><label class="fl">Custom Payment Method</label><input class="finp" id="vnd-m-payment-custom" placeholder="e.g. Direct Debit"/></div>
+      <!-- Status + Dates -->
       <div class="fg"><label class="fl" for="vnd-m-status">Status Override</label>
         <select class="finp" id="vnd-m-status">
           <option value="auto">Auto-compute</option>
@@ -64,6 +117,7 @@
       </div>
       <div class="fg"><label class="fl" for="vnd-m-start">Agreement Start</label><input class="finp" id="vnd-m-start" type="date"/></div>
       <div class="fg"><label class="fl" for="vnd-m-end">Agreement End</label><input class="finp" id="vnd-m-end" type="date"/></div>
+      <!-- Contact -->
       <div class="fg"><label class="fl" for="vnd-m-contact">Contact Name</label><input class="finp" id="vnd-m-contact" type="text" placeholder="Vendor contact person"/></div>
       <div class="fg"><label class="fl" for="vnd-m-email">Contact Email</label><input class="finp" id="vnd-m-email" type="email" placeholder="support@vendor.com"/></div>
       <div class="fg"><label class="fl" for="vnd-m-phone">Contact Phone</label><input class="finp" id="vnd-m-phone" type="text" placeholder="+1-800-…"/></div>
@@ -94,19 +148,69 @@
     <div class="modal-body">
     <div class="modal-grid">
       <div class="fg"><label class="fl" for="cust-m-name">Customer Name</label><input class="finp" id="cust-m-name" type="text" placeholder="e.g. Cloudmandap"/></div>
-      <div class="fg"><label class="fl" for="cust-m-country">Country</label><input class="finp" id="cust-m-country" type="text" placeholder="e.g. Nepal"/></div>
+      <div class="fg"><label class="fl" for="cust-m-country">Country</label>
+        <select class="finp" id="cust-m-country">
+          <option value="">— Select country —</option>
+          <option>Nepal</option><option>India</option><option>United States</option>
+          <option>United Kingdom</option><option>UAE</option><option>Saudi Arabia</option>
+          <option>Singapore</option><option>Australia</option><option>Canada</option>
+          <option>Germany</option><option>Japan</option><option>Bangladesh</option>
+          <option>Pakistan</option><option>Sri Lanka</option><option>Other</option>
+        </select>
+      </div>
       <div class="fg"><label class="fl" for="cust-m-contact">Contact Name</label><input class="finp" id="cust-m-contact" type="text" placeholder="Full name"/></div>
       <div class="fg"><label class="fl" for="cust-m-email">Contact Email</label><input class="finp" id="cust-m-email" type="email" placeholder="email@company.com"/></div>
       <div class="fg"><label class="fl" for="cust-m-phone">Contact Phone</label><input class="finp" id="cust-m-phone" type="text" placeholder="+977-…"/></div>
-      <div class="fg"><label class="fl" for="cust-m-pay-form">Payment Form</label><input class="finp" id="cust-m-pay-form" type="text" placeholder="Bank Transfer, eSewa…"/></div>
+      <!-- Payment method dropdown -->
+      <div class="fg"><label class="fl" for="cust-m-pay-form">Payment Method</label>
+        <select class="finp" id="cust-m-pay-form" onchange="Customers.onCustPaymentChange()">
+          <option value="">— Select —</option>
+          <option>Bank Transfer</option><option>SWIFT Transfer</option><option>Wire Transfer</option>
+          <option>Credit Card</option><option>Debit Card</option>
+          <option>eSewa</option><option>Fonepay</option><option>Khalti</option><option>IME Pay</option>
+          <option>PayPal</option><option>Stripe</option><option>Razorpay</option>
+          <option>UPI</option><option>NEFT / RTGS</option><option>Cheque</option>
+          <option>Cash</option><option>Crypto</option>
+          <option value="__custom__">Other (type below)…</option>
+        </select>
+      </div>
+      <div class="fg" id="cust-m-pay-custom-row" style="display:none"><label class="fl">Custom Payment Method</label><input class="finp" id="cust-m-pay-custom" placeholder="e.g. Direct Debit"/></div>
       <div class="fg"><label class="fl" for="cust-m-signed-by">Signed By (Our Side)</label><input class="finp" id="cust-m-signed-by" type="text" placeholder="e.g. Adarsh"/></div>
       <div class="fg"><label class="fl" for="cust-m-account-mgr">Account Manager</label><input class="finp" id="cust-m-account-mgr" type="text" placeholder="e.g. Adarsh"/></div>
-      <div class="fg fg-wide"><label class="fl" for="cust-m-services">Services (comma-separated)</label><input class="finp" id="cust-m-services" type="text" placeholder="Billing Management, Software Development"/></div>
+      <!-- Services tag picker -->
+      <div class="fg fg-wide">
+        <label class="fl">Services Provided to Customer</label>
+        <div class="tag-picker">
+          <div class="tag-picker-tags" id="cust-m-tags"></div>
+          <div class="tag-picker-input-row">
+            <select class="finp" id="cust-m-svc-sel" onchange="Customers.onCustSvcSelChange()">
+              <option value="">— Pick a service to add —</option>
+              <option>Software Development</option><option>Web Development</option><option>Mobile Development</option>
+              <option>Cloud Infrastructure</option><option>Billing Management</option><option>Consulting</option>
+              <option>UI / UX Design</option><option>DevOps</option><option>QA &amp; Testing</option>
+              <option>Domain &amp; DNS Management</option><option>Email Service</option><option>Data Analytics</option>
+              <option>Security Audit</option><option>SEO &amp; Marketing</option><option>Technical Support</option>
+              <option>HR &amp; Payroll</option><option>Training &amp; Workshops</option>
+              <option value="__custom__">+ Add custom…</option>
+            </select>
+            <button class="btn btn-xs btn-out" type="button" onclick="Customers.addCustTagFromDropdown()">Add</button>
+          </div>
+          <div class="fg" id="cust-m-svc-custom-row" style="display:none;padding:6px 0 0">
+            <input class="finp" id="cust-m-svc-custom" placeholder="Type custom service name…"/>
+          </div>
+        </div>
+      </div>
+      <!-- Currency + Financials -->
       <div class="fg"><label class="fl" for="cust-m-currency">Currency</label>
         <select class="finp" id="cust-m-currency">
-          <option value="USD">USD — US Dollar</option>
-          <option value="NPR">NPR — Nepali Rupee</option>
-          <option value="INR">INR — Indian Rupee</option>
+          <option value="USD">USD — US Dollar</option><option value="EUR">EUR — Euro</option>
+          <option value="GBP">GBP — British Pound</option><option value="AED">AED — UAE Dirham</option>
+          <option value="SAR">SAR — Saudi Riyal</option><option value="SGD">SGD — Singapore Dollar</option>
+          <option value="AUD">AUD — Australian Dollar</option><option value="CAD">CAD — Canadian Dollar</option>
+          <option value="JPY">JPY — Japanese Yen</option><option value="CNY">CNY — Chinese Yuan</option>
+          <option value="NPR">NPR — Nepali Rupee</option><option value="INR">INR — Indian Rupee</option>
+          <option value="PKR">PKR — Pakistani Rupee</option><option value="BDT">BDT — Bangladeshi Taka</option>
+          <option value="QAR">QAR — Qatari Riyal</option>
         </select>
       </div>
       <div class="fg"><label class="fl" for="cust-m-contract-v">Contract Value</label><input class="finp" id="cust-m-contract-v" type="number" min="0" step="0.01" placeholder="0.00"/></div>
