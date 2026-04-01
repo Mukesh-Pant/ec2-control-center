@@ -1148,14 +1148,16 @@
             <datalist id="audit-instance-datalist"></datalist>
             <div class="audit-filter-input-wrap">
               <svg class="audit-filter-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <input class="audit-input" type="text" id="audit-filter-user" placeholder="User email…"/>
+              <input class="audit-input" type="text" id="audit-filter-user" list="audit-user-list" placeholder="User email…"/>
             </div>
+            <datalist id="audit-user-list"></datalist>
             <select class="audit-select" id="audit-filter-action">
               <option value="">All actions</option>
               <option value="start">START</option>
               <option value="stop">STOP</option>
               <option value="auto-stop-idle">AUTO-STOP</option>
               <option value="account-linked">ACCOUNT-LINKED</option>
+              <option value="terminate">TERMINATE</option>
             </select>
             <select class="audit-select" id="audit-filter-account">
               <option value="">All accounts</option>

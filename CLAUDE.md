@@ -106,7 +106,7 @@ EC2-control-center/
         ├── authui.js           ← Auth page UI controller (form switching, validation, loading)
         ├── api.js              ← Fetch wrapper with auto-token-refresh
         ├── instances.js        ← Instance list + start/stop controls
-        ├── audit.js            ← Audit log viewer + daily cost view
+        ├── audit.js            ← Audit log viewer + daily cost view; filter bar: instance (datalist combobox), user email (datalist combobox, admin), action dropdown (START|STOP|AUTO-STOP|ACCOUNT-LINKED|TERMINATE), account dropdown
         ├── billing.js          ← Billing dashboard
         ├── analytics.js        ← Usage analytics
         ├── accounts.js         ← Multi-account management
@@ -417,14 +417,18 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 - Step 3 — Payment upload; submit button calls `_handleLabsSubmit()` (POST `action:'submit'`)
 - Step 4 — "Request Submitted" confirmation screen; `_exitWizard()` sets `_activeFilter = 'pending'` so user lands on Pending filter
 - **Lab list UI (redesigned):** filterable row-based table replaces flat card grid
-  - **Filter bar:** pills — `All` / `Active` / `Pending` / `History` with live counts; default `active`; auto-falls back to `all` if active count = 0
+  - **Attribute filter bar** (replaces old pill filters): Platform | All types | All status | All accounts | All regions | Submitted by (admin combobox)
+  - Filter state: `_labFilters = { platform, serverType, status, account, region, submittedBy }`; `_clearLabFilters()` resets all
+  - Account dropdown displays `"Name (accountId)"` using cached `_accounts` array
+  - Submitted By (admin only): `<input list="lbs-sb-list">` combobox populated with operator+admin emails from `GET /users` (`_labsUsers`); focus is restored after every re-render via `_restoreFocus()`
   - Filter buckets: Active = `running`+`provisioning`; Pending = `pending_approval`; History = `terminated`+`rejected`
   - **Table columns:** Chevron | Lab Name | Platform | Instance Type | Status | Account | Region | Expires
   - **Inline expansion:** clicking a row inserts a detail `<tr>` directly below it; only one expanded at a time; X close button in panel top-right
 - **State variables:** `_activeFilter` (`'all'|'active'|'pending'|'history'`) + `_expandedLabId` (labId of open row, or null)
 - **Key functions:**
-  - `_renderLabsList()` — computes bucket counts, applies auto-fallback, filters visible labs, builds filter bar + table HTML
-  - `_renderFilterBar(counts)` — returns pill bar HTML string
+  - `_renderLabsList()` — computes bucket counts, applies auto-fallback, filters visible labs, builds filter bar + table HTML; saves/restores DOM focus via `_restoreFocus()` to prevent input focus-loss on re-render
+  - `_renderFilterBar()` — returns attribute filter bar HTML (dropdowns + Submitted By combobox)
+  - `_setLabFilter(field, value)` — sets `_labFilters[field]`, re-renders (public)
   - `_setFilter(filter)` — sets `_activeFilter`, clears `_expandedLabId`, re-renders (public)
   - `_renderRow(lab)` — returns `<tr>` HTML with chevron, all columns, correct expanded class
   - `_renderExpiry(lab)` — returns colored `<span>` using `_formatExpiry()`; yellow = future, gray = expired/absent
@@ -554,6 +558,7 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 - Admin-only pages: `accounts` and `users` tabs visible only when `App.setAdmin(true)`
 - Role badge shown in sidebar: `rbac-admin` (blue) / `rbac-operator` (green) / `rbac-viewer` (gray)
 - **Skeleton loading:** `App.init()` injects `.skeleton-row` shimmer placeholders into `#dash-list` and `#ag-wrap` before `Instances.refresh()` fires, so the dashboard is never blank while Lambda responds
+- **`onInstancesRefreshed` hook pattern:** After `Instances.refresh()` loads `allInstances`, it calls `Backup.onInstancesRefreshed()` and `Audit.onInstancesRefreshed()` so those modules can populate their instance datalists immediately, even if those tabs haven't been visited yet
 
 ### CloudFormation
 - `AuthorizationType: COGNITO_USER_POOLS` + `AuthorizerId: !Ref RestApiAuthorizer`

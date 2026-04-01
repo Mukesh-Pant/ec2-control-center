@@ -48,6 +48,9 @@ const Instances = (function () {
       if (typeof Backup !== 'undefined' && Backup.onInstancesRefreshed) {
         Backup.onInstancesRefreshed();
       }
+      if (typeof Audit !== 'undefined' && Audit.onInstancesRefreshed) {
+        Audit.onInstancesRefreshed();
+      }
 
     } catch (err) {
       if (err.message === 'Session expired' || err.message === 'Unauthorized') return;

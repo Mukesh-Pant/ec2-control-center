@@ -25,6 +25,9 @@ const Audit = (function () {
   // Map of accountId → accountName collected from loaded items + instances
   var knownAccounts = {};  // { accountId: accountName }
 
+  // User emails for the User Email combobox (admin only, loaded once)
+  var _auditUsers = [];
+
   // ─── Event Log ────────────────────────────────────────────────────────
 
   // Resolve an instance filter value (name or ID) to an instance ID
@@ -243,6 +246,36 @@ const Audit = (function () {
     });
   }
 
+  // ─── Load user emails for User Email combobox (admin only, once) ────────
+
+  async function _loadAuditUsers() {
+    try {
+      var res  = await API.getUsers();
+      var data = await res.json();
+      _auditUsers = (data.users || [])
+        .filter(function (u) {
+          var g = u.groups || [];
+          return g.indexOf('admins') !== -1 || g.indexOf('operators') !== -1
+              || g.indexOf('viewers') !== -1;
+        })
+        .map(function (u) { return u.email; });
+      var dl = document.getElementById('audit-user-list');
+      if (dl) {
+        dl.innerHTML = _auditUsers
+          .map(function (e) { return '<option value="' + e.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">'; })
+          .join('');
+      }
+    } catch (_) { _auditUsers = []; }
+  }
+
+  // ─── Called by Instances.refresh() after instances load ──────────────
+
+  function onInstancesRefreshed() {
+    _populateInstanceDatalist(
+      (typeof Instances !== 'undefined' && Instances.getAll) ? Instances.getAll() : []
+    );
+  }
+
   // ─── Public: called by app.js when Audit tab is clicked ───────────────
 
   function onTabActivated() {
@@ -251,6 +284,8 @@ const Audit = (function () {
       firstLoad = false;
       loadEvents(true);  // Load all recent events by default (no filters)
     }
+    var role = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : '';
+    if (role === 'admin' && _auditUsers.length === 0) _loadAuditUsers();
   }
 
   // ─── Init — wire all event listeners ──────────────────────────────────
@@ -302,9 +337,10 @@ const Audit = (function () {
   // ─── Public API ───────────────────────────────────────────────────────
 
   return {
-    init:           init,
-    onTabActivated: onTabActivated,
-    search:         function () { loadEvents(true); },
+    init:                init,
+    onTabActivated:      onTabActivated,
+    onInstancesRefreshed: onInstancesRefreshed,
+    search:              function () { loadEvents(true); },
   };
 
 })();
