@@ -8,6 +8,7 @@ const Instances = (function () {
   var allInstances = [];
   var selInst      = null;
   var pollTimer    = null;
+  var _terminating = false;
 
   // ─── Refresh (called from Dashboard + Instances page) ─────────────────────
 
@@ -216,6 +217,7 @@ const Instances = (function () {
 
     var role      = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : 'admin';
     var canMutate = (role === 'admin' || role === 'operator');
+    var isAdmin   = (role === 'admin');
 
     selInst = inst;
 
@@ -243,6 +245,8 @@ const Instances = (function () {
             '<div class="dp-m"><div class="dp-ml">Instance Type</div><div class="dp-mv" id="dp-type">—</div></div>' +
             '<div class="dp-m"><div class="dp-ml">Platform</div><div class="dp-mv violet" id="dp-plat">—</div></div>' +
             '<div class="dp-m"><div class="dp-ml">Public IP</div><div class="dp-mv mono-sm" id="dp-pub">—</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Storage</div><div class="dp-mv" id="dp-storage">—</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Elastic IP</div><div class="dp-mv mono-sm amber" id="dp-eip">—</div></div>' +
           '</div>' +
           (canMutate
             ? '<div class="dp-ctrl">' +
@@ -253,6 +257,14 @@ const Instances = (function () {
                 '<button class="btn btn-red btn-sm" id="dp-stop" onclick="Instances.ctrlInst(\'stop\')" disabled>' +
                   '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span id="dp-stl">Stop</span>' +
                 '</button>' +
+                (isAdmin
+                  ? '<button class="btn btn-red btn-sm" id="dp-terminate" onclick="Instances.confirmTerminate()">' +
+                      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">' +
+                        '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>' +
+                        '<path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>' +
+                      '</svg>Terminate' +
+                    '</button>'
+                  : '') +
                 '<button class="btn btn-out btn-sm" onclick="Instances.refreshDP()">' +
                   '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Refresh' +
                 '</button>' +
@@ -307,6 +319,12 @@ const Instances = (function () {
     App.setText('dp-type', inst.instanceType || '—');
     App.setText('dp-plat', inst.platform || 'Linux');
     App.setText('dp-pub',  inst.publicIp || '—');
+    App.setText('dp-storage', inst.storageGb ? inst.storageGb + ' GB' : '—');
+    App.setText('dp-eip',  inst.elasticIp || '—');
+
+    // Show terminate button for admins only
+    var termBtn = document.getElementById('dp-terminate');
+    if (termBtn) termBtn.style.display = Auth.getRole() === 'admin' ? '' : 'none';
   }
 
   function _setDPStatus(state) {
@@ -344,6 +362,49 @@ const Instances = (function () {
 
   function refreshDP() {
     if (selInst) _pollDP();
+  }
+
+  // ─── Terminate from detail panel (admin only) ─────────────────────────────
+
+  function confirmTerminate() {
+    if (!selInst) return;
+    var overlay = document.getElementById('inst-term-overlay');
+    if (overlay) overlay.style.display = 'flex';
+  }
+
+  function cancelTerminate() {
+    var overlay = document.getElementById('inst-term-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  async function doTerminate() {
+    if (!selInst || _terminating) return;
+    _terminating = true;
+    cancelTerminate();
+
+    var btn = document.getElementById('dp-terminate');
+    if (btn) { btn.disabled = true; btn.textContent = 'Terminating…'; }
+
+    try {
+      var res  = await API.ec2Action({
+        action:       'terminate',
+        instanceId:   selInst.instanceId,
+        region:       selInst.region,
+        accountId:    selInst.accountId,
+        instanceName: selInst.name,
+        instanceType: selInst.instanceType,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Terminate failed');
+      App.showToast('Instance terminated', 'ok');
+      closeDP();
+      setTimeout(function () { Instances.refresh(); }, 3000);
+    } catch (e) {
+      App.showToast('Terminate error: ' + e.message, 'err');
+      if (btn) { btn.disabled = false; btn.textContent = 'Terminate'; }
+    } finally {
+      _terminating = false;
+    }
   }
 
   // ─── Start / Stop from detail panel ───────────────────────────────────────
@@ -400,14 +461,17 @@ const Instances = (function () {
   // ─── Public ────────────────────────────────────────────────────────────────
 
   return {
-    refresh:    refresh,
-    openDP:     openDP,
-    closeDP:    closeDP,
-    refreshDP:  refreshDP,
-    ctrlInst:   ctrlInst,
-    _toggleAg:  _toggleAg,
-    _qCtrl:     _qCtrl,
-    getAll:     function () { return allInstances; },
+    refresh:          refresh,
+    openDP:           openDP,
+    closeDP:          closeDP,
+    refreshDP:        refreshDP,
+    ctrlInst:         ctrlInst,
+    confirmTerminate: confirmTerminate,
+    cancelTerminate:  cancelTerminate,
+    doTerminate:      doTerminate,
+    _toggleAg:        _toggleAg,
+    _qCtrl:           _qCtrl,
+    getAll:           function () { return allInstances; },
   };
 
 })();

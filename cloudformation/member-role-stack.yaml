@@ -47,6 +47,7 @@ Resources:
                   - ec2:DescribeRegions
                   - ec2:StartInstances
                   - ec2:StopInstances
+                  - ec2:DescribeVolumes
                 Resource: '*'
               - Sid: CloudWatchMetrics
                 Effect: Allow
