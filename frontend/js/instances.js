@@ -8,6 +8,7 @@ const Instances = (function () {
   var allInstances = [];
   var selInst      = null;
   var pollTimer    = null;
+  var _terminating = false;
 
   // ─── Refresh (called from Dashboard + Instances page) ─────────────────────
 
@@ -307,6 +308,12 @@ const Instances = (function () {
     App.setText('dp-type', inst.instanceType || '—');
     App.setText('dp-plat', inst.platform || 'Linux');
     App.setText('dp-pub',  inst.publicIp || '—');
+    App.setText('dp-storage', inst.storageGb ? inst.storageGb + ' GB' : '—');
+    App.setText('dp-eip',  inst.elasticIp || '—');
+
+    // Show terminate button for admins only
+    var termBtn = document.getElementById('dp-terminate');
+    if (termBtn) termBtn.style.display = Auth.getRole() === 'admin' ? '' : 'none';
   }
 
   function _setDPStatus(state) {
@@ -344,6 +351,49 @@ const Instances = (function () {
 
   function refreshDP() {
     if (selInst) _pollDP();
+  }
+
+  // ─── Terminate from detail panel (admin only) ─────────────────────────────
+
+  function confirmTerminate() {
+    if (!selInst) return;
+    var overlay = document.getElementById('inst-term-overlay');
+    if (overlay) overlay.style.display = 'flex';
+  }
+
+  function cancelTerminate() {
+    var overlay = document.getElementById('inst-term-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  async function doTerminate() {
+    if (!selInst || _terminating) return;
+    _terminating = true;
+    cancelTerminate();
+
+    var btn = document.getElementById('dp-terminate');
+    if (btn) { btn.disabled = true; btn.textContent = 'Terminating…'; }
+
+    try {
+      var res  = await API.ec2Action({
+        action:       'terminate',
+        instanceId:   selInst.instanceId,
+        region:       selInst.region,
+        accountId:    selInst.accountId,
+        instanceName: selInst.name,
+        instanceType: selInst.instanceType,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Terminate failed');
+      App.showToast('Instance terminated', 'ok');
+      closeDP();
+      setTimeout(function () { Instances.refresh(); }, 3000);
+    } catch (e) {
+      App.showToast('Terminate error: ' + e.message, 'err');
+      if (btn) { btn.disabled = false; btn.textContent = 'Terminate'; }
+    } finally {
+      _terminating = false;
+    }
   }
 
   // ─── Start / Stop from detail panel ───────────────────────────────────────
@@ -400,14 +450,17 @@ const Instances = (function () {
   // ─── Public ────────────────────────────────────────────────────────────────
 
   return {
-    refresh:    refresh,
-    openDP:     openDP,
-    closeDP:    closeDP,
-    refreshDP:  refreshDP,
-    ctrlInst:   ctrlInst,
-    _toggleAg:  _toggleAg,
-    _qCtrl:     _qCtrl,
-    getAll:     function () { return allInstances; },
+    refresh:          refresh,
+    openDP:           openDP,
+    closeDP:          closeDP,
+    refreshDP:        refreshDP,
+    ctrlInst:         ctrlInst,
+    confirmTerminate: confirmTerminate,
+    cancelTerminate:  cancelTerminate,
+    doTerminate:      doTerminate,
+    _toggleAg:        _toggleAg,
+    _qCtrl:           _qCtrl,
+    getAll:           function () { return allInstances; },
   };
 
 })();

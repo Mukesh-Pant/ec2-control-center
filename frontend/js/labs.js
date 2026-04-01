@@ -461,6 +461,50 @@ const Labs = (function () {
     );
   }
 
+  // ─── Lab instance start / stop ────────────────────────────────────────────
+
+  async function _startLab(labId) {
+    var lab = activeLabs.find(function (l) { return l.labId === labId; });
+    if (!lab || !lab.instanceId) { App.showToast('Instance ID not available', 'err'); return; }
+    try {
+      var res  = await API.ec2Action({
+        action:       'start',
+        instanceId:   lab.instanceId,
+        accountId:    lab.accountId,
+        region:       lab.region,
+        instanceName: lab.labName || lab.labId,
+        instanceType: lab.instanceType,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Start failed');
+      App.showToast('Server start initiated', 'ok');
+      await _loadActiveLabs();
+    } catch (e) {
+      App.showToast('Start error: ' + e.message, 'err');
+    }
+  }
+
+  async function _stopLab(labId) {
+    var lab = activeLabs.find(function (l) { return l.labId === labId; });
+    if (!lab || !lab.instanceId) { App.showToast('Instance ID not available', 'err'); return; }
+    try {
+      var res  = await API.ec2Action({
+        action:       'stop',
+        instanceId:   lab.instanceId,
+        accountId:    lab.accountId,
+        region:       lab.region,
+        instanceName: lab.labName || lab.labId,
+        instanceType: lab.instanceType,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Stop failed');
+      App.showToast('Server stop initiated', 'ok');
+      await _loadActiveLabs();
+    } catch (e) {
+      App.showToast('Stop error: ' + e.message, 'err');
+    }
+  }
+
   // ─── Row expand / collapse
 
   function _toggleRowDetail(labId) {
@@ -508,7 +552,8 @@ const Labs = (function () {
     var isAdmin       = role === 'admin';
     var callerEmail   = Auth.getEmail ? Auth.getEmail() : '';
     var isOwner       = !!(callerEmail && (lab.userEmail === callerEmail || lab.callerEmail === callerEmail));
-    var canTerminate  = isAdmin || isOwner;
+    var canTerminate  = isAdmin;
+    var canStartStop  = isAdmin || isOwner;
     var isWindows     = lab.platform === 'windows';
     var platformLabel = PLATFORM_LABELS[lab.platform] || lab.platform || '\u2014';
     var ip            = lab.publicIp || lab.publicDns || '';
@@ -582,6 +627,9 @@ const Labs = (function () {
 
       // ── Actions section
       var actionBtns = '<button class="btn btn-sm btn-outline" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Connection Info (.txt)</button>';
+      if (canStartStop) {
+        actionBtns += ' <button class="btn btn-sm btn-outline" onclick="Labs._stopLab(\'' + labIdEsc + '\')">&#9646;&#9646; Stop Server</button>';
+      }
       if (canTerminate) {
         actionBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>';
       }
@@ -593,22 +641,24 @@ const Labs = (function () {
 
     // ── Stopped server info
     if (lab.status === 'stopped') {
-      var stopNote = isOwner || isAdmin
-        ? 'Your server is stopped. To restart it, go to the <b>Servers</b> tab and click Start on this server. The status here updates automatically when it comes back online.'
-        : 'This server is currently stopped. Only the server owner or an admin can restart it from the Servers tab.';
       html += '<div class="lbs-detail-section">' +
         '<div class="lbs-detail-section-title">Server Stopped</div>' +
         '<div class="lbs-verification-notice">' +
           '<div class="lbs-verification-icon" style="font-size:22px;">&#9646;&#9646;</div>' +
           '<div>' +
             '<h4 class="lbs-verification-title">Server is currently stopped</h4>' +
-            '<p class="lbs-verification-msg">' + stopNote + '</p>' +
+            '<p class="lbs-verification-msg">This server is stopped and not incurring compute costs.</p>' +
           '</div>' +
         '</div>';
+      var stoppedBtns = '';
+      if (canStartStop) {
+        stoppedBtns += '<button class="btn btn-sm btn-success" onclick="Labs._startLab(\'' + labIdEsc + '\')">&#9654; Start Server</button>';
+      }
       if (canTerminate) {
-        html += '<div class="lbs-detail-actions" style="margin-top:12px;">' +
-          '<button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>' +
-          '</div>';
+        stoppedBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>';
+      }
+      if (stoppedBtns) {
+        html += '<div class="lbs-detail-actions" style="margin-top:12px;">' + stoppedBtns + '</div>';
       }
       html += '</div>';
     }
@@ -1727,6 +1777,8 @@ const Labs = (function () {
     _confirmDelete:        _confirmDelete,
     _confirmRemoveHistory: _confirmRemoveHistory,
     _confirmCancelRequest: _confirmCancelRequest,
+    _startLab:             _startLab,
+    _stopLab:              _stopLab,
     _toggleGuide:          _toggleGuide,
     _downloadBill:         _downloadBill,
     _downloadRdp:          _downloadRdp,

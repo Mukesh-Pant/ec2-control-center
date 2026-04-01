@@ -122,8 +122,8 @@ def handle_ec2(event):
     instance_name = body.get('instanceName', '').strip()
     instance_type = body.get('instanceType', '').strip()
 
-    if action not in ('list', 'start', 'stop', 'status'):
-        return error_response(400, 'Invalid action. Must be list, start, stop, or status.')
+    if action not in ('list', 'start', 'stop', 'status', 'terminate'):
+        return error_response(400, 'Invalid action. Must be list, start, stop, status, or terminate.')
 
     caller = get_caller(event)
     logger.info("action=%s instance=%s region=%s account=%s caller=%s",
@@ -137,6 +137,12 @@ def handle_ec2(event):
             return error_response(400, 'instanceId is required.')
         if not region:
             return error_response(400, 'region is required.')
+
+        # ── RBAC: terminate is admin-only ──
+        if action == 'terminate':
+            err = require_admin(event)
+            if err:
+                return err
 
         # ── RBAC: non-admins may only act on their assigned accounts ──
         if not is_admin(event):
@@ -162,6 +168,9 @@ def handle_ec2(event):
         elif action == 'stop':
             return handle_stop(client, instance_id, region, account_id,
                                caller, instance_name, instance_type)
+        elif action == 'terminate':
+            return handle_terminate(client, instance_id, region, account_id,
+                                    caller, instance_name, instance_type)
 
     except IndexError:
         return error_response(404, 'Instance not found.')
@@ -217,25 +226,74 @@ def _list_instances_in_region(account_id, account_name, region):
     instances = []
     try:
         client = get_ec2_client(account_id, region)
-        paginator = client.get_paginator('describe_instances')
+
+        # 1. Collect all raw instances and volume IDs
+        raw_insts   = []
+        all_vol_ids = []
+        paginator   = client.get_paginator('describe_instances')
         for page in paginator.paginate():
             for reservation in page['Reservations']:
                 for inst in reservation['Instances']:
-                    name = inst['InstanceId']
-                    for tag in inst.get('Tags', []):
-                        if tag['Key'] == 'Name':
-                            name = tag['Value'] or inst['InstanceId']
-                            break
-                    instances.append({
-                        'instanceId':   inst['InstanceId'],
-                        'name':         name,
-                        'state':        inst['State']['Name'],
-                        'instanceType': inst.get('InstanceType', 'N/A'),
-                        'publicIp':     inst.get('PublicIpAddress', 'N/A'),
-                        'region':       region,
-                        'accountId':    account_id,
-                        'accountName':  account_name,
-                    })
+                    raw_insts.append(inst)
+                    for bdm in inst.get('BlockDeviceMappings', []):
+                        vid = bdm.get('Ebs', {}).get('VolumeId')
+                        if vid:
+                            all_vol_ids.append(vid)
+
+        # 2. Batch-fetch volume sizes (best-effort)
+        vol_size_map = {}
+        if all_vol_ids:
+            try:
+                vol_pag = client.get_paginator('describe_volumes')
+                for page in vol_pag.paginate(VolumeIds=all_vol_ids):
+                    for vol in page['Volumes']:
+                        vol_size_map[vol['VolumeId']] = vol['Size']
+            except Exception as e:
+                logger.warning("describe_volumes failed %s/%s: %s", account_id, region, e)
+
+        # 3. Fetch Elastic IPs (best-effort)
+        eip_map = {}
+        if raw_insts:
+            try:
+                inst_ids = [i['InstanceId'] for i in raw_insts]
+                addrs = client.describe_addresses(
+                    Filters=[{'Name': 'instance-id', 'Values': inst_ids}]
+                )
+                for addr in addrs.get('Addresses', []):
+                    if 'InstanceId' in addr:
+                        eip_map[addr['InstanceId']] = addr['PublicIp']
+            except Exception as e:
+                logger.warning("describe_addresses failed %s/%s: %s", account_id, region, e)
+
+        # 4. Build enriched instance list
+        for inst in raw_insts:
+            name = inst['InstanceId']
+            for tag in inst.get('Tags', []):
+                if tag['Key'] == 'Name':
+                    name = tag['Value'] or inst['InstanceId']
+                    break
+
+            platform_raw = inst.get('Platform', '')
+            platform     = 'Windows' if platform_raw and platform_raw.lower() == 'windows' else 'Linux'
+
+            storage_gb = sum(
+                vol_size_map.get(bdm.get('Ebs', {}).get('VolumeId', ''), 0)
+                for bdm in inst.get('BlockDeviceMappings', [])
+            )
+
+            instances.append({
+                'instanceId':   inst['InstanceId'],
+                'name':         name,
+                'state':        inst['State']['Name'],
+                'instanceType': inst.get('InstanceType', 'N/A'),
+                'publicIp':     inst.get('PublicIpAddress', ''),
+                'platform':     platform,
+                'storageGb':    storage_gb,
+                'elasticIp':    eip_map.get(inst['InstanceId'], ''),
+                'region':       region,
+                'accountId':    account_id,
+                'accountName':  account_name,
+            })
     except Exception as e:
         logger.warning("Failed listing instances in %s/%s: %s", account_id, region, e)
     return instances
@@ -297,6 +355,42 @@ def handle_stop(client, instance_id, region, account_id,
 
     return response(200, {
         'message':     'Instance stop initiated.',
+        'state':       state,
+        'requestedBy': caller,
+    })
+
+
+def handle_terminate(client, instance_id, region, account_id,
+                     caller, instance_name, instance_type):
+    # Release any associated Elastic IP first (best-effort)
+    try:
+        addrs = client.describe_addresses(
+            Filters=[{'Name': 'instance-id', 'Values': [instance_id]}]
+        )
+        for addr in addrs.get('Addresses', []):
+            try:
+                client.release_address(AllocationId=addr['AllocationId'])
+            except Exception as e:
+                logger.warning('terminate: EIP release failed %s: %s', addr.get('AllocationId'), e)
+    except Exception as e:
+        logger.warning('terminate: describe_addresses failed for %s: %s', instance_id, e)
+
+    resp  = client.terminate_instances(InstanceIds=[instance_id])
+    state = resp['TerminatingInstances'][0]['CurrentState']['Name']
+    logger.info("TERMINATED %s in %s by %s", instance_id, region, caller)
+
+    audit.log_action(
+        instance_id=instance_id,
+        instance_name=instance_name,
+        instance_type=instance_type,
+        action='terminate',
+        user_email=caller,
+        result='success',
+        account_id=account_id,
+        region=region,
+    )
+    return response(200, {
+        'message':     'Instance termination initiated.',
         'state':       state,
         'requestedBy': caller,
     })
