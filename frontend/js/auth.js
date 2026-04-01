@@ -185,7 +185,10 @@ const Auth = (function () {
     var expiry = parseInt(sessionStorage.getItem('token_expiry') || '0', 10);
 
     if (token && Date.now() < expiry) {
+      // Boot immediately for instant UX, then silently sync groups from Cognito.
+      // This ensures role changes by an admin take effect without requiring a hard reload.
       _bootApp(expiry);
+      _syncGroupsFromCognito();
       return true;
     }
 
@@ -205,6 +208,37 @@ const Auth = (function () {
     // 3. No session — show login page
     _showAuthPage();
     return false;
+  }
+
+  // Silently refresh the ID token in the background to pick up latest Cognito group
+  // assignments. If the user's role changed since the last token was issued, reload
+  // so the new permissions take effect immediately — no hard reload required.
+  async function _syncGroupsFromCognito() {
+    try {
+      var cognitoUser = _pool().getCurrentUser();
+      if (!cognitoUser) return;
+
+      await new Promise(function (resolve) {
+        cognitoUser.getSession(function (err, session) {
+          if (err || !session) { resolve(); return; }
+          var rt = session.getRefreshToken();
+          if (!rt) { resolve(); return; }
+
+          cognitoUser.refreshSession(rt, function (err2, newSession) {
+            if (!err2 && newSession) {
+              var oldGroups = sessionStorage.getItem('user_groups') || '[]';
+              _storeSession(newSession);
+              var newGroups = sessionStorage.getItem('user_groups') || '[]';
+              // Role changed — reload to apply updated permissions
+              if (oldGroups !== newGroups) {
+                window.location.reload();
+              }
+            }
+            resolve();
+          });
+        });
+      });
+    } catch (e) { /* silent — never break the session */ }
   }
 
   function _getRole() {

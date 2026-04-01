@@ -153,6 +153,7 @@ const Vendors = (function () {
   // ─── Status computation ───────────────────────────────────────────────
   function _computeStatus(v) {
     if (v.manualStatus === 'inactive') return 'inactive';
+    if (v.manualStatus === 'active')   return 'active';   // force-active override (e.g. renewed verbally, dates not updated)
     if (!v.agreementEnd) return 'active';
     var days = _daysUntil(v.agreementEnd);
     var threshold = FinSettings.get().expiryWarningDays;

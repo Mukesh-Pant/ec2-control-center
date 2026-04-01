@@ -109,10 +109,11 @@
       </div>
       <div class="fg" id="vnd-m-payment-custom-row" style="display:none"><label class="fl">Custom Payment Method</label><input class="finp" id="vnd-m-payment-custom" placeholder="e.g. Direct Debit"/></div>
       <!-- Status + Dates -->
-      <div class="fg"><label class="fl" for="vnd-m-status">Status Override</label>
+      <div class="fg"><label class="fl" for="vnd-m-status">Vendor Status</label>
         <select class="finp" id="vnd-m-status">
-          <option value="auto">Auto-compute</option>
-          <option value="inactive">Force Inactive</option>
+          <option value="auto">Auto (based on agreement dates)</option>
+          <option value="active">Active — Manual Override</option>
+          <option value="inactive">Inactive — Paused / Cancelled</option>
         </select>
       </div>
       <div class="fg"><label class="fl" for="vnd-m-start">Agreement Start</label><input class="finp" id="vnd-m-start" type="date"/></div>
