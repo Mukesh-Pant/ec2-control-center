@@ -247,6 +247,13 @@ const Customers = (function () {
     return inv;
   }
 
+  function deleteInvoice(customerId, invoiceId) {
+    var idx = _data.findIndex(function (x) { return x.id === customerId; });
+    if (idx < 0) return;
+    _data[idx].invoices = (_data[idx].invoices || []).filter(function (i) { return i.id !== invoiceId; });
+    _persist();
+  }
+
   function updateInvoiceStatus(customerId, invoiceId, newStatus) {
     var idx = _data.findIndex(function (x) { return x.id === customerId; });
     if (idx < 0) return;
@@ -778,6 +785,7 @@ const Customers = (function () {
           (inv.status === 'draft'     ? '<button class="btn btn-xs btn-out" onclick="Customers.setInvStatus(\'' + _esc(c.id) + '\',\'' + _esc(inv.id) + '\',\'sent\')">Send</button>' : '') +
           (inv.status === 'sent'      ? '<button class="btn btn-xs btn-out" onclick="Customers.setInvStatus(\'' + _esc(c.id) + '\',\'' + _esc(inv.id) + '\',\'paid\')">Mark Paid</button>' : '') +
           (inv.status !== 'cancelled' && inv.status !== 'paid' ? '<button class="btn btn-xs btn-out fm-btn-del" onclick="Customers.setInvStatus(\'' + _esc(c.id) + '\',\'' + _esc(inv.id) + '\',\'cancelled\')">Cancel</button>' : '') +
+          '<button class="fin-dr-del-btn" onclick="Customers.confirmDeleteInvoice(\'' + _esc(c.id) + '\',\'' + _esc(inv.id) + '\')" title="Delete invoice">&times;</button>' +
         '</div>' +
       '</div>';
     }).join('') + '</div>';
@@ -1014,6 +1022,13 @@ const Customers = (function () {
     if (status === 'paid') _render();
     _refreshDrawer();
     if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();
+  }
+
+  function confirmDeleteInvoice(custId, invId) {
+    if (!window.confirm('Delete this invoice? This cannot be undone.')) return;
+    deleteInvoice(custId, invId);
+    App.showToast('Invoice deleted', 'ok');
+    _refreshDrawer();
   }
 
   function completeContract(custId, ctrId) {
@@ -1257,6 +1272,7 @@ const Customers = (function () {
     submitContract:      submitContract,
     payMilestone:        payMilestone,
     setInvStatus:        setInvStatus,
+    confirmDeleteInvoice:confirmDeleteInvoice,
     completeContract:    completeContract,
   };
 

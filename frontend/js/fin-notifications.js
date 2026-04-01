@@ -145,7 +145,10 @@ const FinNotifications = (function () {
           '<div class="notif-item-msg">'  + _esc(n.message)    + '</div>' +
           '<div class="notif-item-time">' + ts                 + '</div>' +
         '</div>' +
-        (!n.read ? '<button class="notif-check" title="Mark read" onclick="FinNotifications.markRead(\'' + _esc(n.id) + '\');event.stopPropagation()">\u2713</button>' : '') +
+        '<div class="notif-item-btns" onclick="event.stopPropagation()">' +
+          (!n.read ? '<button class="notif-check" title="Mark read" onclick="FinNotifications.markRead(\'' + _esc(n.id) + '\')">\u2713</button>' : '') +
+          '<button class="notif-dismiss" title="Dismiss" onclick="FinNotifications.dismiss(\'' + _esc(n.id) + '\')">&times;</button>' +
+        '</div>' +
       '</div>';
     }).join('');
 
@@ -169,6 +172,16 @@ const FinNotifications = (function () {
 
   function markAllRead() {
     _notifs.forEach(function (n) { n.read = true; });
+    _persist(); _updateBadge(); _renderDropdown(); _renderPageIfOpen();
+  }
+
+  function dismiss(id) {
+    _notifs = _notifs.filter(function (n) { return n.id !== id; });
+    _persist(); _updateBadge(); _renderDropdownIfOpen(); _renderPageIfOpen();
+  }
+
+  function dismissAll() {
+    _notifs = [];
     _persist(); _updateBadge(); _renderDropdown(); _renderPageIfOpen();
   }
 
@@ -212,6 +225,7 @@ const FinNotifications = (function () {
         '<div class="notif-row-actions">' +
           (!n.read ? '<button class="btn btn-xs btn-out" onclick="FinNotifications.markRead(\'' + _esc(n.id) + '\')">Mark read</button>' : '<span class="notif-read-lbl">Read</span>') + ' ' +
           '<button class="btn btn-xs btn-out" onclick="App.go(\'' + _esc(n.link) + '\')">View</button>' +
+          '<button class="btn btn-xs btn-out fm-btn-del" onclick="FinNotifications.dismiss(\'' + _esc(n.id) + '\')">Dismiss</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -252,6 +266,8 @@ const FinNotifications = (function () {
     refresh:           refresh,
     markRead:          markRead,
     markAllRead:       markAllRead,
+    dismiss:           dismiss,
+    dismissAll:        dismissAll,
     toggleDropdown:    toggleDropdown,
     onTabActivated:    onTabActivated,
     onPageFilterChange:onPageFilterChange,
