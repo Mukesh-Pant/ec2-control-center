@@ -5,7 +5,6 @@
 
 const Users = (function () {
 
-  var loaded      = false;
   var allAccounts = [];   // Cached from /accounts — used to populate grant modal
   var grantEmail  = '';   // Email of user for whom grant modal is open
 
@@ -50,7 +49,6 @@ const Users = (function () {
       }
 
       renderUserTable(data.users || []);
-      loaded = true;
 
     } catch (err) {
       if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
@@ -251,7 +249,7 @@ const Users = (function () {
   // ─── Tab Activation ────────────────────────────────────────────────────────
 
   function onTabActivated() {
-    if (!loaded) load();
+    load(); // always re-fetch — user/role changes must be reflected immediately
   }
 
   // ─── Init ──────────────────────────────────────────────────────────────────

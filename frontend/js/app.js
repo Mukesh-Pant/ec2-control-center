@@ -12,15 +12,19 @@ const App = (function () {
   var _extensionPresent = false;
 
   var PAGE_TITLES = {
-    dashboard: 'Dashboard',
-    instances: 'Instances',
-    billing:   'Billing & Cost',
-    analytics: 'Analytics',
-    audit:     'Audit Log',
-    accounts:  'Accounts',
-    users:     'Users',
-    backup:    'Backups',
-    labs:      'My Servers',
+    dashboard:     'Dashboard',
+    instances:     'Instances',
+    billing:       'Billing & Cost',
+    analytics:     'Analytics',
+    audit:         'Audit Log',
+    accounts:      'Accounts',
+    users:         'Users',
+    backup:        'Backups',
+    labs:          'My Servers',
+    vendors:       'Vendors',
+    customers:     'Customers',
+    notifications: 'Alerts & Notifications',
+    finsettings:   'Finance Settings',
   };
 
   // ─── Navigation ────────────────────────────────────────────────────────────
@@ -46,13 +50,17 @@ const App = (function () {
     currentPage = page;
     closeSidebar();
 
-    if (page === 'audit')     Audit.onTabActivated();
-    if (page === 'analytics') Analytics.onTabActivated();
-    if (page === 'billing')   Billing.onTabActivated();
-    if (page === 'accounts')  Accounts.onTabActivated();
-    if (page === 'users')     Users.onTabActivated();
-    if (page === 'backup')    Backup.onTabActivated();
-    if (page === 'labs')      Labs.onTabActivated();
+    if (page === 'audit')         Audit.onTabActivated();
+    if (page === 'analytics')     Analytics.onTabActivated();
+    if (page === 'billing')       Billing.onTabActivated();
+    if (page === 'accounts')      Accounts.onTabActivated();
+    if (page === 'users')         Users.onTabActivated();
+    if (page === 'backup')        Backup.onTabActivated();
+    if (page === 'labs')          Labs.onTabActivated();
+    if (page === 'vendors')       Vendors.onTabActivated();
+    if (page === 'customers')     Customers.onTabActivated();
+    if (page === 'notifications') FinNotifications.onTabActivated();
+    if (page === 'finsettings')   FinSettings.onTabActivated();
   }
 
   // ─── Sidebar ───────────────────────────────────────────────────────────────
@@ -297,6 +305,10 @@ const App = (function () {
     Users.init();
     Backup.init();
     Labs.init();
+    FinSettings.init();
+    Vendors.init();
+    Customers.init();
+    FinNotifications.init();
     startClock();
 
     // Show dashboard shell immediately — don't wait for instance data
@@ -311,6 +323,9 @@ const App = (function () {
     el = document.getElementById('ag-wrap');   if (el) el.innerHTML = skel;
 
     Instances.refresh();
+
+    // Run notification engine after modules are ready
+    setTimeout(function () { FinNotifications.refresh(); }, 100);
   }
 
   // ─── Public ────────────────────────────────────────────────────────────────
