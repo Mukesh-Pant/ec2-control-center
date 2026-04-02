@@ -1143,14 +1143,12 @@
           <div class="audit-filters audit-filters-v2">
             <div class="audit-filter-input-wrap">
               <svg class="audit-filter-icon" viewBox="0 0 24 24" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input class="audit-input" type="text" id="audit-filter-instance" placeholder="Instance ID or name…" list="audit-instance-datalist" autocomplete="off"/>
+              <input class="audit-input" type="text" id="audit-filter-instance" placeholder="Instance ID or name…" autocomplete="off"/>
             </div>
-            <datalist id="audit-instance-datalist"></datalist>
             <div class="audit-filter-input-wrap">
               <svg class="audit-filter-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <input class="audit-input" type="text" id="audit-filter-user" list="audit-user-list" placeholder="User email…"/>
+              <input class="audit-input" type="text" id="audit-filter-user" placeholder="User email…"/>
             </div>
-            <datalist id="audit-user-list"></datalist>
             <select class="audit-select" id="audit-filter-action">
               <option value="">All actions</option>
               <option value="start">START</option>
@@ -1177,8 +1175,10 @@
               </tbody>
             </table>
           </div>
-          <div class="audit-more-row">
-            <button class="btn-load-more" id="btn-audit-more" style="display:none">Load more</button>
+          <div class="audit-pg-row">
+            <button class="btn-pg" id="btn-audit-prev" disabled>&#8592; Prev</button>
+            <span class="pg-info" id="audit-pg-info">Page 1 of 1 &middot; 0 loaded</span>
+            <button class="btn-pg" id="btn-audit-next" disabled>Next &#8594;</button>
           </div>
         </div>
         <button id="btn-audit-search" style="display:none"></button>
@@ -1857,6 +1857,19 @@
     Auth.init().catch(function(e) { window.onerror(e.message || String(e), 'auth.js', 0); });
   });
 </script>
+
+<!-- Privacy Policy (linked from Firefox AMO extension listing) -->
+<section id="privacy" style="display:none">
+  <h2>EC2 Control &mdash; Console Login Extension: Privacy Policy</h2>
+  <p>The EC2 Control Firefox Extension does not collect, transmit, or share any personal data.</p>
+  <ul>
+    <li>It stores a mapping of AWS account IDs to Firefox container IDs in <code>browser.storage.local</code> (on-device only, never transmitted to any server).</li>
+    <li>It opens URLs provided by the solobil.com portal in Firefox container tabs on your behalf.</li>
+    <li>It communicates exclusively with <strong>solobil.com</strong> (to receive the federation URL) and <strong>signin.aws.amazon.com</strong> (the opened tab).</li>
+    <li>No browsing history, credentials, or personal information is collected or stored by this extension.</li>
+  </ul>
+  <p>For questions, contact: pantm8877@gmail.com</p>
+</section>
 
 </body>
 </html>
