@@ -296,43 +296,13 @@ const App = (function () {
       .catch(function () { /* keep default 135 fallback */ });
   }
 
-  function init() {
-    _initExtensionDetection();
-    _fetchNprRate();
-    Audit.init();
-    Billing.init();
-    Accounts.init();
-    Users.init();
-    Backup.init();
-    Labs.init();
-    FinSettings.init();
-    Vendors.init();
-    Customers.init();
-    FinNotifications.init();
-    startClock();
-
-    // Show dashboard shell immediately — don't wait for instance data
-    go('dashboard');
-    log('Portal ready', 'sys');
-
-    // Inject skeleton rows so the user sees content placeholders while Lambda responds
-    var skRow = '<div class="skeleton-row"></div>';
-    var skel  = skRow + skRow + skRow;
-    var el;
-    el = document.getElementById('dash-list'); if (el) el.innerHTML = skel;
-    el = document.getElementById('ag-wrap');   if (el) el.innerHTML = skel;
-
-    Instances.refresh();
-
-    // Run notification engine after modules are ready
-    setTimeout(function () { FinNotifications.refresh(); }, 100);
-  }
-
   // ─── Custom combobox ─────────────────────────────────────────────────────
 
   function makeCombobox(inputId, getOptions) {
     var input = document.getElementById(inputId);
     if (!input) return;
+
+    var CB_MAX_OPTIONS = 8;
 
     // Remove any previous dropdown for this input (re-attach after DOM rebuild)
     var wrapperId = inputId + '-cb';
@@ -348,12 +318,6 @@ const App = (function () {
 
     var activeIndex = -1;
 
-    function _cbEsc(s) {
-      return String(s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
     function getItems() {
       var opts = getOptions();
       if (!opts || opts.length === 0) return [];
@@ -361,7 +325,7 @@ const App = (function () {
       var filtered = val
         ? opts.filter(function (o) { return o.toLowerCase().indexOf(val) !== -1; })
         : opts;
-      return filtered.slice(0, 8);
+      return filtered.slice(0, CB_MAX_OPTIONS);
     }
 
     function render() {
@@ -369,8 +333,8 @@ const App = (function () {
       activeIndex = -1;
       if (items.length === 0) { close(); return; }
       ul.innerHTML = items.map(function (item) {
-        return '<li class="custom-cb-option" data-val="' + _cbEsc(item) + '">' +
-          _cbEsc(item) + '</li>';
+        return '<li class="custom-cb-option" data-val="' + esc(item) + '">' +
+          esc(item) + '</li>';
       }).join('');
       ul.style.display = 'block';
     }
@@ -430,6 +394,38 @@ const App = (function () {
         selectItem(li.getAttribute('data-val'));
       }
     });
+  }
+
+  function init() {
+    _initExtensionDetection();
+    _fetchNprRate();
+    Audit.init();
+    Billing.init();
+    Accounts.init();
+    Users.init();
+    Backup.init();
+    Labs.init();
+    FinSettings.init();
+    Vendors.init();
+    Customers.init();
+    FinNotifications.init();
+    startClock();
+
+    // Show dashboard shell immediately — don't wait for instance data
+    go('dashboard');
+    log('Portal ready', 'sys');
+
+    // Inject skeleton rows so the user sees content placeholders while Lambda responds
+    var skRow = '<div class="skeleton-row"></div>';
+    var skel  = skRow + skRow + skRow;
+    var el;
+    el = document.getElementById('dash-list'); if (el) el.innerHTML = skel;
+    el = document.getElementById('ag-wrap');   if (el) el.innerHTML = skel;
+
+    Instances.refresh();
+
+    // Run notification engine after modules are ready
+    setTimeout(function () { FinNotifications.refresh(); }, 100);
   }
 
   // ─── Public ────────────────────────────────────────────────────────────────
