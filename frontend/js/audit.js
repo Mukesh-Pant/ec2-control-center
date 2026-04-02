@@ -27,6 +27,9 @@ const Audit = (function () {
 
   // User emails for the User Email combobox (admin only, loaded once)
   var _auditUsers = [];
+  var _allEvents  = [];   // accumulates all fetched records across server pages
+  var _auditPage  = 0;    // current display page (0-based)
+  var PAGE_SIZE   = 10;
 
   // ─── Event Log ────────────────────────────────────────────────────────
 
@@ -45,21 +48,22 @@ const Audit = (function () {
 
   async function loadEvents(reset) {
     if (isLoading) return;
-    if (reset) lastKey = null;
+    if (reset) { _allEvents = []; _auditPage = 0; lastKey = null; }
 
     var rawInstance    = document.getElementById('audit-filter-instance').value.trim();
     var instanceFilter = _resolveInstanceId(rawInstance);
     var userFilter     = document.getElementById('audit-filter-user').value.trim();
-    var actionFilter   = document.getElementById('audit-filter-action').value;   // '' means All
-    var accountFilter  = document.getElementById('audit-filter-account').value;  // '' means All
+    var actionFilter   = document.getElementById('audit-filter-action').value;
+    var accountFilter  = document.getElementById('audit-filter-account').value;
 
     var tbody = document.getElementById('audit-events-tbody');
     if (reset) {
-      tbody.innerHTML = '<tr><td colspan="7" class="audit-loading">Loading events\u2026</td></tr>';
+      tbody.innerHTML =
+        '<tr><td colspan="7" class="audit-loading">Loading events\u2026</td></tr>';
     }
 
     isLoading = true;
-    document.getElementById('btn-audit-more').disabled = true;
+    _updatePaginationBar();
 
     try {
       var res = await API.getAuditLog({
@@ -74,55 +78,80 @@ const Audit = (function () {
       if (!res.ok) throw new Error(data.message || 'Request failed');
 
       var items = data.items || [];
-      lastKey   = data.lastKey || null;
+      lastKey = data.lastKey || null;
 
-      // Collect unique accounts from returned items
       items.forEach(function (item) {
-        if (item.accountId) {
-          knownAccounts[item.accountId] = item.accountName || item.accountId;
-        }
+        if (item.accountId) knownAccounts[item.accountId] = item.accountName || item.accountId;
       });
 
-      if (reset) tbody.innerHTML = '';
+      _allEvents = _allEvents.concat(items);
 
-      if (items.length === 0 && reset) {
+      if (reset && _allEvents.length === 0) {
         tbody.innerHTML =
           '<tr><td colspan="7" class="audit-empty">' +
           'No audit events found. Start or stop an instance to create entries.' +
           '</td></tr>';
+        _updatePaginationBar();
       } else {
-        items.forEach(function (item) {
-          var tr = document.createElement('tr');
-          tr.innerHTML = buildEventRow(item);
-          tbody.appendChild(tr);
-        });
+        _renderAuditPage();
       }
 
-      // Update record count
-      var countEl = document.getElementById('audit-record-count');
-      if (countEl) {
-        var rowCount = tbody.querySelectorAll('tr').length;
-        countEl.textContent = rowCount + ' record' + (rowCount === 1 ? '' : 's');
-      }
-
-      // Populate account dropdown (preserve current selection)
       populateAccountDropdown();
-
-      var moreBtn = document.getElementById('btn-audit-more');
-      moreBtn.style.display = lastKey ? 'inline-flex' : 'none';
-      moreBtn.disabled = false;
 
     } catch (err) {
       if (err.message !== 'Session expired' && err.message !== 'Unauthorized') {
         if (reset) {
           tbody.innerHTML =
-            '<tr><td colspan="7" class="audit-empty">Error: ' + escHtml(err.message) + '</td></tr>';
+            '<tr><td colspan="7" class="audit-empty">Error: ' +
+            escHtml(err.message) + '</td></tr>';
         }
         App.showToast('Audit load failed: ' + err.message, 'err');
       }
     } finally {
       isLoading = false;
+      _updatePaginationBar();
     }
+  }
+
+  function _renderAuditPage() {
+    var totalPages = Math.max(1, Math.ceil(_allEvents.length / PAGE_SIZE));
+    _auditPage = Math.min(_auditPage, totalPages - 1);  // clamp after filter resets
+
+    var start = _auditPage * PAGE_SIZE;
+    var rows  = _allEvents.slice(start, start + PAGE_SIZE);
+
+    var tbody = document.getElementById('audit-events-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    rows.forEach(function (item) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = buildEventRow(item);
+      tbody.appendChild(tr);
+    });
+
+    var countEl = document.getElementById('audit-record-count');
+    if (countEl) countEl.textContent = _allEvents.length + ' loaded';
+
+    _updatePaginationBar();
+  }
+
+  function _updatePaginationBar() {
+    var prevBtn = document.getElementById('btn-audit-prev');
+    var nextBtn = document.getElementById('btn-audit-next');
+    var pgInfo  = document.getElementById('audit-pg-info');
+    if (!prevBtn || !nextBtn || !pgInfo) return;
+
+    var totalPages = Math.max(1, Math.ceil(_allEvents.length / PAGE_SIZE));
+    // Clamp _auditPage — guards against "Page 6 of 5" if a next-page fetch fails
+    // after _auditPage was already incremented in the Next button handler
+    _auditPage = Math.min(_auditPage, totalPages - 1);
+    var onLastPage = _auditPage >= totalPages - 1;
+
+    prevBtn.disabled = _auditPage === 0 || isLoading;
+    nextBtn.disabled = (onLastPage && !lastKey) || isLoading;
+    pgInfo.textContent = 'Page ' + (_auditPage + 1) + ' of ' + totalPages +
+      ' \u00b7 ' + _allEvents.length + ' loaded';
   }
 
   function buildEventRow(item) {
@@ -286,6 +315,14 @@ const Audit = (function () {
     }
     var role = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : '';
     if (role === 'admin' && _auditUsers.length === 0) _loadAuditUsers();
+    if (typeof App !== 'undefined' && App.makeCombobox) {
+      App.makeCombobox('audit-filter-instance', function () {
+        return (typeof Instances !== 'undefined' && Instances.getAll)
+          ? Instances.getAll().map(function (i) { return i.name || i.instanceId; }).filter(Boolean)
+          : [];
+      });
+      App.makeCombobox('audit-filter-user', function () { return _auditUsers; });
+    }
   }
 
   // ─── Init — wire all event listeners ──────────────────────────────────
@@ -296,9 +333,16 @@ const Audit = (function () {
       loadEvents(true);
     });
 
-    // Load More button
-    document.getElementById('btn-audit-more').addEventListener('click', function () {
-      loadEvents(false);
+    // Pagination buttons
+    document.getElementById('btn-audit-prev').addEventListener('click', function () {
+      if (_auditPage > 0) { _auditPage--; _renderAuditPage(); }
+    });
+    document.getElementById('btn-audit-next').addEventListener('click', function () {
+      if ((_auditPage + 1) * PAGE_SIZE < _allEvents.length) {
+        _auditPage++; _renderAuditPage();
+      } else if (lastKey) {
+        _auditPage++; loadEvents(false);
+      }
     });
 
     // Clear button — reset all 4 filters then reload
