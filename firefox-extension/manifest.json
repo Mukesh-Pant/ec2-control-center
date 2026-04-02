@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "EC2 Control — Console Login",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Opens AWS Console sessions in isolated Firefox containers for the EC2 Control portal (solobil.com).",
   "browser_specific_settings": {
     "gecko": {

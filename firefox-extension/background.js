@@ -17,6 +17,21 @@
 const STORE_KEY = 'accountSessions';
 
 async function openConsoleTab({ accountId, accountName, loginUrl }) {
+  // ── 0. Validate loginUrl is a legitimate AWS federation URL ─────────────
+  try {
+    const parsed = new URL(loginUrl);
+    if (
+      parsed.protocol !== 'https:' ||
+      parsed.hostname !== 'signin.aws.amazon.com' ||
+      parsed.pathname !== '/federation'
+    ) {
+      throw new Error('Unexpected URL shape');
+    }
+  } catch (err) {
+    console.error('[EC2Ctrl extension] Rejected invalid loginUrl:', err.message);
+    return;
+  }
+
   // ── 1. Load persisted session map ────────────────────────────────────────
   const stored = await browser.storage.local.get(STORE_KEY);
   const sessions = stored[STORE_KEY] || {};

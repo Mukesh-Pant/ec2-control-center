@@ -15,9 +15,12 @@ const Labs = (function () {
   var currentLabId  = null;    // labId being provisioned or viewed
   var _pollTimer    = null;    // setTimeout handle for provisioning poll
   var _accounts     = [];      // cached enabled accounts list
+  var _labsUsers    = [];      // operator + admin emails for Submitted By combobox
   var _confirmCb    = null;    // pending in-page confirm callback
   var _labFilters = { platform: '', serverType: '', status: '', account: '', region: '', submittedBy: '' };
   var _expandedLabId = null;   // labId of currently expanded row, or null
+  var _labsPage     = 0;
+  var LAB_PAGE_SIZE = 10;
   var _guideOpen    = false;   // whether the "How it works" guide is expanded
 
   function _getNprRate() { return (window.NPR_RATE && window.NPR_RATE > 0) ? window.NPR_RATE : 135; }
@@ -194,12 +197,32 @@ const Labs = (function () {
     }
   }
 
+  // ─── Load operator + admin emails for Submitted By combobox (admin only)
+
+  async function _loadLabsUsers() {
+    try {
+      var res  = await API.getUsers();
+      var data = await res.json();
+      _labsUsers = (data.users || [])
+        .filter(function (u) {
+          var g = u.groups || [];
+          return g.indexOf('admins') !== -1 || g.indexOf('operators') !== -1;
+        })
+        .map(function (u) { return u.email; });
+    } catch (_) { _labsUsers = []; }
+  }
+
   // ─── Active Labs Panel
 
   async function _loadActiveLabs() {
     var listEl = document.getElementById('lbs-list');
     if (!listEl) return;
     listEl.innerHTML = '<div class="lbs-loading">Loading labs…</div>';
+
+    var role = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : '';
+    if (_accounts.length === 0) await _loadAccounts();
+    if (role === 'admin' && _labsUsers.length === 0) await _loadLabsUsers();
+
     try {
       var res  = await API.getLabsList();
       var data = await res.json();
@@ -215,6 +238,14 @@ const Labs = (function () {
   function _renderLabsList() {
     var listEl = document.getElementById('lbs-list');
     if (!listEl) return;
+
+    // Save focus so text inputs (e.g. Submitted By) survive the DOM replace
+    var _focusId  = document.activeElement ? document.activeElement.id : null;
+    var _selStart = null, _selEnd = null;
+    if (_focusId && document.activeElement.setSelectionRange) {
+      try { _selStart = document.activeElement.selectionStart;
+            _selEnd   = document.activeElement.selectionEnd; } catch (e) {}
+    }
 
     // ── Empty state (no servers at all): show full onboarding + guide expanded
     if (activeLabs.length === 0) {
@@ -269,7 +300,10 @@ const Labs = (function () {
     var guideHtml = _renderGuide(_guideOpen);
 
     // ── Filter bar + filtered rows
-    var visible = activeLabs.filter(_passesLabFilter);
+    var visible    = activeLabs.filter(_passesLabFilter);
+    var totalPages = Math.max(1, Math.ceil(visible.length / LAB_PAGE_SIZE));
+    _labsPage = Math.min(_labsPage, totalPages - 1);
+    var pageItems = visible.slice(_labsPage * LAB_PAGE_SIZE, (_labsPage + 1) * LAB_PAGE_SIZE);
     var html = statsHtml + guideHtml + _renderFilterBar();
 
     if (visible.length === 0) {
@@ -277,6 +311,7 @@ const Labs = (function () {
         (cntAll > 0 ? ' <button class="btn-audit-clear" onclick="Labs._clearLabFilters()">Clear filters</button>' : '') +
         '</div>';
       listEl.innerHTML = html;
+      _restoreFocus(_focusId, _selStart, _selEnd);
       return;
     }
 
@@ -292,10 +327,33 @@ const Labs = (function () {
     html += '<th>Expires</th>';
     html += '</tr></thead>';
     html += '<tbody>';
-    visible.forEach(function (lab) { html += _renderRow(lab); });
+    pageItems.forEach(function (lab) { html += _renderRow(lab); });
     html += '</tbody></table>';
 
+    if (visible.length > LAB_PAGE_SIZE) {
+      html += '<div class="audit-pg-row">' +
+        '<button class="btn-pg" onclick="Labs._labsPageNav(-1)"' + (_labsPage === 0 ? ' disabled' : '') + '>\u2190 Prev</button>' +
+        '<span class="pg-info">Page ' + (_labsPage + 1) + ' of ' + totalPages + ' \u00b7 ' + visible.length + ' servers</span>' +
+        '<button class="btn-pg" onclick="Labs._labsPageNav(1)"' + (_labsPage >= totalPages - 1 ? ' disabled' : '') + '>Next \u2192</button>' +
+        '</div>';
+    }
+
     listEl.innerHTML = html;
+    _restoreFocus(_focusId, _selStart, _selEnd);
+
+    if (typeof Auth !== 'undefined' && Auth.getRole && Auth.getRole() === 'admin') {
+      if (typeof App !== 'undefined' && App.makeCombobox) {
+        App.makeCombobox('lbs-filter-submittedby', function () { return _labsUsers; });
+      }
+    }
+  }
+
+  function _restoreFocus(id, selStart, selEnd) {
+    if (!id) return;
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.focus();
+    if (selStart !== null) { try { el.setSelectionRange(selStart, selEnd); } catch (e) {} }
   }
 
   // ─── How it works guide (always rendered, collapsible)
@@ -332,19 +390,28 @@ const Labs = (function () {
     if (_labFilters.status     && lab.status !== _labFilters.status)                            return false;
     if (_labFilters.account    && lab.accountId !== _labFilters.account)                        return false;
     if (_labFilters.region     && lab.region !== _labFilters.region)                            return false;
-    if (_labFilters.submittedBy && !(lab.callerEmail || '').toLowerCase().includes(_labFilters.submittedBy.toLowerCase())) return false;
+    if (_labFilters.submittedBy && !(lab.userEmail || '').toLowerCase().includes(_labFilters.submittedBy.toLowerCase())) return false;
     return true;
   }
 
   function _setLabFilter(field, value) {
     _labFilters[field] = value;
     _expandedLabId = null;
+    _labsPage = 0;
     _renderLabsList();
   }
 
   function _clearLabFilters() {
     _labFilters = { platform: '', serverType: '', status: '', account: '', region: '', submittedBy: '' };
     _expandedLabId = null;
+    _labsPage = 0;
+    _renderLabsList();
+  }
+
+  function _labsPageNav(delta) {
+    var visible    = activeLabs.filter(_passesLabFilter);
+    var totalPages = Math.max(1, Math.ceil(visible.length / LAB_PAGE_SIZE));
+    _labsPage = Math.max(0, Math.min(totalPages - 1, _labsPage + delta));
     _renderLabsList();
   }
 
@@ -375,7 +442,7 @@ const Labs = (function () {
         types.map(function(t){ return opt(t, t, _labFilters.serverType); }).join('') +
       '</select>' +
       '<select class="audit-select" onchange="Labs._setLabFilter(\'status\',this.value)">' +
-        opt('',                'All statuses',     _labFilters.status) +
+        opt('',                'All status',        _labFilters.status) +
         opt('running',         'Running',          _labFilters.status) +
         opt('stopped',         'Stopped',          _labFilters.status) +
         opt('provisioning',    'Provisioning',     _labFilters.status) +
@@ -385,7 +452,11 @@ const Labs = (function () {
       '</select>' +
       '<select class="audit-select" onchange="Labs._setLabFilter(\'account\',this.value)">' +
         opt('', 'All accounts', _labFilters.account) +
-        accounts.map(function(a){ return opt(a, a, _labFilters.account); }).join('') +
+        accounts.map(function(id) {
+          var acct  = _accounts.find(function(a){ return a.accountId === id; });
+          var label = acct ? ((acct.name || id) + ' (' + id + ')') : id;
+          return opt(id, label, _labFilters.account);
+        }).join('') +
       '</select>' +
       '<select class="audit-select" onchange="Labs._setLabFilter(\'region\',this.value)">' +
         opt('', 'All regions', _labFilters.region) +
@@ -396,7 +467,8 @@ const Labs = (function () {
             '<svg class="audit-filter-icon" viewBox="0 0 24 24" width="14" height="14">' +
               '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' +
             '</svg>' +
-            '<input class="audit-input" type="text" placeholder="Submitted by\u2026"' +
+            '<input class="audit-input" id="lbs-filter-submittedby" type="text"' +
+              ' placeholder="Submitted by\u2026"' +
               ' value="' + _esc(_labFilters.submittedBy) + '"' +
               ' oninput="Labs._setLabFilter(\'submittedBy\',this.value)"/>' +
           '</div>'
@@ -1799,6 +1871,7 @@ const Labs = (function () {
     // Exposed for inline onclick handlers
     _setLabFilter:       _setLabFilter,
     _clearLabFilters:    _clearLabFilters,
+    _labsPageNav:        _labsPageNav,
     _toggleRowDetail:    _toggleRowDetail,
     _approveLab:         _approveLab,
     _rejectLab:          _rejectLab,
