@@ -74,8 +74,11 @@ const Accounts = (function () {
       '<button class="act-btn act-btn-remove" onclick="Accounts.removeAccount(\'' + _esc(acct.accountId) + '\', \'' + _esc(acct.accountName) + '\')">Remove</button>';
 
     var role = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : 'admin';
+    var hasConsoleRole = !!acct.consoleRoleArn;
     var consoleBtn = (!isCentral && acct.enabled && role !== 'viewer')
-      ? '<button class="act-btn act-btn-console" id="console-btn-' + _esc(acct.accountId) + '" onclick="Accounts.consoleLogin(\'' + _esc(acct.accountId) + '\')">Console Login</button>'
+      ? (hasConsoleRole
+          ? '<button class="act-btn act-btn-console" id="console-btn-' + _esc(acct.accountId) + '" onclick="Accounts.consoleLogin(\'' + _esc(acct.accountId) + '\')" title="Open AWS Console in Firefox container tab">Console Login</button>'
+          : '<button class="act-btn act-btn-console" disabled title="Console Login Role not configured — add it by editing this account">Console Login</button>')
       : '';
 
     return (
@@ -232,10 +235,11 @@ const Accounts = (function () {
   // ─── Modal ─────────────────────────────────────────────────────────────────
 
   function openModal() {
-    document.getElementById('modal-acct-id').value   = '';
-    document.getElementById('modal-acct-name').value = '';
-    document.getElementById('modal-acct-role').value = '';
-    document.getElementById('modal-err').textContent  = '';
+    document.getElementById('modal-acct-id').value           = '';
+    document.getElementById('modal-acct-name').value         = '';
+    document.getElementById('modal-acct-role').value         = '';
+    document.getElementById('modal-acct-console-role').value = '';
+    document.getElementById('modal-err').textContent          = '';
     document.getElementById('overlay').classList.add('open');
   }
 
@@ -244,10 +248,11 @@ const Accounts = (function () {
   }
 
   async function confirmAdd() {
-    var accountId   = document.getElementById('modal-acct-id').value.trim();
-    var accountName = document.getElementById('modal-acct-name').value.trim();
-    var roleArn     = document.getElementById('modal-acct-role').value.trim();
-    var errEl       = document.getElementById('modal-err');
+    var accountId      = document.getElementById('modal-acct-id').value.trim();
+    var accountName    = document.getElementById('modal-acct-name').value.trim();
+    var roleArn        = document.getElementById('modal-acct-role').value.trim();
+    var consoleRoleArn = document.getElementById('modal-acct-console-role').value.trim();
+    var errEl          = document.getElementById('modal-err');
 
     errEl.textContent = '';
 
@@ -269,7 +274,7 @@ const Accounts = (function () {
     btn.textContent = 'Adding…';
 
     try {
-      var res  = await API.postAccounts({ action: 'add', accountId: accountId, accountName: accountName, roleArn: roleArn });
+      var res  = await API.postAccounts({ action: 'add', accountId: accountId, accountName: accountName, roleArn: roleArn, consoleRoleArn: consoleRoleArn });
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Request failed');
 
@@ -303,11 +308,12 @@ const Accounts = (function () {
   // ─── Init ──────────────────────────────────────────────────────────────────
 
   function init() {
-    var modalAcctId   = document.getElementById('modal-acct-id');
-    var modalAcctName = document.getElementById('modal-acct-name');
-    var modalAcctRole = document.getElementById('modal-acct-role');
+    var modalAcctId          = document.getElementById('modal-acct-id');
+    var modalAcctName        = document.getElementById('modal-acct-name');
+    var modalAcctRole        = document.getElementById('modal-acct-role');
+    var modalAcctConsoleRole = document.getElementById('modal-acct-console-role');
 
-    [modalAcctId, modalAcctName, modalAcctRole].forEach(function (el) {
+    [modalAcctId, modalAcctName, modalAcctRole, modalAcctConsoleRole].forEach(function (el) {
       if (el) el.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') confirmAdd();
       });

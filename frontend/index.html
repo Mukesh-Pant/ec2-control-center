@@ -272,7 +272,12 @@
     <div class="fg" style="margin-top:10px">
       <label class="fl" for="modal-acct-role">Cross-Account Role ARN</label>
       <input class="finp" id="modal-acct-role" type="text" placeholder="arn:aws:iam::123456789012:role/EC2ControlCrossAccountRole-production" style="font-family:var(--mono);font-size:12px"/>
-      <div class="fhint">From the RoleArn output of member-role-stack.yaml</div>
+      <div class="fhint">From the <strong>RoleArn</strong> output of member-role-stack.yaml</div>
+    </div>
+    <div class="fg" style="margin-top:10px">
+      <label class="fl" for="modal-acct-console-role">Console Login Role ARN <span style="font-size:11px;color:var(--ink3);font-weight:400">(optional)</span></label>
+      <input class="finp" id="modal-acct-console-role" type="text" placeholder="arn:aws:iam::123456789012:role/EC2ControlConsoleRole-production" style="font-family:var(--mono);font-size:12px"/>
+      <div class="fhint">From the <strong>ConsoleRoleArn</strong> output of member-role-stack.yaml — enables role-based console access</div>
     </div>
     <div class="merr" id="modal-err"></div>
     <div class="modal-actions">

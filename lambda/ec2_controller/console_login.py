@@ -69,18 +69,32 @@ def handle_console_login(event):
     if role_arn == 'LOCAL':
         return error_response(400, 'Console login via federation is not supported for the central account.')
 
-    # ── 5. AssumeRole in target account ─────────────────────────────────────
+    console_role_arn = account.get('consoleRoleArn', '').strip()
+    if not console_role_arn:
+        return error_response(400, 'Console login role not configured for this account. Add the Console Login Role ARN in the Accounts settings.')
+
+    # ── 5. AssumeRole with role-based session policy ──────────────────────────
+    caller_is_admin = is_admin(event)
+    email_prefix    = caller.split('@')[0][:32].replace('+', '-')
+    session_name    = f'ec2ctrl-{"admin" if caller_is_admin else "operator"}-{email_prefix}'
+
+    assume_kwargs = {
+        'RoleArn':         console_role_arn,
+        'RoleSessionName': session_name,
+        'DurationSeconds': 3600,
+        'ExternalId':      f'ec2-control-{CENTRAL_ACCOUNT_ID}',
+    }
+    if not caller_is_admin:
+        assume_kwargs['PolicyArns'] = [
+            {'arn': 'arn:aws:iam::aws:policy/job-function/ViewOnlyAccess'}
+        ]
+
     sts = boto3.client('sts')
     try:
-        assumed = sts.assume_role(
-            RoleArn=role_arn,
-            RoleSessionName='ec2ctrl-console',
-            DurationSeconds=3600,   # role chaining hard-caps at 1 hour
-            ExternalId=f'ec2-control-{CENTRAL_ACCOUNT_ID}',
-        )
+        assumed = sts.assume_role(**assume_kwargs)
     except Exception as e:
         logger.error("AssumeRole failed for %s: %s", account_id, e)
-        return error_response(500, 'Failed to assume account role. Check the cross-account role trust policy.')
+        return error_response(500, 'Failed to assume console role. Check the Console Login Role ARN and its trust policy.')
 
     creds = assumed['Credentials']
 

@@ -618,7 +618,9 @@ Resources:
               - Sid: STSCrossAccount
                 Effect: Allow
                 Action: sts:AssumeRole
-                Resource: !Sub 'arn:aws:iam::*:role/EC2ControlCrossAccountRole-${Environment}'
+                Resource:
+                  - !Sub 'arn:aws:iam::*:role/EC2ControlCrossAccountRole-${Environment}'
+                  - !Sub 'arn:aws:iam::*:role/EC2ControlConsoleRole-${Environment}'
               - Sid: DynamoDB
                 Effect: Allow
                 Action:

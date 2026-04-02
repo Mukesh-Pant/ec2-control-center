@@ -414,11 +414,12 @@ def handle_accounts_list(event):
         all_enabled = get_accounts()
         accounts = [a for a in all_enabled if a['accountId'] in allowed_ids]
     safe = [{
-        'accountId':   a['accountId'],
-        'accountName': a.get('accountName', a['accountId']),
-        'roleArn':     a.get('roleArn', ''),
-        'enabled':     a.get('enabled', False),
-        'isCentral':   a.get('roleArn', '') == 'LOCAL',
+        'accountId':      a['accountId'],
+        'accountName':    a.get('accountName', a['accountId']),
+        'roleArn':        a.get('roleArn', ''),
+        'consoleRoleArn': a.get('consoleRoleArn', ''),
+        'enabled':        a.get('enabled', False),
+        'isCentral':      a.get('roleArn', '') == 'LOCAL',
     } for a in accounts]
     return response(200, {'accounts': safe})
 
@@ -464,12 +465,16 @@ def handle_accounts_mutation(event):
         if not account_id.isdigit() or len(account_id) != 12:
             return error_response(400, 'accountId must be a 12-digit AWS account ID.')
         try:
-            table.put_item(Item={
+            item = {
                 'accountId':   account_id,
                 'accountName': account_name,
                 'roleArn':     role_arn,
                 'enabled':     True,
-            })
+            }
+            console_role_arn = body.get('consoleRoleArn', '').strip()
+            if console_role_arn:
+                item['consoleRoleArn'] = console_role_arn
+            table.put_item(Item=item)
             logger.info("Account added: %s (%s) by %s", account_id, account_name, caller)
             return response(200, {'message': f'Account {account_id} added successfully.',
                                   'accountId': account_id})
@@ -482,12 +487,17 @@ def handle_accounts_mutation(event):
         if not account_name:
             return error_response(400, 'accountName is required.')
         try:
+            update_expr = 'SET accountName = :n'
+            expr_values = {':n': account_name}
+            if 'consoleRoleArn' in body:
+                update_expr += ', consoleRoleArn = :crn'
+                expr_values[':crn'] = body['consoleRoleArn'].strip()
             table.update_item(
                 Key={'accountId': account_id},
-                UpdateExpression='SET accountName = :n',
-                ExpressionAttributeValues={':n': account_name},
+                UpdateExpression=update_expr,
+                ExpressionAttributeValues=expr_values,
             )
-            return response(200, {'message': 'Account name updated.', 'accountId': account_id})
+            return response(200, {'message': 'Account updated.', 'accountId': account_id})
         except Exception as e:
             logger.error("Failed to update account %s: %s", account_id, e)
             return error_response(500, 'Failed to update account.')
