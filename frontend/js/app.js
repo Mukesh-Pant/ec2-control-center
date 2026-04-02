@@ -328,6 +328,110 @@ const App = (function () {
     setTimeout(function () { FinNotifications.refresh(); }, 100);
   }
 
+  // ─── Custom combobox ─────────────────────────────────────────────────────
+
+  function makeCombobox(inputId, getOptions) {
+    var input = document.getElementById(inputId);
+    if (!input) return;
+
+    // Remove any previous dropdown for this input (re-attach after DOM rebuild)
+    var wrapperId = inputId + '-cb';
+    var old = document.getElementById(wrapperId);
+    if (old) old.parentElement.removeChild(old);
+
+    var ul = document.createElement('ul');
+    ul.className = 'custom-cb-dropdown';
+    ul.id = wrapperId;
+    ul.style.display = 'none';
+    // Append INSIDE the parent wrapper (.audit-filter-input-wrap has position:relative)
+    input.parentElement.appendChild(ul);
+
+    var activeIndex = -1;
+
+    function _cbEsc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function getItems() {
+      var opts = getOptions();
+      if (!opts || opts.length === 0) return [];
+      var val = input.value.toLowerCase();
+      var filtered = val
+        ? opts.filter(function (o) { return o.toLowerCase().indexOf(val) !== -1; })
+        : opts;
+      return filtered.slice(0, 8);
+    }
+
+    function render() {
+      var items = getItems();
+      activeIndex = -1;
+      if (items.length === 0) { close(); return; }
+      ul.innerHTML = items.map(function (item) {
+        return '<li class="custom-cb-option" data-val="' + _cbEsc(item) + '">' +
+          _cbEsc(item) + '</li>';
+      }).join('');
+      ul.style.display = 'block';
+    }
+
+    function close() {
+      ul.style.display = 'none';
+      activeIndex = -1;
+    }
+
+    function selectItem(val) {
+      input.value = val;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      close();
+    }
+
+    function setActive(idx) {
+      var opts = ul.querySelectorAll('.custom-cb-option');
+      opts.forEach(function (el) { el.classList.remove('custom-cb-option--active'); });
+      activeIndex = idx;
+      if (idx >= 0 && opts[idx]) {
+        opts[idx].classList.add('custom-cb-option--active');
+        opts[idx].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    input.addEventListener('focus', render);
+    input.addEventListener('input', render);
+
+    input.addEventListener('keydown', function (e) {
+      if (ul.style.display === 'none') return;
+      var opts = ul.querySelectorAll('.custom-cb-option');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActive(Math.min(activeIndex + 1, opts.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActive(Math.max(activeIndex - 1, 0));
+      } else if (e.key === 'Enter' && activeIndex >= 0 && opts[activeIndex]) {
+        e.preventDefault();
+        selectItem(opts[activeIndex].getAttribute('data-val'));
+      } else if (e.key === 'Escape') {
+        close();
+      }
+    });
+
+    input.addEventListener('blur', function () {
+      setTimeout(close, 150);
+    });
+
+    ul.addEventListener('mousedown', function (e) {
+      // Use closest() with fallback for older browsers
+      var li = e.target.closest
+        ? e.target.closest('.custom-cb-option')
+        : (e.target.classList.contains('custom-cb-option') ? e.target : null);
+      if (li) {
+        e.preventDefault();   // prevent blur firing before click registers
+        selectItem(li.getAttribute('data-val'));
+      }
+    });
+  }
+
   // ─── Public ────────────────────────────────────────────────────────────────
 
   return {
@@ -345,6 +449,7 @@ const App = (function () {
     setUserInfo:        setUserInfo,
     setSessionExpiry:   setSessionExpiry,
     isExtensionPresent: isExtensionPresent,
+    makeCombobox:       makeCombobox,
     init:               init,
     prices:             _PRICES,
   };
