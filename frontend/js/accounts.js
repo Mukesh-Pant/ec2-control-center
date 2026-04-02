@@ -247,6 +247,32 @@ const Accounts = (function () {
     document.getElementById('overlay').classList.remove('open');
   }
 
+  function _buildQuickCreateUrl(region) {
+    if (!CONFIG.MEMBER_ROLE_TEMPLATE_URL || !CONFIG.CENTRAL_ACCOUNT_ID || !CONFIG.ENVIRONMENT) {
+      return null;
+    }
+    var tmplUrl = encodeURIComponent(CONFIG.MEMBER_ROLE_TEMPLATE_URL);
+    var cfUrl = 'https://' + region + '.console.aws.amazon.com/cloudformation/home'
+              + '?region=' + region
+              + '#/stacks/create/review'
+              + '?templateURL=' + tmplUrl
+              + '&stackName=ec2-control-member-role'
+              + '&param_CentralAccountId=' + encodeURIComponent(CONFIG.CENTRAL_ACCOUNT_ID)
+              + '&param_Environment='      + encodeURIComponent(CONFIG.ENVIRONMENT);
+    return cfUrl;
+  }
+
+  function openDeployConsole() {
+    var el = document.getElementById('modal-cf-region');
+    var region = (el && el.value) || 'ap-south-1';
+    var url = _buildQuickCreateUrl(region);
+    if (!url) {
+      App.showToast('Deploy URL not available — please redeploy the portal to enable this feature.', 'error');
+      return;
+    }
+    window.open(url, '_blank');
+  }
+
   async function confirmAdd() {
     var accountId      = document.getElementById('modal-acct-id').value.trim();
     var accountName    = document.getElementById('modal-acct-name').value.trim();
@@ -330,9 +356,10 @@ const Accounts = (function () {
     testConnection: testConnection,
     removeAccount:  removeAccount,
     consoleLogin:   consoleLogin,
-    openModal:      openModal,
-    closeModal:     closeModal,
-    confirmAdd:     confirmAdd,
+    openModal:          openModal,
+    closeModal:         closeModal,
+    confirmAdd:         confirmAdd,
+    openDeployConsole:  openDeployConsole,
   };
 
 })();
