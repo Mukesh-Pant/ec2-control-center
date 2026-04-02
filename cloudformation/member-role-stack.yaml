@@ -143,6 +143,29 @@ Resources:
         - Key: ManagedBy
           Value: CentralPortal
 
+  ConsoleLoginRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'EC2ControlConsoleRole-${Environment}'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${CentralAccountId}:role/ec2-control-lambda-role-${Environment}-${AWS::Region}'
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Sub 'ec2-control-${CentralAccountId}'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: ManagedBy
+          Value: CentralPortal
+
 Outputs:
 
   RoleArn:
@@ -150,6 +173,12 @@ Outputs:
       ARN of the cross-account role. Register this account in the central portal
       by adding it to the DynamoDB AccountRegistry table.
     Value: !GetAtt CrossAccountRole.Arn
+
+  ConsoleRoleArn:
+    Description: >
+      ARN of the Console Login role. Paste this into the portal Accounts page
+      Console Login Role ARN field to enable role-based console access.
+    Value: !GetAtt ConsoleLoginRole.Arn
 
   BackupRoleArn:
     Description: ARN of the backup service role (assumed by AWS Backup to access EC2 in this account).

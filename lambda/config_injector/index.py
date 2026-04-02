@@ -97,6 +97,10 @@ def handler(event, context):
             if portal_bucket:
                 logger.info("Delete — emptying bucket: %s", portal_bucket)
                 _empty_bucket(portal_bucket)
+            templates_bucket = props.get('TemplatesBucket', '')
+            if templates_bucket:
+                logger.info("Delete — emptying templates bucket: %s", templates_bucket)
+                _empty_bucket(templates_bucket)
             send_response(event, 'SUCCESS')
             return
 
@@ -105,6 +109,9 @@ def handler(event, context):
         distribution_id = props['DistributionId']
         code_bucket = props['CodeBucket']
         frontend_key = props['FrontendS3Key']
+        central_account_id   = props['CentralAccountId']
+        environment          = props['Environment']
+        member_role_tmpl_url = props['MemberRoleTemplateUrl']
 
         # Build CONFIG object to inject
         config_js = (
@@ -114,6 +121,9 @@ def handler(event, context):
             f"  REDIRECT_URI: '{props['RedirectUri']}',\n"
             f"  API_URL: '{props['ApiUrl']}',\n"
             f"  USER_POOL_ID: '{props['UserPoolId']}',\n"
+            f"  CENTRAL_ACCOUNT_ID: '{central_account_id}',\n"
+            f"  ENVIRONMENT: '{environment}',\n"
+            f"  MEMBER_ROLE_TEMPLATE_URL: '{member_role_tmpl_url}',\n"
             f"}};"
         )
         logger.info("CONFIG to inject:\n%s", config_js)

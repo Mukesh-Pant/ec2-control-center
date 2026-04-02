@@ -145,6 +145,16 @@ aws cloudformation deploy \
   --region "$AWS_REGION" \
   --no-fail-on-empty-changeset
 
+# ─── Step 5b: Upload member-role-stack.yaml to templates bucket ───
+echo ""
+echo "==> Uploading member-role-stack.yaml to templates bucket..."
+TEMPLATES_BUCKET="ec2-control-templates-${AWS_ACCOUNT_ID}-${AWS_REGION}"
+aws s3 cp "$SCRIPT_DIR/cloudformation/member-role-stack.yaml" \
+  "s3://${TEMPLATES_BUCKET}/member-role-stack.yaml" \
+  --region "$AWS_REGION" \
+  ${AWS_PROFILE:+--profile "$AWS_PROFILE"}
+echo "    Template uploaded to s3://${TEMPLATES_BUCKET}/member-role-stack.yaml"
+
 # ─── Step 6: Flush REST API deployment snapshot ───
 # Forces a fresh deployment snapshot so all new methods (with Cognito auth) are properly captured.
 # Without this, newly added methods can fail with "Invalid key=value pair" on first request.

@@ -244,6 +244,41 @@ Resources:
                 AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
 
   # =============================================
+  # S3 BUCKET - Public, hosts CloudFormation templates
+  # =============================================
+  TemplatesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'ec2-control-templates-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: EC2Control
+        - Key: Environment
+          Value: !Ref Environment
+
+  TemplatesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TemplatesBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowPublicRead
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub 'arn:aws:s3:::ec2-control-templates-${AWS::AccountId}-${AWS::Region}/member-role-stack.yaml'
+
+  # =============================================
   # COGNITO USER POOL - Email login, admin-only
   # =============================================
   CognitoUserPool:
@@ -618,7 +653,9 @@ Resources:
               - Sid: STSCrossAccount
                 Effect: Allow
                 Action: sts:AssumeRole
-                Resource: !Sub 'arn:aws:iam::*:role/EC2ControlCrossAccountRole-${Environment}'
+                Resource:
+                  - !Sub 'arn:aws:iam::*:role/EC2ControlCrossAccountRole-${Environment}'
+                  - !Sub 'arn:aws:iam::*:role/EC2ControlConsoleRole-${Environment}'
               - Sid: DynamoDB
                 Effect: Allow
                 Action:
@@ -863,11 +900,13 @@ Resources:
       - CognitoAppClient
       - RestApiStage
       - PortalBucketPolicy
+      - TemplatesBucketPolicy
     Properties:
       ServiceToken: !GetAtt ConfigInjectorLambda.Arn
       PortalBucket: !Ref PortalBucket
       DistributionId: !Ref CloudFrontDistribution
       CodeBucket: !Ref LambdaCodeS3Bucket
+      TemplatesBucket: !Ref TemplatesBucket
       FrontendS3Key: !Sub 'frontend/frontend-${Environment}.zip'
       CognitoDomain: !Sub 'https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
       ClientId: !Ref CognitoAppClient
@@ -877,6 +916,9 @@ Resources:
           - !Sub 'https://${CloudFrontDistribution.DomainName}/index.html'
       ApiUrl: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
       UserPoolId: !Ref CognitoUserPool
+      CentralAccountId: !Sub '${AWS::AccountId}'
+      Environment: !Ref Environment
+      MemberRoleTemplateUrl: !Sub 'https://ec2-control-templates-${AWS::AccountId}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/member-role-stack.yaml'
       Version: !Ref LambdaCodeVersion
 
   # =============================================
@@ -1983,6 +2025,10 @@ Outputs:
   S3BucketName:
     Description: S3 bucket storing frontend files (managed by Config Injector).
     Value: !Ref PortalBucket
+
+  TemplatesBucketName:
+    Description: Public S3 bucket hosting CloudFormation templates for member account onboarding.
+    Value: !Ref TemplatesBucket
 
   ApiURL:
     Description: 'REST API endpoint URL (stage: prod).'

@@ -253,12 +253,42 @@
     <div class="modal-hd">
       <div>
         <div class="modal-title">Register Member Account</div>
-        <div class="modal-sub">Deploy <code>member-role-stack.yaml</code> in the target account first, then paste the Role ARN here.</div>
+        <div class="modal-sub">Follow the two steps below to register a member AWS account.</div>
       </div>
       <button class="modal-close" onclick="Accounts.closeModal()">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+    <!-- ── Step 1: Deploy role stack ── -->
+    <div style="background:var(--s2);border-radius:8px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;margin-bottom:10px">Step 1 — Deploy IAM Role Stack in Your AWS Account</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <label class="fl" for="modal-cf-region" style="font-size:13px;white-space:nowrap">AWS Region</label>
+        <select id="modal-cf-region" class="finp" style="flex:1;padding:6px 10px;font-size:13px">
+          <option value="ap-south-1" selected>Asia Pacific (Mumbai) — ap-south-1</option>
+          <option value="ap-southeast-1">Asia Pacific (Singapore) — ap-southeast-1</option>
+          <option value="ap-southeast-2">Asia Pacific (Sydney) — ap-southeast-2</option>
+          <option value="ap-northeast-1">Asia Pacific (Tokyo) — ap-northeast-1</option>
+          <option value="us-east-1">US East (N. Virginia) — us-east-1</option>
+          <option value="us-east-2">US East (Ohio) — us-east-2</option>
+          <option value="us-west-2">US West (Oregon) — us-west-2</option>
+          <option value="eu-west-1">Europe (Ireland) — eu-west-1</option>
+          <option value="eu-central-1">Europe (Frankfurt) — eu-central-1</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-blue" style="width:100%;justify-content:center;margin-bottom:12px" onclick="Accounts.openDeployConsole()">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Open CloudFormation in AWS Console
+      </button>
+      <div style="font-size:12px;color:var(--ink3);line-height:1.7">
+        After the stack reaches <strong style="color:var(--ink2)">CREATE_COMPLETE</strong>:
+        go to the <strong style="color:var(--ink2)">Outputs</strong> tab and copy
+        <strong style="color:var(--ink2)">RoleArn</strong> and
+        <strong style="color:var(--ink2)">ConsoleRoleArn</strong> into the fields below.
+      </div>
+    </div>
+    <!-- ── Step 2 divider ── -->
+    <div style="font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;margin-bottom:12px">Step 2 — Enter Account Details</div>
     <div class="fg">
       <label class="fl" for="modal-acct-id">AWS Account ID</label>
       <input class="finp" id="modal-acct-id" type="text" placeholder="123456789012" maxlength="12" autocomplete="off" inputmode="numeric"/>
@@ -272,7 +302,12 @@
     <div class="fg" style="margin-top:10px">
       <label class="fl" for="modal-acct-role">Cross-Account Role ARN</label>
       <input class="finp" id="modal-acct-role" type="text" placeholder="arn:aws:iam::123456789012:role/EC2ControlCrossAccountRole-production" style="font-family:var(--mono);font-size:12px"/>
-      <div class="fhint">From the RoleArn output of member-role-stack.yaml</div>
+      <div class="fhint">From the <strong>RoleArn</strong> output of member-role-stack.yaml</div>
+    </div>
+    <div class="fg" style="margin-top:10px">
+      <label class="fl" for="modal-acct-console-role">Console Login Role ARN <span style="font-size:11px;color:var(--ink3);font-weight:400">(optional)</span></label>
+      <input class="finp" id="modal-acct-console-role" type="text" placeholder="arn:aws:iam::123456789012:role/EC2ControlConsoleRole-production" style="font-family:var(--mono);font-size:12px"/>
+      <div class="fhint">From the <strong>ConsoleRoleArn</strong> output of member-role-stack.yaml — enables role-based console access</div>
     </div>
     <div class="merr" id="modal-err"></div>
     <div class="modal-actions">
