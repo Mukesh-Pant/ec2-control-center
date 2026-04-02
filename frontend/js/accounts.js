@@ -219,7 +219,7 @@ const Accounts = (function () {
         accountId:   data.accountId,
         accountName: data.accountName,
         loginUrl:    data.loginUrl,
-      }, '*');
+      }, window.location.origin);
       App.log('Console login initiated for ' + (data.accountName || accountId), 'ok');
     } catch (err) {
       App.showToast('Console login failed: ' + err.message, 'err');
