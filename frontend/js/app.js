@@ -219,12 +219,14 @@ const App = (function () {
 
   function setAdmin(flag) {
     isAdmin = flag;
-    var admSec  = document.getElementById('adm-sec');
-    var navAcc  = document.getElementById('nav-accounts');
-    var navUsr  = document.getElementById('nav-users');
-    if (admSec) admSec.style.display = flag ? '' : 'none';
-    if (navAcc) navAcc.style.display = flag ? '' : 'none';
-    if (navUsr) navUsr.style.display = flag ? '' : 'none';
+    var admSec     = document.getElementById('adm-sec');
+    var navAcc     = document.getElementById('nav-accounts');
+    var navUsr     = document.getElementById('nav-users');
+    var navFinSet  = document.getElementById('nav-finsettings');
+    if (admSec)    admSec.style.display    = flag ? '' : 'none';
+    if (navAcc)    navAcc.style.display    = flag ? '' : 'none';
+    if (navUsr)    navUsr.style.display    = flag ? '' : 'none';
+    if (navFinSet) navFinSet.style.display = flag ? '' : 'none';
   }
 
   function setUserInfo(email, role) {

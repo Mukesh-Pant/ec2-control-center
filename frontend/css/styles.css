@@ -3457,195 +3457,158 @@ code {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   MY SERVERS — DESIGN LAYER (Syne display · dramatic depth)
-   Aesthetic: Infrastructure Command Center — crisp, precise,
-   with atmospheric depth and editorial template treatments.
+   MY SERVERS — DESIGN LAYER (system font, compact, clean)
 ════════════════════════════════════════════════════════════════ */
 
-/* ── Display font ──────────────────────────────────────────── */
+/* ── No custom display font — use the site's var(--sans) everywhere ── */
 .msv2-hero-h1,
 .msv2-ql-title,
-.msv2-tpl-name {
-  font-family: 'Syne', var(--sans);
+.msv2-tpl-name,
+.msv2-hero-stat-val,
+.msv2-sum-val,
+.msv2-card-name,
+.msv2-card-cost,
+.msv2-tpl-price-main,
+.lbs-price-summary-amount {
+  font-family: var(--sans);
 }
 
-/* ── Hero — deeper atmosphere, grain overlay ──────────────── */
+/* ── Hero — compact, no overpowering canvas ──────────────── */
 .msv2-hero {
-  background:
-    radial-gradient(ellipse 70% 90% at 80% 50%, rgba(37,99,235,.22) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 60% at 10% 80%, rgba(124,58,237,.15) 0%, transparent 65%),
-    linear-gradient(135deg, #0b1f40 0%, #0f2553 45%, #111c4a 100%);
-  box-shadow: 0 8px 48px rgba(10,20,60,.28), 0 2px 8px rgba(10,20,60,.12);
+  background: linear-gradient(135deg, #0e2148 0%, #122c53 100%);
+  box-shadow: 0 2px 12px rgba(10,20,60,.14);
+  min-height: 130px !important;
+  padding: 20px 28px !important;
 }
-/* Noise grain overlay on hero */
-.msv2-hero::before {
-  content: '';
-  position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  border-radius: inherit;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-  opacity: .45;
-}
+.msv2-hero::before { display: none; }   /* remove grain overlay */
+.msv2-hero-canvas  { display: none; }   /* hide animated canvas */
+
 .msv2-hero-content,
-.msv2-hero-stats { position: relative; z-index: 3; }
-.msv2-hero-canvas { z-index: 0; }
+.msv2-hero-stats { position: relative; z-index: 1; }
 
-/* Hero heading — bolder Syne scale */
+/* Hero heading — normal weight, tight */
 .msv2-hero-h1 {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -.6px;
-  line-height: 1.18;
-  background: linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,.75) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+  line-height: 1.25;
+  color: #fff;
+  background: none;
+  -webkit-text-fill-color: #fff;
 }
-.msv2-hero-sub { font-size: 13.5px; letter-spacing: .01em; }
+.msv2-hero-sub { font-size: 12.5px; color: rgba(255,255,255,.6); letter-spacing: 0; }
+.msv2-hero-eyebrow { font-size: 11px; margin-bottom: 6px; }
 
-/* Eyebrow — animated pulse ring */
-.msv2-hero-eyebrow-dot {
-  box-shadow: 0 0 0 0 rgba(93,155,255,.6);
-  animation: eyebrow-ring 2.4s infinite;
-}
-@keyframes eyebrow-ring {
-  0%   { box-shadow: 0 0 0 0 rgba(93,155,255,.6); }
-  60%  { box-shadow: 0 0 0 6px rgba(93,155,255,0); }
-  100% { box-shadow: 0 0 0 0 rgba(93,155,255,0); }
-}
+/* Eyebrow pulse — keep subtle */
+.msv2-hero-eyebrow-dot { animation: none; box-shadow: none; }
 
-/* Primary hero CTA — gradient border trick */
+/* Hero CTA buttons — compact */
 .msv2-hero-btn-primary {
-  position: relative;
-  background: linear-gradient(135deg, #3b7fff 0%, #2460e0 100%);
-  border: none;
-  padding: 11px 22px;
-  letter-spacing: .2px;
-  font-size: 13.5px;
+  background: var(--blue);
+  border: none; padding: 8px 16px;
+  letter-spacing: 0; font-size: 13px;
+  box-shadow: none;
 }
-.msv2-hero-btn-primary::before {
-  content: '';
-  position: absolute; inset: -1px; border-radius: inherit;
-  background: linear-gradient(135deg, rgba(255,255,255,.25), rgba(255,255,255,0));
-  pointer-events: none; border-radius: var(--rlg);
-}
-/* Secondary CTA glassy */
+.msv2-hero-btn-primary::before { display: none; }
+.msv2-hero-btn-primary:hover { background: var(--blue2); transform: none; box-shadow: none; }
+
 .msv2-hero-btn-secondary {
-  backdrop-filter: blur(12px);
-  background: rgba(255,255,255,.08);
-  border: 1px solid rgba(255,255,255,.18);
-  font-size: 13.5px;
+  backdrop-filter: none; background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2); font-size: 13px;
 }
+.msv2-hero-btn-secondary:hover { transform: none; }
 
-/* Hero stat cards — glassy refinement */
+/* Hero stat cards — flat */
 .msv2-hero-stat {
-  background: rgba(255,255,255,.07);
-  border: 1px solid rgba(255,255,255,.1);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  padding: 10px 16px;
 }
-.msv2-hero-stat-val { font-family: 'Syne', var(--mono); font-size: 20px; }
+.msv2-hero-stat-val { font-size: 18px; font-weight: 700; color: #fff; }
+.msv2-hero-stat-lbl { font-size: 10px; }
 
-/* ── Summary bar — editorial treatment ───────────────────── */
+/* ── Summary bar — clean strip ───────────────────────────── */
 .msv2-summary-bar {
-  background: var(--white);
-  border: 1.5px solid var(--bd);
+  background: var(--white); border: 1px solid var(--bd);
+  border-radius: var(--r); padding: 10px 18px;
   position: relative; overflow: hidden;
 }
 .msv2-summary-bar::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 2px;
-  background: linear-gradient(90deg, var(--blue) 0%, var(--blue2) 50%, var(--violet) 100%);
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--blue);
 }
-.msv2-sum-val { font-family: 'Syne', var(--mono); }
+.msv2-sum-val { font-size: 16px; font-weight: 700; color: var(--ink); }
 
-/* ── Quick Launch — refined card system ──────────────────── */
-.msv2-ql-title { font-size: 17px; letter-spacing: -.3px; }
+/* ── Quick Launch — clean card system ───────────────────── */
+.msv2-ql-title { font-size: 15px; font-weight: 700; letter-spacing: 0; }
 
 .msv2-tpl-card {
   border-width: 1px;
-  transition: box-shadow .25s cubic-bezier(.4,0,.2,1),
-              border-color .25s,
-              transform .25s cubic-bezier(.34,1.56,.64,1); /* spring bounce */
+  transition: box-shadow .18s ease, transform .18s ease;
 }
-.msv2-tpl-card:hover { transform: translateY(-4px) scale(1.01); }
+.msv2-tpl-card:hover { transform: translateY(-2px); box-shadow: var(--shm); }
+.msv2-tpl-card::before { height: 3px; }
 
-/* Card top accent — thicker, full-bleed */
-.msv2-tpl-card::before { height: 4px; }
-
-/* Template icon treatment — frosted disk */
+/* Template icon */
 .msv2-tpl-icon {
   display: flex; align-items: center; justify-content: center;
-  width: 48px; height: 48px;
-  background: var(--bg2); border-radius: 14px;
-  font-size: 22px; line-height: 1;
-  border: 1px solid var(--bd); box-shadow: var(--sh);
-  transition: transform .2s;
+  width: 40px; height: 40px; background: var(--bg2); border-radius: 10px;
+  font-size: 20px; line-height: 1; border: 1px solid var(--bd);
+  transition: transform .15s;
 }
-.msv2-tpl-card:hover .msv2-tpl-icon { transform: scale(1.08) rotate(-3deg); }
+.msv2-tpl-card:hover .msv2-tpl-icon { transform: scale(1.06); }
 
-/* Template name — Syne bold */
-.msv2-tpl-name { font-size: 15px; letter-spacing: -.2px; margin-bottom: 4px; }
+/* Template name */
+.msv2-tpl-name { font-size: 14px; font-weight: 700; letter-spacing: 0; margin-bottom: 3px; color: var(--ink); }
 
-/* Price row */
+/* Price — no gradient text */
 .msv2-tpl-price-main {
-  font-family: 'Syne', var(--mono);
-  font-size: 17px;
-  background: linear-gradient(135deg, var(--ink) 0%, var(--blue2) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 16px; font-weight: 700; color: var(--ink);
+  background: none; -webkit-background-clip: unset;
+  -webkit-text-fill-color: var(--ink); background-clip: unset;
 }
 
-/* Launch button — more dramatic */
+/* Launch button — clean */
 .msv2-tpl-launch {
-  position: relative; overflow: hidden;
-  border-radius: 8px;
-  font-size: 12.5px; letter-spacing: .2px;
+  position: relative; overflow: visible;
+  border-radius: var(--r); font-size: 12px; font-weight: 600;
+  letter-spacing: 0; padding: 8px 14px;
 }
-.msv2-tpl-launch::after {
-  content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,.18) 0%, transparent 60%);
-  pointer-events: none;
-}
+.msv2-tpl-launch::after { display: none; }
 
-/* ── Server cards — status-coded border accent ────────────── */
+/* ── Server cards — clean, no spring bounce ──────────────── */
 .msv2-card {
-  border-width: 1.5px;
-  transition: box-shadow .22s, border-color .22s,
-              transform .22s cubic-bezier(.34,1.56,.64,1);
+  border-width: 1px;
+  transition: box-shadow .18s ease, border-color .18s ease;
 }
-/* Left-edge status stripe */
 .msv2-card::before {
-  content: '';
-  position: absolute; left: -1px; top: 16px; bottom: 16px;
-  width: 3px; border-radius: 0 3px 3px 0;
-  transition: height .2s;
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; border-radius: 3px 0 0 3px;
 }
-.msv2-card.status-running::before  { background: var(--green2); box-shadow: 0 0 8px var(--green2); }
-.msv2-card.status-stopped::before  { background: var(--ink4); }
-.msv2-card.status-pending::before  { background: var(--amber2); box-shadow: 0 0 8px var(--amber2); animation: pulse-dot 1.5s infinite; }
-.msv2-card.status-provisioning::before { background: var(--blue2); box-shadow: 0 0 8px var(--blue2); animation: pulse-dot 1.2s infinite; }
+.msv2-card.status-running::before  { background: var(--green2); box-shadow: none; }
+.msv2-card.status-stopped::before  { background: var(--ink4); box-shadow: none; }
+.msv2-card.status-pending::before  { background: var(--amber2); box-shadow: none; animation: none; }
+.msv2-card.status-provisioning::before { background: var(--blue2); box-shadow: none; animation: none; }
+.msv2-card:hover { transform: none; box-shadow: var(--shm); border-color: var(--blue3); }
 
-.msv2-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(13,27,62,.14), 0 4px 8px rgba(13,27,62,.06); }
-
-/* Card header — subtle divider */
 .msv2-card-hd { border-bottom-color: var(--bg2); }
 
-/* Card name — readable, weighted */
-.msv2-card-name { font-family: 'Syne', var(--sans); font-size: 13.5px; letter-spacing: -.1px; }
-
-/* Cost display — monospace readout feel */
-.msv2-card-cost {
-  font-family: 'Syne', var(--mono);
-  font-size: 18px; letter-spacing: -.3px;
-  background: linear-gradient(135deg, var(--ink), var(--blue2));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* Card name — site font, normal weight */
+.msv2-card-name {
+  font-family: var(--sans); font-size: 13.5px; font-weight: 700;
+  letter-spacing: 0; color: var(--ink);
 }
 
-/* Ticker — terminal feel */
+/* Cost — no gradient, plain ink */
+.msv2-card-cost {
+  font-family: var(--sans); font-size: 15px; font-weight: 700;
+  letter-spacing: 0; color: var(--ink);
+  background: none; -webkit-background-clip: unset;
+  -webkit-text-fill-color: var(--ink); background-clip: unset;
+}
+
+/* Ticker */
 .msv2-ticker {
   font-family: var(--mono); font-size: 10.5px;
   background: var(--gdim); border: 1px solid rgba(5,150,105,.2);
@@ -3654,45 +3617,37 @@ code {
 
 /* Card action buttons */
 .msv2-card-btn {
-  border-radius: 7px; font-size: 11.5px;
-  font-family: var(--sans); letter-spacing: .1px;
+  border-radius: var(--rsm); font-size: 11.5px;
+  font-family: var(--sans); letter-spacing: 0;
 }
 
-/* ── AI Advisor — premium card ─────────────────────────────── */
-.msv2-advisor {
-  border-width: 1.5px;
-  position: relative; overflow: hidden;
-}
+/* ── AI Advisor ─────────────────────────────────────────── */
+.msv2-advisor { border-width: 1px; position: relative; overflow: hidden; }
 .msv2-advisor::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
   background: linear-gradient(90deg, var(--violet) 0%, var(--blue2) 100%);
 }
 .msv2-advisor-hd { border-bottom-color: var(--bd); }
 .msv2-advisor-badge {
-  background: linear-gradient(135deg, #7c3aed 0%, #2460e0 100%);
-  border-radius: 5px; padding: 2px 8px;
-  font-size: 9.5px; letter-spacing: .4px;
+  background: var(--vdim); color: var(--violet);
+  border-radius: 5px; padding: 2px 8px; font-size: 10px; letter-spacing: 0;
+  border: 1px solid rgba(124,58,237,.2);
 }
-.msv2-advisor-input {
-  border-radius: 8px; font-size: 13px;
-  min-height: 80px;
-}
+.msv2-advisor-input { border-radius: var(--r); font-size: 13px; min-height: 72px; }
 .msv2-advisor-send {
-  background: linear-gradient(135deg, #7c3aed 0%, #2460e0 100%);
-  border-radius: 8px; padding: 10px 18px; letter-spacing: .2px;
-  box-shadow: 0 4px 14px rgba(124,58,237,.3);
+  background: var(--blue); border-radius: var(--r);
+  padding: 9px 16px; letter-spacing: 0;
+  box-shadow: none; font-size: 13px;
 }
-.msv2-advisor-send:hover { box-shadow: 0 6px 20px rgba(124,58,237,.42); }
+.msv2-advisor-send:hover { background: var(--blue2); box-shadow: none; }
 .msv2-advisor-result {
-  border-radius: 8px; font-size: 13px; margin-top: 12px;
-  border-color: var(--bd2);
-  background: linear-gradient(135deg, var(--s2) 0%, var(--bdim) 100%);
+  border-radius: var(--r); font-size: 13px; margin-top: 10px;
+  border-color: var(--bd); background: var(--s2);
 }
 
-/* ── Forecast chart — editorial label ─────────────────────── */
+/* ── Forecast chart ─────────────────────────────────────── */
 .msv2-forecast {
-  border-width: 1.5px;
+  border-width: 1px;
   position: relative; overflow: hidden;
 }
 .msv2-forecast::before {
@@ -3700,23 +3655,23 @@ code {
   position: absolute; top: 0; left: 0; right: 0; height: 2px;
   background: linear-gradient(90deg, var(--blue) 0%, var(--cyan2) 100%);
 }
-.msv2-forecast-title { font-family: 'Syne', var(--sans); font-size: 13.5px; }
+.msv2-forecast-title { font-family: var(--sans); font-size: 13px; font-weight: 700; }
 
-/* ── Feature columns — elevated ───────────────────────────── */
+/* ── Feature columns ─────────────────────────────────────── */
 .msv2-feat { position: relative; overflow: hidden; }
 .msv2-feat::after {
   content: '';
   position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
   background: linear-gradient(90deg, transparent, var(--bd), transparent);
 }
-.msv2-feat-ico { font-size: 22px; }
-.msv2-feat-title { font-family: 'Syne', var(--sans); font-size: 14.5px; letter-spacing: -.1px; }
+.msv2-feat-ico { font-size: 20px; }
+.msv2-feat-title { font-family: var(--sans); font-size: 13.5px; font-weight: 700; letter-spacing: 0; }
 
 /* ── Strip stats ─────────────────────────────────────────── */
-.msv2-strip-val { font-family: 'Syne', var(--mono); font-size: 22px; letter-spacing: -.2px; }
+.msv2-strip-val { font-family: var(--sans); font-size: 18px; font-weight: 700; letter-spacing: 0; }
 
 /* ── Empty state ─────────────────────────────────────────── */
-.msv2-empty-title { font-family: 'Syne', var(--sans); }
+.msv2-empty-title { font-family: var(--sans); font-weight: 700; }
 
 /* ── Card grid stagger override — more spring-like ──────── */
 .msv2-card:nth-child(1)  { animation-delay: .00s; }
@@ -3762,7 +3717,7 @@ code {
   position: absolute; top: 0; left: 0; right: 0; height: 2px;
   background: linear-gradient(90deg, var(--amber) 0%, var(--amber2) 100%);
 }
-.billing-cfg-title { font-family: 'Syne', var(--sans); font-size: 14.5px; }
+.billing-cfg-title { font-family: var(--sans); font-size: 14px; }
 
 /* ── Dots menu micro-polish ──────────────────────────────── */
 .msv2-dots-btn {
@@ -3884,8 +3839,8 @@ code {
 }
 .lbs-price-summary-label { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: rgba(255,255,255,.55); margin-bottom: 8px; }
 .lbs-price-summary-amount {
-  font-family: 'Syne', var(--mono); font-size: 34px; font-weight: 800;
-  color: #fff; letter-spacing: -.5px; line-height: 1; margin-bottom: 10px;
+  font-family: var(--sans); font-size: 28px; font-weight: 700;
+  color: #fff; letter-spacing: -.2px; line-height: 1; margin-bottom: 10px;
 }
 .lbs-price-summary-meta { font-size: 12px; color: rgba(255,255,255,.55); margin-bottom: 6px; }
 .lbs-price-incl-note {
