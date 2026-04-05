@@ -344,6 +344,18 @@ const Accounts = (function () {
         if (e.key === 'Enter') confirmAdd();
       });
     });
+
+    // Auto-populate Account ID from pasted RoleArn (arn:aws:iam::{accountId}:role/...)
+    if (modalAcctRole) {
+      modalAcctRole.addEventListener('input', function () {
+        var parts = modalAcctRole.value.trim().split(':');
+        if (parts.length >= 5 && parts[0] === 'arn' && parts[2] === 'iam' && /^\d{12}$/.test(parts[4])) {
+          if (!modalAcctId.value.trim()) {
+            modalAcctId.value = parts[4];
+          }
+        }
+      });
+    }
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────
