@@ -15,9 +15,12 @@ const Labs = (function () {
   var currentLabId  = null;    // labId being provisioned or viewed
   var _pollTimer    = null;    // setTimeout handle for provisioning poll
   var _accounts     = [];      // cached enabled accounts list
+  var _labsUsers    = [];      // operator + admin emails for Submitted By combobox
   var _confirmCb    = null;    // pending in-page confirm callback
-  var _activeFilter = 'active'; // current filter pill: 'all'|'active'|'pending'|'history'
+  var _labFilters = { platform: '', serverType: '', status: '', account: '', region: '', submittedBy: '' };
   var _expandedLabId = null;   // labId of currently expanded row, or null
+  var _labsPage     = 0;
+  var LAB_PAGE_SIZE = 10;
   var _guideOpen    = false;   // whether the "How it works" guide is expanded
   // v2 state
   var _searchQuery  = '';
@@ -201,6 +204,21 @@ const Labs = (function () {
     }
   }
 
+  // ─── Load operator + admin emails for Submitted By combobox (admin only)
+
+  async function _loadLabsUsers() {
+    try {
+      var res  = await API.getUsers();
+      var data = await res.json();
+      _labsUsers = (data.users || [])
+        .filter(function (u) {
+          var g = u.groups || [];
+          return g.indexOf('admins') !== -1 || g.indexOf('operators') !== -1;
+        })
+        .map(function (u) { return u.email; });
+    } catch (_) { _labsUsers = []; }
+  }
+
   // ─── Active Labs Panel
 
   async function _loadActiveLabs() {
@@ -208,6 +226,12 @@ const Labs = (function () {
     if (!listEl) return;
     // Show skeleton grid while fetching
     listEl.innerHTML = _renderSkeletons(6);
+
+    var role = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : '';
+    if (_accounts.length === 0) await _loadAccounts();
+    if (role === 'admin' && typeof _labsUsers !== 'undefined' && _labsUsers.length === 0 && typeof _loadLabsUsers === 'function') await _loadLabsUsers();
+
+
     try {
       var res  = await API.getLabsList();
       var data = await res.json();
@@ -229,16 +253,13 @@ const Labs = (function () {
     var listEl = document.getElementById('lbs-list');
     if (!listEl) return;
 
-    // ── Compute bucket counts
-    var counts = { all: activeLabs.length, active: 0, pending: 0, history: 0 };
-    activeLabs.forEach(function (lab) {
-      if (lab.status === 'running' || lab.status === 'provisioning') counts.active++;
-      else if (lab.status === 'pending_approval')                     counts.pending++;
-      else if (lab.status === 'terminated' || lab.status === 'rejected') counts.history++;
-    });
-
-    // ── Auto-fallback: if default filter has nothing, fall back to 'all'
-    if (_activeFilter === 'active' && counts.active === 0) _activeFilter = 'all';
+    // Save focus so text inputs (e.g. Submitted By) survive the DOM replace
+    var _focusId  = document.activeElement ? document.activeElement.id : null;
+    var _selStart = null, _selEnd = null;
+    if (_focusId && document.activeElement.setSelectionRange) {
+      try { _selStart = document.activeElement.selectionStart;
+            _selEnd   = document.activeElement.selectionEnd; } catch (e) {}
+    }
 
     // ── Empty state (no servers at all): show full onboarding + guide expanded
     if (activeLabs.length === 0) {
@@ -261,25 +282,30 @@ const Labs = (function () {
     }
 
     // ── Stats cards
+    var cntAll     = activeLabs.length;
+    var cntActive  = activeLabs.filter(function(l){ return l.status === 'running' || l.status === 'provisioning'; }).length;
+    var cntPending = activeLabs.filter(function(l){ return l.status === 'pending_approval'; }).length;
+    var cntHistory = activeLabs.filter(function(l){ return l.status === 'terminated' || l.status === 'rejected'; }).length;
+
     var statsHtml = '<div class="lbs-stats-row">' +
       '<div class="lbs-stat-card">' +
         '<div class="lbs-stat-ico lbs-stat-ico--blue"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg></div>' +
-        '<div class="lbs-stat-val">' + counts.all + '</div>' +
+        '<div class="lbs-stat-val">' + cntAll + '</div>' +
         '<div class="lbs-stat-lbl">Total Servers</div>' +
       '</div>' +
       '<div class="lbs-stat-card">' +
         '<div class="lbs-stat-ico lbs-stat-ico--green"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>' +
-        '<div class="lbs-stat-val lbs-stat-green">' + counts.active + '</div>' +
+        '<div class="lbs-stat-val lbs-stat-green">' + cntActive + '</div>' +
         '<div class="lbs-stat-lbl">Active</div>' +
       '</div>' +
       '<div class="lbs-stat-card">' +
         '<div class="lbs-stat-ico lbs-stat-ico--amber"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>' +
-        '<div class="lbs-stat-val lbs-stat-amber">' + counts.pending + '</div>' +
+        '<div class="lbs-stat-val lbs-stat-amber">' + cntPending + '</div>' +
         '<div class="lbs-stat-lbl">Pending</div>' +
       '</div>' +
       '<div class="lbs-stat-card">' +
         '<div class="lbs-stat-ico lbs-stat-ico--gray"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></div>' +
-        '<div class="lbs-stat-val lbs-stat-gray">' + (counts.history || 0) + '</div>' +
+        '<div class="lbs-stat-val lbs-stat-gray">' + cntHistory + '</div>' +
         '<div class="lbs-stat-lbl">History</div>' +
       '</div>' +
     '</div>';
@@ -287,30 +313,19 @@ const Labs = (function () {
     // ── Collapsible guide (always present, collapsed by default when servers exist)
     var guideHtml = _renderGuide(_guideOpen);
 
-    // ── Filter bar
-    var html = statsHtml + guideHtml + _renderFilterBar(counts);
-
-    // ── Filter visible labs
-    var visible = activeLabs.filter(function (lab) {
-      if (_activeFilter === 'all')     return true;
-      if (_activeFilter === 'active')  return lab.status === 'running' || lab.status === 'provisioning';
-      if (_activeFilter === 'pending') return lab.status === 'pending_approval';
-      if (_activeFilter === 'history') return lab.status === 'terminated' || lab.status === 'rejected';
-      return true;
-    });
+    // ── Filter bar + filtered rows
+    var visible    = activeLabs.filter(_passesLabFilter);
+    var totalPages = Math.max(1, Math.ceil(visible.length / LAB_PAGE_SIZE));
+    _labsPage = Math.min(_labsPage, totalPages - 1);
+    var pageItems = visible.slice(_labsPage * LAB_PAGE_SIZE, (_labsPage + 1) * LAB_PAGE_SIZE);
+    var html = statsHtml + guideHtml + _renderFilterBar();
 
     if (visible.length === 0) {
-      var emptyMsg = {
-        active:  'No active servers right now.',
-        pending: 'No servers awaiting approval.',
-        history: 'No history yet.',
-        all:     'No servers found.',
-      }[_activeFilter] || 'No servers found.';
-      var switchLink = (_activeFilter !== 'all' && counts.all > 0)
-        ? ' <button class="lbs-pill" onclick="Labs._setFilter(\'all\')">View All<span class="lbs-pill-count">' + counts.all + '</span></button>'
-        : '';
-      html += '<div class="lbs-empty">' + emptyMsg + switchLink + '</div>';
+      html += '<div class="lbs-empty">No servers match the current filters.' +
+        (cntAll > 0 ? ' <button class="btn-audit-clear" onclick="Labs._clearLabFilters()">Clear filters</button>' : '') +
+        '</div>';
       listEl.innerHTML = html;
+      _restoreFocus(_focusId, _selStart, _selEnd);
       return;
     }
 
@@ -326,10 +341,33 @@ const Labs = (function () {
     html += '<th>Expires</th>';
     html += '</tr></thead>';
     html += '<tbody>';
-    visible.forEach(function (lab) { html += _renderRow(lab); });
+    pageItems.forEach(function (lab) { html += _renderRow(lab); });
     html += '</tbody></table>';
 
+    if (visible.length > LAB_PAGE_SIZE) {
+      html += '<div class="audit-pg-row">' +
+        '<button class="btn-pg" onclick="Labs._labsPageNav(-1)"' + (_labsPage === 0 ? ' disabled' : '') + '>\u2190 Prev</button>' +
+        '<span class="pg-info">Page ' + (_labsPage + 1) + ' of ' + totalPages + ' \u00b7 ' + visible.length + ' servers</span>' +
+        '<button class="btn-pg" onclick="Labs._labsPageNav(1)"' + (_labsPage >= totalPages - 1 ? ' disabled' : '') + '>Next \u2192</button>' +
+        '</div>';
+    }
+
     listEl.innerHTML = html;
+    _restoreFocus(_focusId, _selStart, _selEnd);
+
+    if (typeof Auth !== 'undefined' && Auth.getRole && Auth.getRole() === 'admin') {
+      if (typeof App !== 'undefined' && App.makeCombobox) {
+        App.makeCombobox('lbs-filter-submittedby', function () { return _labsUsers; });
+      }
+    }
+  }
+
+  function _restoreFocus(id, selStart, selEnd) {
+    if (!id) return;
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.focus();
+    if (selStart !== null) { try { el.setSelectionRange(selStart, selEnd); } catch (e) {} }
   }
 
   // ─── How it works guide (always rendered, collapsible)
@@ -358,30 +396,100 @@ const Labs = (function () {
     _renderLabsList();
   }
 
-  // ─── Filter bar HTML
+  // ─── Filter helpers
 
-  function _renderFilterBar(counts) {
-    var filters = [
-      { key: 'all',     label: 'All'     },
-      { key: 'active',  label: 'Active'  },
-      { key: 'pending', label: 'Pending' },
-      { key: 'history', label: 'History' },
-    ];
-    var pills = filters.map(function (f) {
-      var active = _activeFilter === f.key ? ' lbs-pill--active' : '';
-      return '<button class="lbs-pill' + active + '" onclick="Labs._setFilter(\'' + f.key + '\')">' +
-        f.label + '<span class="lbs-pill-count">' + (counts[f.key] || 0) + '</span>' +
-        '</button>';
-    }).join('');
-    return '<div class="lbs-filter-bar">' + pills + '</div>';
+  function _passesLabFilter(lab) {
+    if (_labFilters.platform   && (lab.platform || '').toLowerCase() !== _labFilters.platform) return false;
+    if (_labFilters.serverType && lab.instanceType !== _labFilters.serverType)                  return false;
+    if (_labFilters.status     && lab.status !== _labFilters.status)                            return false;
+    if (_labFilters.account    && lab.accountId !== _labFilters.account)                        return false;
+    if (_labFilters.region     && lab.region !== _labFilters.region)                            return false;
+    if (_labFilters.submittedBy && !(lab.userEmail || '').toLowerCase().includes(_labFilters.submittedBy.toLowerCase())) return false;
+    return true;
   }
 
-  // ─── Set active filter (public for pill onclick)
-
-  function _setFilter(filter) {
-    _activeFilter = filter;
+  function _setLabFilter(field, value) {
+    _labFilters[field] = value;
     _expandedLabId = null;
+    _labsPage = 0;
     _renderLabsList();
+  }
+
+  function _clearLabFilters() {
+    _labFilters = { platform: '', serverType: '', status: '', account: '', region: '', submittedBy: '' };
+    _expandedLabId = null;
+    _labsPage = 0;
+    _renderLabsList();
+  }
+
+  function _labsPageNav(delta) {
+    var visible    = activeLabs.filter(_passesLabFilter);
+    var totalPages = Math.max(1, Math.ceil(visible.length / LAB_PAGE_SIZE));
+    _labsPage = Math.max(0, Math.min(totalPages - 1, _labsPage + delta));
+    _renderLabsList();
+  }
+
+  // ─── Attribute filter bar (Audit Log-style)
+
+  function _renderFilterBar() {
+    var role    = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : '';
+    var isAdmin = (role === 'admin');
+
+    var types    = Array.from(new Set(activeLabs.map(function(l){ return l.instanceType; }).filter(Boolean))).sort();
+    var accounts = Array.from(new Set(activeLabs.map(function(l){ return l.accountId;    }).filter(Boolean))).sort();
+    var regions  = Array.from(new Set(activeLabs.map(function(l){ return l.region;       }).filter(Boolean))).sort();
+
+    function opt(val, label, cur) {
+      return '<option value="' + _esc(val) + '"' + (cur === val ? ' selected' : '') + '>' + _esc(label) + '</option>';
+    }
+
+    var totalVisible = activeLabs.filter(_passesLabFilter).length;
+
+    return '<div class="audit-filters audit-filters-v2" style="margin-bottom:16px">' +
+      '<select class="audit-select" onchange="Labs._setLabFilter(\'platform\',this.value)">' +
+        opt('',        'All platforms',  _labFilters.platform) +
+        opt('windows', 'Windows',        _labFilters.platform) +
+        opt('ubuntu',  'Linux / Ubuntu', _labFilters.platform) +
+      '</select>' +
+      '<select class="audit-select" onchange="Labs._setLabFilter(\'serverType\',this.value)">' +
+        opt('', 'All types', _labFilters.serverType) +
+        types.map(function(t){ return opt(t, t, _labFilters.serverType); }).join('') +
+      '</select>' +
+      '<select class="audit-select" onchange="Labs._setLabFilter(\'status\',this.value)">' +
+        opt('',                'All status',        _labFilters.status) +
+        opt('running',         'Running',          _labFilters.status) +
+        opt('stopped',         'Stopped',          _labFilters.status) +
+        opt('provisioning',    'Provisioning',     _labFilters.status) +
+        opt('pending_approval','Pending Approval', _labFilters.status) +
+        opt('terminated',      'Terminated',       _labFilters.status) +
+        opt('rejected',        'Rejected',         _labFilters.status) +
+      '</select>' +
+      '<select class="audit-select" onchange="Labs._setLabFilter(\'account\',this.value)">' +
+        opt('', 'All accounts', _labFilters.account) +
+        accounts.map(function(id) {
+          var acct  = _accounts.find(function(a){ return a.accountId === id; });
+          var label = acct ? ((acct.name || id) + ' (' + id + ')') : id;
+          return opt(id, label, _labFilters.account);
+        }).join('') +
+      '</select>' +
+      '<select class="audit-select" onchange="Labs._setLabFilter(\'region\',this.value)">' +
+        opt('', 'All regions', _labFilters.region) +
+        regions.map(function(r){ return opt(r, r, _labFilters.region); }).join('') +
+      '</select>' +
+      (isAdmin
+        ? '<div class="audit-filter-input-wrap">' +
+            '<svg class="audit-filter-icon" viewBox="0 0 24 24" width="14" height="14">' +
+              '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' +
+            '</svg>' +
+            '<input class="audit-input" id="lbs-filter-submittedby" type="text"' +
+              ' placeholder="Submitted by\u2026"' +
+              ' value="' + _esc(_labFilters.submittedBy) + '"' +
+              ' oninput="Labs._setLabFilter(\'submittedBy\',this.value)"/>' +
+          '</div>'
+        : '') +
+      '<button class="btn-audit-clear" onclick="Labs._clearLabFilters()">Clear</button>' +
+      '<span class="audit-record-count">' + totalVisible + ' server' + (totalVisible !== 1 ? 's' : '') + '</span>' +
+    '</div>';
   }
 
   // ─── Render a single table row
@@ -474,6 +582,50 @@ const Labs = (function () {
     );
   }
 
+  // ─── Lab instance start / stop ────────────────────────────────────────────
+
+  async function _startLab(labId) {
+    var lab = activeLabs.find(function (l) { return l.labId === labId; });
+    if (!lab || !lab.instanceId) { App.showToast('Instance ID not available', 'err'); return; }
+    try {
+      var res  = await API.ec2Action({
+        action:       'start',
+        instanceId:   lab.instanceId,
+        accountId:    lab.accountId,
+        region:       lab.region,
+        instanceName: lab.labName || lab.labId,
+        instanceType: lab.instanceType,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Start failed');
+      App.showToast('Server start initiated', 'ok');
+      await _loadActiveLabs();
+    } catch (e) {
+      App.showToast('Start error: ' + e.message, 'err');
+    }
+  }
+
+  async function _stopLab(labId) {
+    var lab = activeLabs.find(function (l) { return l.labId === labId; });
+    if (!lab || !lab.instanceId) { App.showToast('Instance ID not available', 'err'); return; }
+    try {
+      var res  = await API.ec2Action({
+        action:       'stop',
+        instanceId:   lab.instanceId,
+        accountId:    lab.accountId,
+        region:       lab.region,
+        instanceName: lab.labName || lab.labId,
+        instanceType: lab.instanceType,
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Stop failed');
+      App.showToast('Server stop initiated', 'ok');
+      await _loadActiveLabs();
+    } catch (e) {
+      App.showToast('Stop error: ' + e.message, 'err');
+    }
+  }
+
   // ─── Row expand / collapse
 
   function _toggleRowDetail(labId) {
@@ -521,7 +673,8 @@ const Labs = (function () {
     var isAdmin       = role === 'admin';
     var callerEmail   = Auth.getEmail ? Auth.getEmail() : '';
     var isOwner       = !!(callerEmail && (lab.userEmail === callerEmail || lab.callerEmail === callerEmail));
-    var canTerminate  = isAdmin || isOwner;
+    var canTerminate  = isAdmin;
+    var canStartStop  = isAdmin || isOwner;
     var isWindows     = lab.platform === 'windows';
     var platformLabel = PLATFORM_LABELS[lab.platform] || lab.platform || '\u2014';
     var ip            = lab.publicIp || lab.publicDns || '';
@@ -595,6 +748,9 @@ const Labs = (function () {
 
       // ── Actions section
       var actionBtns = '<button class="btn btn-sm btn-outline" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Connection Info (.txt)</button>';
+      if (canStartStop) {
+        actionBtns += ' <button class="btn btn-sm btn-outline" onclick="Labs._stopLab(\'' + labIdEsc + '\')">&#9646;&#9646; Stop Server</button>';
+      }
       if (canTerminate) {
         actionBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>';
       }
@@ -606,22 +762,24 @@ const Labs = (function () {
 
     // ── Stopped server info
     if (lab.status === 'stopped') {
-      var stopNote = isOwner || isAdmin
-        ? 'Your server is stopped. To restart it, go to the <b>Servers</b> tab and click Start on this server. The status here updates automatically when it comes back online.'
-        : 'This server is currently stopped. Only the server owner or an admin can restart it from the Servers tab.';
       html += '<div class="lbs-detail-section">' +
         '<div class="lbs-detail-section-title">Server Stopped</div>' +
         '<div class="lbs-verification-notice">' +
           '<div class="lbs-verification-icon" style="font-size:22px;">&#9646;&#9646;</div>' +
           '<div>' +
             '<h4 class="lbs-verification-title">Server is currently stopped</h4>' +
-            '<p class="lbs-verification-msg">' + stopNote + '</p>' +
+            '<p class="lbs-verification-msg">This server is stopped and not incurring compute costs.</p>' +
           '</div>' +
         '</div>';
+      var stoppedBtns = '';
+      if (canStartStop) {
+        stoppedBtns += '<button class="btn btn-sm btn-success" onclick="Labs._startLab(\'' + labIdEsc + '\')">&#9654; Start Server</button>';
+      }
       if (canTerminate) {
-        html += '<div class="lbs-detail-actions" style="margin-top:12px;">' +
-          '<button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>' +
-          '</div>';
+        stoppedBtns += ' <button class="btn btn-sm btn-danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">Terminate Server</button>';
+      }
+      if (stoppedBtns) {
+        html += '<div class="lbs-detail-actions" style="margin-top:12px;">' + stoppedBtns + '</div>';
       }
       html += '</div>';
     }
@@ -737,7 +895,7 @@ const Labs = (function () {
     if (listEl) listEl.style.display = '';
     if (btnNew) btnNew.style.display = '';
 
-    _activeFilter  = 'pending';
+    _labFilters.status = 'pending_approval';
     _expandedLabId = null;
     _loadActiveLabs();
   }
@@ -1527,7 +1685,7 @@ const Labs = (function () {
           if (lab.status === 'running') {
             _pollTimer = null;
             activeLabs = labs;
-            _activeFilter = 'active';
+            _labFilters = { platform: '', serverType: '', status: '', account: '', region: '', submittedBy: '' };
             _renderLabsList();
             _toggleRowDetail(labId);
             App.showToast('Lab is ready!', 'ok');
@@ -2737,7 +2895,9 @@ const Labs = (function () {
     confirmOk:       confirmOk,
     confirmCancel:   confirmCancel,
     // Exposed for inline onclick handlers
-    _setFilter:          _setFilter,
+    _setLabFilter:       _setLabFilter,
+    _clearLabFilters:    _clearLabFilters,
+    _labsPageNav:        _labsPageNav,
     _toggleRowDetail:    _toggleRowDetail,
     _approveLab:         _approveLab,
     _rejectLab:          _rejectLab,
@@ -2752,6 +2912,8 @@ const Labs = (function () {
     _confirmDelete:        _confirmDelete,
     _confirmRemoveHistory: _confirmRemoveHistory,
     _confirmCancelRequest: _confirmCancelRequest,
+    _startLab:             _startLab,
+    _stopLab:              _stopLab,
     _toggleGuide:          _toggleGuide,
     _downloadBill:         _downloadBill,
     _downloadRdp:          _downloadRdp,

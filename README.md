@@ -170,8 +170,9 @@ This will:
 2. Zip and upload Lambda functions + frontend
 3. Deploy/update the CloudFormation stack (including custom domain + Route 53 records if set)
 4. Auto-inject config into the frontend, push to S3, invalidate CloudFront cache
-5. Flush the REST API deployment snapshot
-6. Print the portal URL
+5. Upload `member-role-stack.yaml` to the public templates bucket (enables the Quick-Create button)
+6. Flush the REST API deployment snapshot
+7. Print the portal URL
 
 First deploy: ~8-12 min (CloudFront). Updates: ~2-5 min.
 
@@ -200,8 +201,18 @@ For the full onboarding guide, branch naming, commit format, and code patterns: 
 
 ## Adding Member AWS Accounts
 
-1. Deploy the cross-account role in the target account:
+The **Add Account** modal in the portal guides you through the process in two steps.
 
+### Step 1 — Deploy the IAM role stack in the target account
+
+Click **+ Add Account** in the portal's Accounts tab. The modal shows a **"Open CloudFormation in AWS Console"** button with a region picker. Click it — CloudFormation opens in a new tab with everything pre-filled:
+- Template automatically loaded from the hosted S3 URL
+- `CentralAccountId` and `Environment` parameters pre-populated
+- Suggested stack name: `ec2-control-member-role`
+
+Give the stack a name, click **Deploy**, and wait for `CREATE_COMPLETE` (~2 min). Then go to the **Outputs** tab to copy the two ARN values.
+
+**Manual alternative** (CLI):
 ```bash
 aws cloudformation deploy \
   --template-file cloudformation/member-role-stack.yaml \
@@ -212,9 +223,16 @@ aws cloudformation deploy \
   --profile <member-account-profile>
 ```
 
-2. Copy the `RoleArn` from the stack outputs.
-3. In the portal → **Accounts** tab → **+ Add Account** → paste the Role ARN.
-4. Click **Test** to verify. Instances appear immediately in the Instances tab.
+### Step 2 — Register the account in the portal
+
+Back in the Add Account modal:
+1. Enter the **AWS Account ID** (12-digit)
+2. Enter a friendly **Account Name**
+3. Paste the **`RoleArn`** from CloudFormation Outputs into the **Cross-Account Role ARN** field
+4. Paste the **`ConsoleRoleArn`** into the **Console Login Role ARN** field (optional — enables one-click Console Login)
+5. Click **Add Account** → **Test** to verify connectivity
+
+Instances from the new account appear immediately in the Instances tab.
 
 ---
 

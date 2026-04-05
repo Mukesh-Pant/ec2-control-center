@@ -28,6 +28,7 @@ Fully serverless, zero infrastructure to manage.
 | M9 | Backup — AWS Backup service, on-demand + scheduled backups, restore, /backup endpoint | ✅ LIVE |
 | M10 | Console Login — one-click AWS Console via STS federation + Firefox container tabs extension | ✅ LIVE |
 | M11 | Labs — self-service EC2 lab provisioning, payment upload, pending-approval workflow, admin controls | 🚧 IN DEV |
+| M12 | Quick-Add Account — CloudFormation Quick-Create button in Add Account modal; public S3 template hosting; pre-filled params | 🚧 IN DEV |
 | Perf | Performance — STS cred caching, boto3 singletons, script defer, skeleton loading, Lambda 512MB, CloudFront PriceClass_200 | ✅ LIVE |
 
 **API:** REST API v1 (migrated from HTTP API v2) with COGNITO_USER_POOLS authorizer.
@@ -106,7 +107,7 @@ EC2-control-center/
         ├── authui.js           ← Auth page UI controller (form switching, validation, loading)
         ├── api.js              ← Fetch wrapper with auto-token-refresh
         ├── instances.js        ← Instance list + start/stop controls
-        ├── audit.js            ← Audit log viewer + daily cost view
+        ├── audit.js            ← Audit log viewer + daily cost view; filter bar: instance (datalist combobox), user email (datalist combobox, admin), action dropdown (START|STOP|AUTO-STOP|ACCOUNT-LINKED|TERMINATE), account dropdown
         ├── billing.js          ← Billing dashboard
         ├── analytics.js        ← Usage analytics
         ├── accounts.js         ← Multi-account management
@@ -311,6 +312,42 @@ After onboarding via Accounts tab, also add account ARN to vault `AccessPolicy` 
 
 ---
 
+## Quick-Add Account System (M12)
+
+### Overview
+Replaces the fully manual "deploy YAML yourself" onboarding with a one-click CloudFormation Quick-Create button inside the Add Account modal. Non-IT clients click a button, a new tab opens with CloudFormation pre-loaded, they give the stack a name and hit Deploy, then copy two ARN values from Outputs back into the form.
+
+### Infrastructure
+- **TemplatesBucket:** `ec2-control-templates-{accountId}-{region}` (public S3) — hosts `member-role-stack.yaml` with public `s3:GetObject` restricted to exactly that one object path (no wildcard)
+- **deploy.sh Step 5b:** uploads `cloudformation/member-role-stack.yaml` to `TemplatesBucket` after CF deploy
+- **config_injector:** now injects 3 new CONFIG keys — `CENTRAL_ACCOUNT_ID`, `ENVIRONMENT`, `MEMBER_ROLE_TEMPLATE_URL` — plus empties `TemplatesBucket` on stack delete alongside `PortalBucket`
+
+### Frontend (accounts.js)
+- `_buildQuickCreateUrl(region)` — builds `https://{region}.console.aws.amazon.com/cloudformation/home?region={region}#/stacks/create/review?templateURL={encoded}&stackName=ec2-control-member-role&param_CentralAccountId={id}&param_Environment={env}`
+  - Guards: returns `null` if any CONFIG key is undefined
+  - All three CONFIG values are `encodeURIComponent`-encoded
+- `openDeployConsole()` — reads `#modal-cf-region` dropdown (9 regions, default `ap-south-1`), calls `window.open(url, '_blank')`, shows toast via `App.showToast` if CONFIG not yet available
+- Both functions are inside the `Accounts` IIFE; `openDeployConsole` exposed in public return object
+
+### Modal UI (index.html)
+- Step 1 card (above existing form fields): region dropdown + "Open CloudFormation in AWS Console" button + post-deploy instructions (CREATE_COMPLETE → Outputs → copy RoleArn + ConsoleRoleArn)
+- Step 2 divider: "STEP 2 — ENTER ACCOUNT DETAILS" above the 4 existing input fields
+- Region dropdown: `id="modal-cf-region"`, `ap-south-1` selected by default, 9 AWS regions
+
+### CloudFormation Quick-Create URL format
+```
+https://{region}.console.aws.amazon.com/cloudformation/home
+  ?region={region}
+  #/stacks/create/review
+  ?templateURL={encoded-s3-url}
+  &stackName=ec2-control-member-role
+  &param_CentralAccountId={central-account-id}
+  &param_Environment={environment}
+```
+The `?` after `#/stacks/create/review` is the SPA fragment query separator — this is correct AWS console URL format.
+
+---
+
 ## Console Login System (M10)
 
 ### Lambda (console_login.py)
@@ -417,14 +454,18 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 - Step 3 — Payment upload; submit button calls `_handleLabsSubmit()` (POST `action:'submit'`)
 - Step 4 — "Request Submitted" confirmation screen; `_exitWizard()` sets `_activeFilter = 'pending'` so user lands on Pending filter
 - **Lab list UI (redesigned):** filterable row-based table replaces flat card grid
-  - **Filter bar:** pills — `All` / `Active` / `Pending` / `History` with live counts; default `active`; auto-falls back to `all` if active count = 0
+  - **Attribute filter bar** (replaces old pill filters): Platform | All types | All status | All accounts | All regions | Submitted by (admin combobox)
+  - Filter state: `_labFilters = { platform, serverType, status, account, region, submittedBy }`; `_clearLabFilters()` resets all
+  - Account dropdown displays `"Name (accountId)"` using cached `_accounts` array
+  - Submitted By (admin only): `<input list="lbs-sb-list">` combobox populated with operator+admin emails from `GET /users` (`_labsUsers`); focus is restored after every re-render via `_restoreFocus()`
   - Filter buckets: Active = `running`+`provisioning`; Pending = `pending_approval`; History = `terminated`+`rejected`
   - **Table columns:** Chevron | Lab Name | Platform | Instance Type | Status | Account | Region | Expires
   - **Inline expansion:** clicking a row inserts a detail `<tr>` directly below it; only one expanded at a time; X close button in panel top-right
 - **State variables:** `_activeFilter` (`'all'|'active'|'pending'|'history'`) + `_expandedLabId` (labId of open row, or null)
 - **Key functions:**
-  - `_renderLabsList()` — computes bucket counts, applies auto-fallback, filters visible labs, builds filter bar + table HTML
-  - `_renderFilterBar(counts)` — returns pill bar HTML string
+  - `_renderLabsList()` — computes bucket counts, applies auto-fallback, filters visible labs, builds filter bar + table HTML; saves/restores DOM focus via `_restoreFocus()` to prevent input focus-loss on re-render
+  - `_renderFilterBar()` — returns attribute filter bar HTML (dropdowns + Submitted By combobox)
+  - `_setLabFilter(field, value)` — sets `_labFilters[field]`, re-renders (public)
   - `_setFilter(filter)` — sets `_activeFilter`, clears `_expandedLabId`, re-renders (public)
   - `_renderRow(lab)` — returns `<tr>` HTML with chevron, all columns, correct expanded class
   - `_renderExpiry(lab)` — returns colored `<span>` using `_formatExpiry()`; yellow = future, gray = expired/absent
@@ -547,13 +588,14 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 - All modules: IIFE pattern — `const ModuleName = (function() { ... return {...}; })()`
 - **Script load order:** `cognito-sdk (CDN+fallback)` → `auth` → `authui` → `api` → `instances` → `audit` → `billing` → `analytics` → `accounts` → `users` → `backup` → `labs` → `app`
 - **Script loading:** Cognito SDK + `auth.js` + `authui.js` are synchronous (CDN fallback uses `document.write`; `Auth` must be defined before bootstrap). All other modules (`api.js` → `app.js`) use `defer`. `Auth.init()` is called inside a `DOMContentLoaded` listener to guarantee `App` is defined when `Auth._bootApp()` calls `App.init()`.
-- `const CONFIG = { /*__INJECT__*/ };` in index.html — replaced at deploy by config_injector
+- `const CONFIG = { /*__INJECT__*/ };` in index.html — replaced at deploy by config_injector with: `COGNITO_DOMAIN`, `CLIENT_ID`, `REDIRECT_URI`, `API_URL`, `USER_POOL_ID`, `CENTRAL_ACCOUNT_ID`, `ENVIRONMENT`, `MEMBER_ROLE_TEMPLATE_URL`
 - Auth uses `sessionStorage`; `isNearExpiry()` = < 10 min buffer (handles Cognito clock skew)
 - `Auth.init()` is the entry point — decides whether to show login page or boot dashboard
 - Dashboard pages: `dashboard`, `instances`, `billing`, `analytics`, `audit`, `accounts`, `users`, `backup`, `labs`
 - Admin-only pages: `accounts` and `users` tabs visible only when `App.setAdmin(true)`
 - Role badge shown in sidebar: `rbac-admin` (blue) / `rbac-operator` (green) / `rbac-viewer` (gray)
 - **Skeleton loading:** `App.init()` injects `.skeleton-row` shimmer placeholders into `#dash-list` and `#ag-wrap` before `Instances.refresh()` fires, so the dashboard is never blank while Lambda responds
+- **`onInstancesRefreshed` hook pattern:** After `Instances.refresh()` loads `allInstances`, it calls `Backup.onInstancesRefreshed()` and `Audit.onInstancesRefreshed()` so those modules can populate their instance datalists immediately, even if those tabs haven't been visited yet
 
 ### CloudFormation
 - `AuthorizationType: COGNITO_USER_POOLS` + `AuthorizerId: !Ref RestApiAuthorizer`
@@ -600,14 +642,17 @@ aws cloudformation describe-stacks --stack-name ec2-control-acm-solobil \
 
 **deploy-config.env fields:** `ADMIN_EMAIL`, `COGNITO_DOMAIN_PREFIX`, `ENVIRONMENT`, `AWS_REGION` (required) | `AWS_PROFILE`, `NOTIFICATION_EMAIL`, `CUSTOM_DOMAIN`, `APEX_DOMAIN`, `ACM_CERT_ARN`, `HOSTED_ZONE_ID` (optional)
 
-**Add member account:**
+**Add member account (Quick-Create — recommended for non-IT clients):**
+Portal → Accounts tab → **+ Add Account** → select AWS region → click **Open CloudFormation in AWS Console** → stack pre-filled (template auto-loaded, `CentralAccountId` + `Environment` pre-filled) → deploy → copy `RoleArn` + `ConsoleRoleArn` from Outputs → paste into modal → Add Account → Test.
+
+**Add member account (CLI — for power users):**
 ```bash
 aws cloudformation deploy \
   --template-file cloudformation/member-role-stack.yaml \
   --stack-name ec2-control-member-role --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides CentralAccountId=976792586566 Environment=production \
   --region ap-south-1 --profile <member-profile>
-# Then: Portal → Accounts tab → + Add Account → paste RoleArn → Test
+# Then: Portal → Accounts tab → + Add Account → paste RoleArn + ConsoleRoleArn → Test
 ```
 
 ---

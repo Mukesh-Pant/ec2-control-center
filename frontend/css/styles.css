@@ -676,7 +676,7 @@ code {
 .dp-badge.running .dp-sdot { animation: pulse-dot 2s infinite; }
 .dp-metrics {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 1px;
   background: var(--bg2);
   border-bottom: 1px solid var(--bg2);
@@ -1404,7 +1404,7 @@ code {
 @media (max-width: 1024px) {
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .dash-grid { grid-template-columns: 1fr; }
-  .dp-metrics { grid-template-columns: repeat(3, 1fr); }
+  .dp-metrics { grid-template-columns: repeat(4, 1fr); }
   .an-grid { grid-template-columns: 1fr; }
   .add-form-fields { grid-template-columns: 1fr; }
 }
@@ -2739,22 +2739,22 @@ code {
 /* ── Dashboard — Quick Actions grid ── */
 .dash-quick-grid {
   display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 10px; padding: 4px 0 8px;
+  gap: 14px; padding: 8px 12px 14px;
 }
 .dq-card {
   display: flex; flex-direction: column; align-items: flex-start;
-  gap: 6px; padding: 14px 14px 12px;
+  gap: 8px; padding: 18px 16px 16px; min-height: 92px;
   background: var(--bg); border: 1px solid var(--bd);
   border-radius: var(--rlg); cursor: pointer; text-align: left;
   transition: background .15s, border-color .15s, box-shadow .15s;
-  box-shadow: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
 }
 .dq-card:hover {
   background: var(--white); border-color: var(--blue3);
   box-shadow: var(--shm);
 }
 .dq-ico {
-  width: 36px; height: 36px; border-radius: 10px;
+  width: 40px; height: 40px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
@@ -2764,8 +2764,8 @@ code {
 .dq-ico.cyan   { background: var(--cdim);  color: var(--cyan);  }
 .dq-ico.violet { background: var(--vdim);  color: var(--violet);}
 .dq-ico.red    { background: var(--rdim);  color: var(--red);   }
-.dq-label { font-size: 13px; font-weight: 700; color: var(--ink); }
-.dq-sub   { font-size: 11px; color: var(--ink3); }
+.dq-label { font-size: 13px; font-weight: 700; color: var(--ink); letter-spacing: -.1px; }
+.dq-sub   { font-size: 12px; color: var(--ink3); }
 
 @media (max-width: 480px) {
   .dash-quick-grid { grid-template-columns: repeat(2, 1fr); }
@@ -3787,3 +3787,39 @@ code {
 #pv-labs .page-body::-webkit-scrollbar { width: 5px; }
 #pv-labs .page-body::-webkit-scrollbar-thumb { background: var(--bd2); border-radius: 3px; }
 
+/* ─── Custom Combobox ─────────────────────────────────────────── */
+.custom-cb-dropdown {
+  position: absolute; top: calc(100% + 2px); left: 0;
+  min-width: 100%; max-height: 220px; overflow-y: auto;
+  background: #fff; border: 1.5px solid var(--bd);
+  border-radius: var(--rsm); box-shadow: 0 4px 12px rgba(0,0,0,.1);
+  z-index: 200; list-style: none; margin: 0; padding: 4px 0;
+}
+.custom-cb-option {
+  padding: 7px 12px; font-size: 12.5px; color: var(--ink);
+  cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--sans);
+}
+.custom-cb-option:hover,
+.custom-cb-option--active { background: var(--bdim); color: var(--blue); }
+.custom-cb-empty {
+  padding: 7px 12px; font-size: 12px; color: var(--ink4);
+  cursor: default; font-family: var(--sans);
+}
+
+/* ─── Pagination Row (shared: Audit Log + Labs) ───────────────── */
+.audit-pg-row {
+  display: flex; align-items: center; justify-content: center;
+  gap: 12px; padding: 12px; border-top: 1px solid var(--bg2);
+}
+.btn-pg {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 14px; background: var(--bdim); color: var(--blue);
+  border: 1.5px solid rgba(37,99,235,.2); border-radius: var(--r);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: var(--sans); transition: all .15s;
+}
+.btn-pg:hover:not(:disabled) { background: var(--blue2); color: #fff; }
+.btn-pg:disabled { opacity: .4; cursor: default; }
+.pg-info { font-size: 12px; color: var(--ink3); white-space: nowrap; }

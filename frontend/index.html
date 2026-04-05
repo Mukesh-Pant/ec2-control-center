@@ -253,12 +253,42 @@
     <div class="modal-hd">
       <div>
         <div class="modal-title">Register Member Account</div>
-        <div class="modal-sub">Deploy <code>member-role-stack.yaml</code> in the target account first, then paste the Role ARN here.</div>
+        <div class="modal-sub">Follow the two steps below to register a member AWS account.</div>
       </div>
       <button class="modal-close" onclick="Accounts.closeModal()">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+    <!-- ── Step 1: Deploy role stack ── -->
+    <div style="background:var(--s2);border-radius:8px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;margin-bottom:10px">Step 1 — Deploy IAM Role Stack in Your AWS Account</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <label class="fl" for="modal-cf-region" style="font-size:13px;white-space:nowrap">AWS Region</label>
+        <select id="modal-cf-region" class="finp" style="flex:1;padding:6px 10px;font-size:13px">
+          <option value="ap-south-1" selected>Asia Pacific (Mumbai) — ap-south-1</option>
+          <option value="ap-southeast-1">Asia Pacific (Singapore) — ap-southeast-1</option>
+          <option value="ap-southeast-2">Asia Pacific (Sydney) — ap-southeast-2</option>
+          <option value="ap-northeast-1">Asia Pacific (Tokyo) — ap-northeast-1</option>
+          <option value="us-east-1">US East (N. Virginia) — us-east-1</option>
+          <option value="us-east-2">US East (Ohio) — us-east-2</option>
+          <option value="us-west-2">US West (Oregon) — us-west-2</option>
+          <option value="eu-west-1">Europe (Ireland) — eu-west-1</option>
+          <option value="eu-central-1">Europe (Frankfurt) — eu-central-1</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-blue" style="width:100%;justify-content:center;margin-bottom:12px" onclick="Accounts.openDeployConsole()">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Open CloudFormation in AWS Console
+      </button>
+      <div style="font-size:12px;color:var(--ink3);line-height:1.7">
+        After the stack reaches <strong style="color:var(--ink2)">CREATE_COMPLETE</strong>:
+        go to the <strong style="color:var(--ink2)">Outputs</strong> tab and copy
+        <strong style="color:var(--ink2)">RoleArn</strong> and
+        <strong style="color:var(--ink2)">ConsoleRoleArn</strong> into the fields below.
+      </div>
+    </div>
+    <!-- ── Step 2 divider ── -->
+    <div style="font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;margin-bottom:12px">Step 2 — Enter Account Details</div>
     <div class="fg">
       <label class="fl" for="modal-acct-id">AWS Account ID</label>
       <input class="finp" id="modal-acct-id" type="text" placeholder="123456789012" maxlength="12" autocomplete="off" inputmode="numeric"/>
@@ -272,7 +302,12 @@
     <div class="fg" style="margin-top:10px">
       <label class="fl" for="modal-acct-role">Cross-Account Role ARN</label>
       <input class="finp" id="modal-acct-role" type="text" placeholder="arn:aws:iam::123456789012:role/EC2ControlCrossAccountRole-production" style="font-family:var(--mono);font-size:12px"/>
-      <div class="fhint">From the RoleArn output of member-role-stack.yaml</div>
+      <div class="fhint">From the <strong>RoleArn</strong> output of member-role-stack.yaml</div>
+    </div>
+    <div class="fg" style="margin-top:10px">
+      <label class="fl" for="modal-acct-console-role">Console Login Role ARN <span style="font-size:11px;color:var(--ink3);font-weight:400">(optional)</span></label>
+      <input class="finp" id="modal-acct-console-role" type="text" placeholder="arn:aws:iam::123456789012:role/EC2ControlConsoleRole-production" style="font-family:var(--mono);font-size:12px"/>
+      <div class="fhint">From the <strong>ConsoleRoleArn</strong> output of member-role-stack.yaml — enables role-based console access</div>
     </div>
     <div class="merr" id="modal-err"></div>
     <div class="modal-actions">
@@ -922,6 +957,8 @@
               <div class="dp-m"><div class="dp-ml">Instance Type</div><div class="dp-mv" id="dp-type">—</div></div>
               <div class="dp-m"><div class="dp-ml">Platform</div><div class="dp-mv violet" id="dp-plat">—</div></div>
               <div class="dp-m"><div class="dp-ml">Public IP</div><div class="dp-mv mono-sm" id="dp-pub">—</div></div>
+              <div class="dp-m"><div class="dp-ml">Storage</div><div class="dp-mv" id="dp-storage">—</div></div>
+              <div class="dp-m"><div class="dp-ml">Elastic IP</div><div class="dp-mv mono-sm amber" id="dp-eip">—</div></div>
             </div>
             <div class="dp-ctrl">
               <span class="dp-ctrl-lbl">Controls</span>
@@ -930,6 +967,10 @@
               </button>
               <button class="btn btn-red btn-sm" id="dp-stop" onclick="Instances.ctrlInst('stop')" disabled>
                 <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span id="dp-stl">Stop</span>
+              </button>
+              <button class="btn btn-red btn-sm" id="dp-terminate" onclick="Instances.confirmTerminate()" style="display:none">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                Terminate
               </button>
               <button class="btn btn-out btn-sm" onclick="Instances.refreshDP()">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -942,6 +983,21 @@
             <div class="dp-tags" id="dp-tags" style="display:none">
               <div class="dp-tags-lbl">EC2 Tags</div>
               <div class="tagchips" id="dp-tchips"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminate instance confirm overlay -->
+        <div id="inst-term-overlay" class="bk-confirm-overlay" style="display:none">
+          <div class="bk-confirm-card">
+            <div class="bk-confirm-icon-wrap bk-confirm-icon-danger">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            </div>
+            <div class="bk-confirm-title">Terminate Instance?</div>
+            <div class="bk-confirm-msg">This will permanently terminate the EC2 instance and release any associated Elastic IP. This cannot be undone.</div>
+            <div class="bk-confirm-actions">
+              <button class="btn btn-ghost btn-sm" onclick="Instances.cancelTerminate()">Cancel</button>
+              <button class="btn btn-red btn-sm" onclick="Instances.doTerminate()">Terminate</button>
             </div>
           </div>
         </div>
@@ -1122,9 +1178,8 @@
           <div class="audit-filters audit-filters-v2">
             <div class="audit-filter-input-wrap">
               <svg class="audit-filter-icon" viewBox="0 0 24 24" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input class="audit-input" type="text" id="audit-filter-instance" placeholder="Instance ID or name…" list="audit-instance-datalist" autocomplete="off"/>
+              <input class="audit-input" type="text" id="audit-filter-instance" placeholder="Instance ID or name…" autocomplete="off"/>
             </div>
-            <datalist id="audit-instance-datalist"></datalist>
             <div class="audit-filter-input-wrap">
               <svg class="audit-filter-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               <input class="audit-input" type="text" id="audit-filter-user" placeholder="User email…"/>
@@ -1135,6 +1190,7 @@
               <option value="stop">STOP</option>
               <option value="auto-stop-idle">AUTO-STOP</option>
               <option value="account-linked">ACCOUNT-LINKED</option>
+              <option value="terminate">TERMINATE</option>
             </select>
             <select class="audit-select" id="audit-filter-account">
               <option value="">All accounts</option>
@@ -1154,8 +1210,10 @@
               </tbody>
             </table>
           </div>
-          <div class="audit-more-row">
-            <button class="btn-load-more" id="btn-audit-more" style="display:none">Load more</button>
+          <div class="audit-pg-row">
+            <button class="btn-pg" id="btn-audit-prev" disabled>&#8592; Prev</button>
+            <span class="pg-info" id="audit-pg-info">Page 1 of 1 &middot; 0 loaded</span>
+            <button class="btn-pg" id="btn-audit-next" disabled>Next &#8594;</button>
           </div>
         </div>
         <button id="btn-audit-search" style="display:none"></button>
@@ -1835,6 +1893,19 @@
     Auth.init().catch(function(e) { window.onerror(e.message || String(e), 'auth.js', 0); });
   });
 </script>
+
+<!-- Privacy Policy (linked from Firefox AMO extension listing) -->
+<section id="privacy" style="display:none">
+  <h2>EC2 Control &mdash; Console Login Extension: Privacy Policy</h2>
+  <p>The EC2 Control Firefox Extension does not collect, transmit, or share any personal data.</p>
+  <ul>
+    <li>It stores a mapping of AWS account IDs to Firefox container IDs in <code>browser.storage.local</code> (on-device only, never transmitted to any server).</li>
+    <li>It opens URLs provided by the solobil.com portal in Firefox container tabs on your behalf.</li>
+    <li>It communicates exclusively with <strong>solobil.com</strong> (to receive the federation URL) and <strong>signin.aws.amazon.com</strong> (the opened tab).</li>
+    <li>No browsing history, credentials, or personal information is collected or stored by this extension.</li>
+  </ul>
+  <p>For questions, contact: pantm8877@gmail.com</p>
+</section>
 
 </body>
 </html>

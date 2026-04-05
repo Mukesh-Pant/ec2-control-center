@@ -74,8 +74,11 @@ const Accounts = (function () {
       '<button class="act-btn act-btn-remove" onclick="Accounts.removeAccount(\'' + _esc(acct.accountId) + '\', \'' + _esc(acct.accountName) + '\')">Remove</button>';
 
     var role = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : 'admin';
+    var hasConsoleRole = !!acct.consoleRoleArn;
     var consoleBtn = (!isCentral && acct.enabled && role !== 'viewer')
-      ? '<button class="act-btn act-btn-console" id="console-btn-' + _esc(acct.accountId) + '" onclick="Accounts.consoleLogin(\'' + _esc(acct.accountId) + '\')">Console Login</button>'
+      ? (hasConsoleRole
+          ? '<button class="act-btn act-btn-console" id="console-btn-' + _esc(acct.accountId) + '" onclick="Accounts.consoleLogin(\'' + _esc(acct.accountId) + '\')" title="Open AWS Console in Firefox container tab">Console Login</button>'
+          : '<button class="act-btn act-btn-console" disabled title="Console Login Role not configured — add it by editing this account">Console Login</button>')
       : '';
 
     return (
@@ -219,7 +222,7 @@ const Accounts = (function () {
         accountId:   data.accountId,
         accountName: data.accountName,
         loginUrl:    data.loginUrl,
-      }, '*');
+      }, window.location.origin);
       App.log('Console login initiated for ' + (data.accountName || accountId), 'ok');
     } catch (err) {
       App.showToast('Console login failed: ' + err.message, 'err');
@@ -232,10 +235,11 @@ const Accounts = (function () {
   // ─── Modal ─────────────────────────────────────────────────────────────────
 
   function openModal() {
-    document.getElementById('modal-acct-id').value   = '';
-    document.getElementById('modal-acct-name').value = '';
-    document.getElementById('modal-acct-role').value = '';
-    document.getElementById('modal-err').textContent  = '';
+    document.getElementById('modal-acct-id').value           = '';
+    document.getElementById('modal-acct-name').value         = '';
+    document.getElementById('modal-acct-role').value         = '';
+    document.getElementById('modal-acct-console-role').value = '';
+    document.getElementById('modal-err').textContent          = '';
     document.getElementById('overlay').classList.add('open');
   }
 
@@ -243,11 +247,38 @@ const Accounts = (function () {
     document.getElementById('overlay').classList.remove('open');
   }
 
+  function _buildQuickCreateUrl(region) {
+    if (!CONFIG.MEMBER_ROLE_TEMPLATE_URL || !CONFIG.CENTRAL_ACCOUNT_ID || !CONFIG.ENVIRONMENT) {
+      return null;
+    }
+    var tmplUrl = encodeURIComponent(CONFIG.MEMBER_ROLE_TEMPLATE_URL);
+    var cfUrl = 'https://' + region + '.console.aws.amazon.com/cloudformation/home'
+              + '?region=' + region
+              + '#/stacks/create/review'
+              + '?templateURL=' + tmplUrl
+              + '&stackName=ec2-control-member-role'
+              + '&param_CentralAccountId=' + encodeURIComponent(CONFIG.CENTRAL_ACCOUNT_ID)
+              + '&param_Environment='      + encodeURIComponent(CONFIG.ENVIRONMENT);
+    return cfUrl;
+  }
+
+  function openDeployConsole() {
+    var el = document.getElementById('modal-cf-region');
+    var region = (el && el.value) || 'ap-south-1';
+    var url = _buildQuickCreateUrl(region);
+    if (!url) {
+      App.showToast('Deploy URL not available — please redeploy the portal to enable this feature.', 'error');
+      return;
+    }
+    window.open(url, '_blank');
+  }
+
   async function confirmAdd() {
-    var accountId   = document.getElementById('modal-acct-id').value.trim();
-    var accountName = document.getElementById('modal-acct-name').value.trim();
-    var roleArn     = document.getElementById('modal-acct-role').value.trim();
-    var errEl       = document.getElementById('modal-err');
+    var accountId      = document.getElementById('modal-acct-id').value.trim();
+    var accountName    = document.getElementById('modal-acct-name').value.trim();
+    var roleArn        = document.getElementById('modal-acct-role').value.trim();
+    var consoleRoleArn = document.getElementById('modal-acct-console-role').value.trim();
+    var errEl          = document.getElementById('modal-err');
 
     errEl.textContent = '';
 
@@ -269,7 +300,7 @@ const Accounts = (function () {
     btn.textContent = 'Adding…';
 
     try {
-      var res  = await API.postAccounts({ action: 'add', accountId: accountId, accountName: accountName, roleArn: roleArn });
+      var res  = await API.postAccounts({ action: 'add', accountId: accountId, accountName: accountName, roleArn: roleArn, consoleRoleArn: consoleRoleArn });
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Request failed');
 
@@ -303,11 +334,12 @@ const Accounts = (function () {
   // ─── Init ──────────────────────────────────────────────────────────────────
 
   function init() {
-    var modalAcctId   = document.getElementById('modal-acct-id');
-    var modalAcctName = document.getElementById('modal-acct-name');
-    var modalAcctRole = document.getElementById('modal-acct-role');
+    var modalAcctId          = document.getElementById('modal-acct-id');
+    var modalAcctName        = document.getElementById('modal-acct-name');
+    var modalAcctRole        = document.getElementById('modal-acct-role');
+    var modalAcctConsoleRole = document.getElementById('modal-acct-console-role');
 
-    [modalAcctId, modalAcctName, modalAcctRole].forEach(function (el) {
+    [modalAcctId, modalAcctName, modalAcctRole, modalAcctConsoleRole].forEach(function (el) {
       if (el) el.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') confirmAdd();
       });
@@ -324,9 +356,10 @@ const Accounts = (function () {
     testConnection: testConnection,
     removeAccount:  removeAccount,
     consoleLogin:   consoleLogin,
-    openModal:      openModal,
-    closeModal:     closeModal,
-    confirmAdd:     confirmAdd,
+    openModal:          openModal,
+    closeModal:         closeModal,
+    confirmAdd:         confirmAdd,
+    openDeployConsole:  openDeployConsole,
   };
 
 })();
