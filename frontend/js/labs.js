@@ -19,6 +19,13 @@ const Labs = (function () {
   var _activeFilter = 'active'; // current filter pill: 'all'|'active'|'pending'|'history'
   var _expandedLabId = null;   // labId of currently expanded row, or null
   var _guideOpen    = false;   // whether the "How it works" guide is expanded
+  // v2 state
+  var _searchQuery  = '';
+  var _sortBy       = 'cost';
+  var _selectedIds  = [];      // bulk-selected labIds
+  var _openMenuId   = null;    // labId whose 3-dot menu is open
+  var _tickerTimers = {};      // {labId: intervalId}
+  var _statusPollers = {};     // {labId: timeoutId}
 
   function _getNprRate() { return (window.NPR_RATE && window.NPR_RATE > 0) ? window.NPR_RATE : 135; }
   function _npmFmt(usd) {
@@ -199,7 +206,8 @@ const Labs = (function () {
   async function _loadActiveLabs() {
     var listEl = document.getElementById('lbs-list');
     if (!listEl) return;
-    listEl.innerHTML = '<div class="lbs-loading">Loading labs…</div>';
+    // Show skeleton grid while fetching
+    listEl.innerHTML = _renderSkeletons(6);
     try {
       var res  = await API.getLabsList();
       var data = await res.json();
@@ -213,6 +221,11 @@ const Labs = (function () {
   }
 
   function _renderLabsList() {
+    // Delegate to v2 card grid renderer
+    _renderLabsListV2();
+  }
+
+  function _renderLabsListLegacy() {
     var listEl = document.getElementById('lbs-list');
     if (!listEl) return;
 
@@ -1690,6 +1703,1018 @@ const Labs = (function () {
     URL.revokeObjectURL(url);
   }
 
+  // ════════════════════════════════════════════════════════════════
+  // MY SERVERS v2 — Hero · Quick Launch · Cards · Billing · AI
+  // ════════════════════════════════════════════════════════════════
+
+  // ─── Region flags + labels ────────────────────────────────────
+
+  var REGION_META = {
+    'ap-south-1':     { flag: '🇮🇳', label: 'Mumbai' },
+    'ap-south-2':     { flag: '🇮🇳', label: 'Hyderabad' },
+    'us-east-1':      { flag: '🇺🇸', label: 'N. Virginia' },
+    'us-east-2':      { flag: '🇺🇸', label: 'Ohio' },
+    'us-west-1':      { flag: '🇺🇸', label: 'N. California' },
+    'us-west-2':      { flag: '🇺🇸', label: 'Oregon' },
+    'eu-west-1':      { flag: '🇮🇪', label: 'Ireland' },
+    'eu-central-1':   { flag: '🇩🇪', label: 'Frankfurt' },
+    'ap-southeast-1': { flag: '🇸🇬', label: 'Singapore' },
+    'ap-southeast-2': { flag: '🇦🇺', label: 'Sydney' },
+    'ap-northeast-1': { flag: '🇯🇵', label: 'Tokyo' },
+  };
+
+  function _regionFlag(region)  { return (REGION_META[region] || {}).flag  || '🌐'; }
+  function _regionLabel(region) { return (REGION_META[region] || {}).label || (region || '—'); }
+
+  // ─── Hero canvas animation ────────────────────────────────────
+
+  function _initHeroCanvas(canvas) {
+    if (!canvas || !canvas.getContext) return;
+    var ctx   = canvas.getContext('2d');
+    var W     = canvas.width  = canvas.offsetWidth  || 600;
+    var H     = canvas.height = canvas.offsetHeight || 220;
+    var nodes = [];
+    var RAF   = null;
+
+    for (var i = 0; i < 18; i++) {
+      nodes.push({
+        x:  Math.random() * W, y:  Math.random() * H,
+        vx: (Math.random() - .5) * .4, vy: (Math.random() - .5) * .4,
+        r:  2 + Math.random() * 1.5,
+      });
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      // connections
+      for (var a = 0; a < nodes.length; a++) {
+        for (var b = a + 1; b < nodes.length; b++) {
+          var dx = nodes[a].x - nodes[b].x, dy = nodes[a].y - nodes[b].y;
+          var dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 110) {
+            ctx.beginPath();
+            ctx.moveTo(nodes[a].x, nodes[a].y);
+            ctx.lineTo(nodes[b].x, nodes[b].y);
+            ctx.strokeStyle = 'rgba(59,127,255,' + (1 - dist / 110) * .35 + ')';
+            ctx.lineWidth = .8;
+            ctx.stroke();
+          }
+        }
+      }
+      // nodes
+      nodes.forEach(function (n) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(93,155,255,.7)';
+        ctx.fill();
+        n.x += n.vx; n.y += n.vy;
+        if (n.x < 0 || n.x > W) n.vx *= -1;
+        if (n.y < 0 || n.y > H) n.vy *= -1;
+      });
+      RAF = requestAnimationFrame(draw);
+    }
+
+    draw();
+    canvas._stopAnimation = function () { if (RAF) cancelAnimationFrame(RAF); };
+
+    // resize
+    var ro = new ResizeObserver(function () {
+      W = canvas.width  = canvas.offsetWidth  || 600;
+      H = canvas.height = canvas.offsetHeight || 220;
+    });
+    ro.observe(canvas.parentElement || canvas);
+  }
+
+  // ─── Hero section ─────────────────────────────────────────────
+
+  function _renderHero(counts) {
+    var runningNpr = 0;
+    var runningCnt = 0;
+    activeLabs.forEach(function (lab) {
+      if (lab.status === 'running') {
+        runningCnt++;
+        var b = typeof BillingEngine !== 'undefined'
+          ? BillingEngine.compute({ instanceType: lab.instanceType, storageGb: lab.storageGb || 20, hoursPerDay: lab.hoursPerDay || 24, isRunning: true })
+          : null;
+        if (b) runningNpr += b.finalNpr;
+      }
+    });
+    var nprStr = runningNpr > 0 && typeof BillingEngine !== 'undefined'
+      ? BillingEngine.fmtNpr(runningNpr)
+      : '—';
+    return (
+      '<div class="msv2-hero">' +
+        '<canvas class="msv2-hero-canvas" id="msv2-hero-canvas"></canvas>' +
+        '<div class="msv2-hero-content">' +
+          '<div class="msv2-hero-eyebrow"><span class="msv2-hero-eyebrow-dot"></span>Cloud Servers · ap-south-1</div>' +
+          '<h1 class="msv2-hero-h1">Your Servers,<br>Instantly Deployed.</h1>' +
+          '<p class="msv2-hero-sub">Provision dedicated cloud servers in minutes. Production-grade AWS infrastructure, managed billing, and real-time monitoring — all in one place.</p>' +
+          '<div class="msv2-hero-actions">' +
+            '<button class="msv2-hero-btn-primary" onclick="Labs.startWizard()">' +
+              '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+              'Provision Server' +
+            '</button>' +
+            '<button class="msv2-hero-btn-secondary" onclick="Labs._scrollToTemplates()">' +
+              '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>' +
+              'Browse Templates' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="msv2-hero-stats">' +
+          '<div class="msv2-hero-stat"><div class="msv2-hero-stat-val">' + (counts.active || 0) + '</div><div class="msv2-hero-stat-lbl">Running</div></div>' +
+          '<div class="msv2-hero-stat"><div class="msv2-hero-stat-val" style="font-size:14px;">' + _esc(nprStr) + '</div><div class="msv2-hero-stat-lbl">Monthly Spend</div></div>' +
+          '<div class="msv2-hero-stat"><div class="msv2-hero-stat-val">99.9%</div><div class="msv2-hero-stat-lbl">Uptime SLA</div></div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function _scrollToTemplates() {
+    var el = document.getElementById('msv2-tpl-anchor');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // ─── Feature columns ──────────────────────────────────────────
+
+  function _renderFeatures() {
+    return (
+      '<div class="msv2-features">' +
+        '<div class="msv2-feat">' +
+          '<div class="msv2-feat-ico blue">⚡</div>' +
+          '<div class="msv2-feat-title">Instant Provisioning</div>' +
+          '<div class="msv2-feat-desc">Your server launches within minutes of payment approval. AWS EC2 infrastructure in ap-south-1 with elastic IP and key pair auto-generated.</div>' +
+        '</div>' +
+        '<div class="msv2-feat">' +
+          '<div class="msv2-feat-ico green">🔒</div>' +
+          '<div class="msv2-feat-title">Managed Security</div>' +
+          '<div class="msv2-feat-desc">Custom security groups, encrypted storage, SSH key management, and Windows RDP password retrieval — all secured and audited.</div>' +
+        '</div>' +
+        '<div class="msv2-feat">' +
+          '<div class="msv2-feat-ico violet">💳</div>' +
+          '<div class="msv2-feat-title">Transparent Billing</div>' +
+          '<div class="msv2-feat-desc">Real-time NPR cost tracking per server. Live spend ticker, 12-month forecast, and itemised billing with WHT, margin, and VAT included.</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  // ─── Quick Launch Templates ───────────────────────────────────
+
+  function _renderQuickLaunch() {
+    if (typeof BillingEngine === 'undefined') return '';
+
+    var tpls   = BillingEngine.templatePrices();
+    var colors = ['c-green', 'c-blue', 'c-amber', 'c-violet', 'c-red', 'c-cyan'];
+    var html   = '<div class="msv2-ql-section" id="msv2-tpl-anchor">' +
+      '<div class="msv2-ql-header">' +
+        '<div>' +
+          '<div class="msv2-ql-title">' +
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>' +
+            'Quick Launch' +
+          '</div>' +
+          '<div class="msv2-ql-sub" style="margin-top:3px;">Pre-configured templates with real AWS ap-south-1 pricing — ready in one click</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="msv2-tpl-grid">';
+
+    tpls.forEach(function (t, idx) {
+      var b    = t.billing;
+      var col  = colors[idx % colors.length];
+      var npr  = typeof BillingEngine !== 'undefined' ? BillingEngine.fmtNpr(b.finalNpr) : '—';
+      var uses = t.useCases.map(function (u) { return '<span class="msv2-tpl-use">' + _esc(u) + '</span>'; }).join('');
+      html +=
+        '<div class="msv2-tpl-card ' + col + '">' +
+          '<div class="msv2-tpl-top">' +
+            '<span class="msv2-tpl-icon">' + t.icon + '</span>' +
+            '<span class="tpl-badge ' + _esc(t.badgeClass) + '">' + _esc(t.badge) + '</span>' +
+          '</div>' +
+          '<div class="msv2-tpl-name">' + _esc(t.name) + '</div>' +
+          '<div class="msv2-tpl-desc">' + _esc(t.description) + '</div>' +
+          '<div class="msv2-tpl-specs">' +
+            '<span class="msv2-tpl-spec">' + t.vcpu + ' vCPU</span>' +
+            '<span class="msv2-tpl-spec">' + t.ram + ' RAM</span>' +
+            '<span class="msv2-tpl-spec">' + t.storageGb + ' GB</span>' +
+            '<span class="msv2-tpl-spec">' + _esc(t.instanceType) + '</span>' +
+          '</div>' +
+          '<div class="msv2-tpl-uses">' + uses + '</div>' +
+          '<div class="msv2-tpl-price-row">' +
+            '<div>' +
+              '<div class="msv2-tpl-price-main">' + _esc(npr) + '</div>' +
+              '<div class="msv2-tpl-price-sub">/ month incl. taxes</div>' +
+            '</div>' +
+            '<button class="msv2-tpl-launch" onclick="Labs._launchTemplate(\'' + _esc(t.id) + '\')">' +
+              'Launch Now' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+    });
+
+    html += '</div></div>';
+    return html;
+  }
+
+  function _launchTemplate(tplId) {
+    if (typeof BillingEngine === 'undefined') { startWizard(); return; }
+    var tpl = BillingEngine.getTemplates().find(function (t) { return t.id === tplId; });
+    if (!tpl) { startWizard(); return; }
+    wizardConfig = {
+      instanceType:    tpl.instanceType,
+      storageGb:       tpl.storageGb,
+      detailedMonitor: tpl.detailedMonitor,
+      labName:         tpl.name + ' Server',
+      platform:        'ubuntu',
+      region:          'ap-south-1',
+    };
+    startWizard();
+  }
+
+  // ─── AI Advisor ───────────────────────────────────────────────
+
+  function _renderAdvisor() {
+    return (
+      '<div class="msv2-advisor" id="msv2-advisor">' +
+        '<div class="msv2-advisor-hd">' +
+          '<div class="msv2-advisor-title">' +
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/></svg>' +
+            'AI Server Advisor' +
+            '<span class="msv2-advisor-badge">Claude AI</span>' +
+          '</div>' +
+          '<button class="btn btn-xs btn-out" onclick="Labs._toggleAdvisor()" id="msv2-advisor-toggle">Collapse</button>' +
+        '</div>' +
+        '<div class="msv2-advisor-body" id="msv2-advisor-body">' +
+          '<p style="font-size:12px;color:var(--ink4);margin:0 0 12px;">Describe your project and get a template recommendation with reasoning.</p>' +
+          '<div class="msv2-advisor-prompt-wrap">' +
+            '<textarea class="msv2-advisor-input" id="msv2-advisor-txt" rows="3" placeholder="e.g. I need to host a Node.js API with 50k daily users, PostgreSQL database, and occasional spike traffic…"></textarea>' +
+          '</div>' +
+          '<button class="msv2-advisor-send" onclick="Labs._askAdvisor()" id="msv2-advisor-btn">Ask Advisor</button>' +
+          '<div class="msv2-advisor-result" id="msv2-advisor-result"></div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  var _advisorOpen = true;
+  function _toggleAdvisor() {
+    _advisorOpen = !_advisorOpen;
+    var body   = document.getElementById('msv2-advisor-body');
+    var toggle = document.getElementById('msv2-advisor-toggle');
+    if (body)   body.style.display   = _advisorOpen ? '' : 'none';
+    if (toggle) toggle.textContent   = _advisorOpen ? 'Collapse' : 'Expand';
+  }
+
+  async function _askAdvisor() {
+    var txt    = document.getElementById('msv2-advisor-txt');
+    var resEl  = document.getElementById('msv2-advisor-result');
+    var sendBtn = document.getElementById('msv2-advisor-btn');
+    if (!txt || !resEl) return;
+    var prompt = (txt.value || '').trim();
+    if (!prompt) { App.showToast('Describe your use case first', 'info'); return; }
+
+    if (sendBtn) sendBtn.disabled = true;
+    resEl.className = 'msv2-advisor-result visible';
+    resEl.innerHTML =
+      '<div class="msv2-advisor-thinking">' +
+        '<div class="msv2-advisor-thinking-dot"></div>' +
+        'Analysing your requirements…' +
+      '</div>';
+
+    try {
+      var body = {
+        action: 'advisor',
+        prompt: prompt,
+        templates: typeof BillingEngine !== 'undefined'
+          ? BillingEngine.getTemplates().map(function (t) { return { id: t.id, name: t.name, description: t.description, instanceType: t.instanceType, vcpu: t.vcpu, ram: t.ram, storageGb: t.storageGb }; })
+          : [],
+      };
+
+      var res  = await API.provisionLab(body);
+      var data = await res.json();
+
+      if (res.ok && data.recommendation) {
+        resEl.innerHTML = '<div style="line-height:1.7;">' + _esc(data.recommendation).replace(/\n/g, '<br>') + '</div>';
+      } else if (data.message) {
+        // Backend not wired — show a client-side recommendation
+        resEl.innerHTML = _clientAdvisor(prompt);
+      } else {
+        resEl.innerHTML = _clientAdvisor(prompt);
+      }
+    } catch (_) {
+      resEl.innerHTML = _clientAdvisor(prompt);
+    } finally {
+      if (sendBtn) sendBtn.disabled = false;
+    }
+  }
+
+  function _clientAdvisor(prompt) {
+    var lc = prompt.toLowerCase();
+    var rec;
+    if (lc.match(/game|minecraft|cs2|valheim|gaming/))
+      rec = { name: 'Game Server', note: 'High CPU allocation (c5.xlarge) handles game physics and concurrent player connections without lag spikes.' };
+    else if (lc.match(/api|backend|microservic|high.traffic|production/))
+      rec = { name: 'Enterprise API', note: 'm5.xlarge provides balanced CPU and memory ideal for concurrent request handling and in-memory caching.' };
+    else if (lc.match(/analytic|data|jupyter|spark|pandas|ml|machine learning/))
+      rec = { name: 'Analytics Engine', note: 'm5.large offers strong memory-to-CPU ratio for data processing workloads and Jupyter notebooks.' };
+    else if (lc.match(/shop|store|woo|magento|ecommerce|e-commerce/))
+      rec = { name: 'E-Commerce', note: 't3.large handles PHP/MySQL stacks well and scales with burstable CPU for traffic spikes.' };
+    else if (lc.match(/dev|test|staging|ci|node|python|docker/))
+      rec = { name: 'Dev Sandbox', note: 't3.medium gives enough CPU and RAM for local development stacks with room for Docker containers.' };
+    else
+      rec = { name: 'Starter Blog', note: 't3.micro is ideal for low-traffic sites. You can always resize later if traffic grows.' };
+
+    return '<strong>Recommended: ' + rec.name + '</strong><br>' + rec.note + '<br><br>' +
+      '<button class="btn btn-sm btn-blue" onclick="Labs._launchTemplate(\'' + rec.name.toLowerCase().replace(/\s+/g, '-') + '\')">Launch ' + rec.name + '</button>';
+  }
+
+  // ─── Summary bar ──────────────────────────────────────────────
+
+  function _renderSummaryBar(counts) {
+    var totalNpr = 0;
+    var running  = 0;
+    activeLabs.forEach(function (lab) {
+      if (lab.status === 'running') {
+        running++;
+        var b = typeof BillingEngine !== 'undefined'
+          ? BillingEngine.compute({ instanceType: lab.instanceType, storageGb: lab.storageGb || 20, hoursPerDay: lab.hoursPerDay || 24, isRunning: true })
+          : null;
+        if (b) totalNpr += b.finalNpr;
+      }
+    });
+    var nprStr = totalNpr > 0 && typeof BillingEngine !== 'undefined' ? BillingEngine.fmtNpr(totalNpr) : '—';
+    return (
+      '<div class="msv2-summary-bar">' +
+        '<div class="msv2-summary-stats">' +
+          '<div class="msv2-sum-stat"><span class="msv2-sum-val green">' + running + '</span><span class="msv2-sum-lbl">Active</span></div>' +
+          '<div class="msv2-sum-sep"></div>' +
+          '<div class="msv2-sum-stat"><span class="msv2-sum-val">' + counts.all + '</span><span class="msv2-sum-lbl">Total</span></div>' +
+          '<div class="msv2-sum-sep"></div>' +
+          '<div class="msv2-sum-stat"><span class="msv2-sum-val" style="font-size:16px;">' + _esc(nprStr) + '</span><span class="msv2-sum-lbl">/ month</span></div>' +
+        '</div>' +
+        '<button class="lbs-cta-btn" onclick="Labs.startWizard()">' +
+          '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+          'Provision Server' +
+        '</button>' +
+      '</div>'
+    );
+  }
+
+  // ─── Controls (search / sort / filter) ───────────────────────
+
+  function _renderControls(counts) {
+    var filters = [
+      { key: 'all',     label: 'All',     count: counts.all     },
+      { key: 'active',  label: 'Active',  count: counts.active  },
+      { key: 'pending', label: 'Pending', count: counts.pending },
+      { key: 'history', label: 'History', count: counts.history },
+    ];
+    var pills = filters.map(function (f) {
+      var cls = 'msv2-pill' + (_activeFilter === f.key ? ' active' : '');
+      return '<button class="' + cls + '" onclick="Labs._setFilter(\'' + f.key + '\')">' +
+        f.label + '<span class="msv2-pill-cnt">' + (f.count || 0) + '</span></button>';
+    }).join('');
+
+    var sortOptions = [
+      { val: 'cost',   label: 'Sort: Cost'    },
+      { val: 'name',   label: 'Sort: Name'    },
+      { val: 'status', label: 'Sort: Status'  },
+      { val: 'uptime', label: 'Sort: Uptime'  },
+    ].map(function (o) {
+      return '<option value="' + o.val + '"' + (_sortBy === o.val ? ' selected' : '') + '>' + o.label + '</option>';
+    }).join('');
+
+    return (
+      '<div class="msv2-controls">' +
+        '<div class="msv2-search-wrap">' +
+          '<svg class="msv2-search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+          '<input class="msv2-search" type="text" placeholder="Search servers…" value="' + _esc(_searchQuery) + '" oninput="Labs._handleSearch(this.value)"/>' +
+        '</div>' +
+        '<div class="msv2-filter-pills">' + pills + '</div>' +
+        '<select class="msv2-sort-select" onchange="Labs._setSort(this.value)">' + sortOptions + '</select>' +
+      '</div>'
+    );
+  }
+
+  function _handleSearch(val) {
+    _searchQuery = val || '';
+    _renderLabsList();
+  }
+
+  function _setSort(val) {
+    _sortBy = val;
+    _renderLabsList();
+  }
+
+  // ─── Bulk selection bar ───────────────────────────────────────
+
+  function _renderBulkBar() {
+    if (_selectedIds.length === 0) return '';
+    return (
+      '<div class="msv2-bulk-bar">' +
+        '<span class="msv2-bulk-count">' + _selectedIds.length + ' selected</span>' +
+        '<button class="btn btn-xs btn-green" onclick="Labs._bulkStart()">Start All</button>' +
+        '<button class="btn btn-xs btn-red" onclick="Labs._bulkStop()">Stop All</button>' +
+        '<button class="btn btn-xs btn-danger" onclick="Labs._bulkDelete()">Terminate All</button>' +
+        '<button class="btn btn-xs btn-out" onclick="Labs._clearSelection()">Deselect All</button>' +
+      '</div>'
+    );
+  }
+
+  function _toggleSelect(labId) {
+    var idx = _selectedIds.indexOf(labId);
+    if (idx === -1) _selectedIds.push(labId);
+    else            _selectedIds.splice(idx, 1);
+    _renderLabsList();
+  }
+
+  function _clearSelection() {
+    _selectedIds = [];
+    _renderLabsList();
+  }
+
+  async function _bulkStop() {
+    var ids = _selectedIds.slice();
+    if (!ids.length) return;
+    if (!confirm('Stop ' + ids.length + ' server(s)?')) return;
+    for (var i = 0; i < ids.length; i++) {
+      var lab = activeLabs.find(function (l) { return l.labId === ids[i]; });
+      if (!lab || lab.status !== 'running') continue;
+      try { await API.ec2Action({ action: 'stop', instanceId: lab.instanceId, accountId: lab.accountId, region: lab.region }); } catch (_) {}
+    }
+    App.showToast('Stop commands sent', 'ok');
+    _clearSelection();
+    setTimeout(_loadActiveLabs, 3000);
+  }
+
+  async function _bulkStart() {
+    var ids = _selectedIds.slice();
+    if (!ids.length) return;
+    for (var i = 0; i < ids.length; i++) {
+      var lab = activeLabs.find(function (l) { return l.labId === ids[i]; });
+      if (!lab || lab.status !== 'stopped') continue;
+      try { await API.ec2Action({ action: 'start', instanceId: lab.instanceId, accountId: lab.accountId, region: lab.region }); } catch (_) {}
+    }
+    App.showToast('Start commands sent', 'ok');
+    _clearSelection();
+    setTimeout(_loadActiveLabs, 3000);
+  }
+
+  async function _bulkDelete() {
+    var ids = _selectedIds.slice();
+    if (!ids.length) return;
+    if (!confirm('Permanently terminate ' + ids.length + ' server(s)? This cannot be undone.')) return;
+    for (var i = 0; i < ids.length; i++) {
+      try { await API.deleteLabInstance({ labId: ids[i] }); } catch (_) {}
+    }
+    App.showToast('Servers terminated', 'ok');
+    _clearSelection();
+    _loadActiveLabs();
+  }
+
+  // ─── Three-dot menu ───────────────────────────────────────────
+
+  function _openMenu(labId, e) {
+    if (e) e.stopPropagation();
+    if (_openMenuId === labId) { _openMenuId = null; _renderLabsList(); return; }
+    _openMenuId = labId;
+    _renderLabsList();
+    // Close on outside click
+    setTimeout(function () {
+      document.addEventListener('click', _closeMenuOnce, { once: true });
+    }, 0);
+  }
+
+  function _closeMenuOnce() {
+    if (_openMenuId) { _openMenuId = null; _renderLabsList(); }
+  }
+
+  function _menuRename(labId) {
+    _openMenuId = null;
+    var lab = activeLabs.find(function (l) { return l.labId === labId; });
+    if (!lab) return;
+    var newName = prompt('Rename server:', lab.labName || ('ec2ctrl-lab-' + labId.substring(0, 8)));
+    if (newName && newName.trim()) {
+      lab.labName = newName.trim();
+      App.showToast('Renamed (local only — backend rename coming soon)', 'info');
+      _renderLabsList();
+    }
+  }
+
+  function _menuCloneConfig(labId) {
+    _openMenuId = null;
+    var lab = activeLabs.find(function (l) { return l.labId === labId; });
+    if (!lab) return;
+    wizardConfig = {
+      instanceType:    lab.instanceType,
+      storageGb:       lab.storageGb,
+      platform:        lab.platform,
+      region:          lab.region,
+      accountId:       lab.accountId,
+      labName:         (lab.labName || '') + ' (copy)',
+    };
+    startWizard();
+  }
+
+  function _menuViewLogs(labId) {
+    _openMenuId = null;
+    App.showToast('Log viewer — coming soon', 'info');
+  }
+
+  function _menuBillingHistory(labId) {
+    _openMenuId = null;
+    App.showToast('Billing history — coming soon', 'info');
+  }
+
+  // ─── Sparkline SVG ────────────────────────────────────────────
+
+  function _sparkline(data, color) {
+    if (!data || data.length < 2) return '<span style="color:var(--ink4);font-size:11px;">No data</span>';
+    var W = 120, H = 36;
+    var min = Math.min.apply(null, data), max = Math.max.apply(null, data);
+    var range = max - min || 1;
+    var xs = data.map(function (_, i) { return (i / (data.length - 1)) * W; });
+    var ys = data.map(function (v) { return H - ((v - min) / range) * (H - 4) - 2; });
+    var pts = xs.map(function (x, i) { return x + ',' + ys[i]; }).join(' ');
+    var areaBottom = xs.map(function (x, i) { return x + ',' + H; });
+    var areaPath = 'M ' + pts.split(' ').join(' L ') +
+      ' L ' + xs[xs.length - 1] + ',' + H +
+      ' L ' + xs[0] + ',' + H + ' Z';
+    var linePath = 'M ' + pts.split(' ').join(' L ');
+    color = color || 'var(--blue2)';
+    return (
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" style="display:block;">' +
+        '<defs><linearGradient id="sg' + Math.floor(Math.random() * 9999) + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + color + '" stop-opacity=".3"/><stop offset="100%" stop-color="' + color + '" stop-opacity="0"/></linearGradient></defs>' +
+        '<path d="' + areaPath + '" fill="' + color + '" opacity=".15"/>' +
+        '<path d="' + linePath + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+        '<circle cx="' + xs[xs.length - 1] + '" cy="' + ys[ys.length - 1] + '" r="2.5" fill="' + color + '"/>' +
+      '</svg>'
+    );
+  }
+
+  function _mockSparkData(lab) {
+    // Generate plausible 7-day cost sparkline from billing
+    var b = typeof BillingEngine !== 'undefined'
+      ? BillingEngine.compute({ instanceType: lab.instanceType, storageGb: lab.storageGb || 20, hoursPerDay: lab.hoursPerDay || 24, isRunning: true })
+      : null;
+    var daily = b ? (b.finalNpr / 30) : 0;
+    var data  = [];
+    for (var i = 6; i >= 0; i--) {
+      data.push(daily * (0.85 + Math.random() * 0.3));
+    }
+    return data;
+  }
+
+  // ─── Card grid ────────────────────────────────────────────────
+
+  function _renderCardGrid(labs) {
+    if (labs.length === 0) {
+      var msg = {
+        active:  'No running servers.',
+        pending: 'No servers pending approval.',
+        history: 'No history yet.',
+        all:     'No servers match your search.',
+      }[_activeFilter] || 'No servers found.';
+      return '<div class="msv2-empty">' +
+        '<div class="msv2-empty-icon">🖥️</div>' +
+        '<div class="msv2-empty-title">Nothing here</div>' +
+        '<div class="msv2-empty-desc">' + msg + '</div>' +
+        '<button class="btn btn-blue" onclick="Labs.startWizard()">Provision New Server</button>' +
+        '</div>';
+    }
+
+    // Staggered card entrance (CSS animation-delay via inline style)
+    var html = '<div class="msv2-grid">';
+    labs.forEach(function (lab, idx) {
+      html += _renderCard(lab, idx);
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function _renderCard(lab, idx) {
+    var labIdEsc  = _esc(lab.labId);
+    var status    = lab.status || 'pending';
+    var stateCls  = status === 'running' ? 'running' : (status === 'stopped' ? 'stopped' : 'pending');
+    var stateLabel = STATUS_LABELS[status] || status;
+    var isSelected = _selectedIds.indexOf(lab.labId) !== -1;
+    var isRunning  = status === 'running';
+    var isStopped  = status === 'stopped';
+    var region     = lab.region || 'ap-south-1';
+    var name       = lab.labName || ('ec2ctrl-lab-' + lab.labId.substring(0, 8));
+
+    // Billing
+    var billing = null;
+    if (typeof BillingEngine !== 'undefined') {
+      billing = BillingEngine.compute({
+        instanceType:    lab.instanceType,
+        storageGb:       lab.storageGb || 20,
+        hoursPerDay:     lab.hoursPerDay || 24,
+        isRunning:       isRunning,
+        detailedMonitor: !!(lab.detailedMonitor),
+      });
+    }
+    var nprStr  = billing ? BillingEngine.fmtNpr(billing.finalNpr) : (lab.estimatedCost ? _npmFmt(Number(lab.estimatedCost)) : '—');
+    var perSec  = billing ? billing.perSecondNpr : 0;
+
+    // Sparkline (for active servers)
+    var sparkHtml = '';
+    if (isRunning) {
+      var sparkData = _mockSparkData(lab);
+      sparkHtml =
+        '<div style="margin:6px 0 2px;">' +
+          '<div class="msv2-card-meta-label" style="margin-bottom:4px;">7-day spend trend</div>' +
+          _sparkline(sparkData, 'var(--blue2)') +
+        '</div>';
+    }
+
+    // Live cost ticker
+    var tickerHtml = '';
+    if (isRunning && perSec > 0) {
+      tickerHtml =
+        '<div class="msv2-ticker">' +
+          '<span class="msv2-ticker-dot"></span>' +
+          '<span>Live: </span>' +
+          '<span class="msv2-ticker-val" id="msv2-tick-' + labIdEsc + '">NPR 0.000</span>' +
+          '<span style="color:var(--ink4)">/s</span>' +
+        '</div>';
+    }
+
+    // Three-dot menu
+    var menuHtml = '';
+    if (_openMenuId === lab.labId) {
+      menuHtml =
+        '<div class="msv2-dots-menu" id="msv2-menu-' + labIdEsc + '">' +
+          '<div class="msv2-dots-item" onclick="Labs._menuRename(\'' + labIdEsc + '\')">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+            'Rename' +
+          '</div>' +
+          '<div class="msv2-dots-item" onclick="Labs._menuCloneConfig(\'' + labIdEsc + '\')">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+            'Clone Config' +
+          '</div>' +
+          '<div class="msv2-dots-item" onclick="Labs._menuViewLogs(\'' + labIdEsc + '\')">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
+            'View Logs' +
+          '</div>' +
+          '<div class="msv2-dots-item" onclick="Labs._menuBillingHistory(\'' + labIdEsc + '\')">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
+            'Billing History' +
+          '</div>' +
+          '<div class="msv2-dots-sep"></div>' +
+          '<div class="msv2-dots-item danger" onclick="Labs._confirmDelete(\'' + labIdEsc + '\')">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
+            'Terminate' +
+          '</div>' +
+        '</div>';
+    }
+
+    var delay = (idx * 0.04).toFixed(2) + 's';
+    var statusStripe = 'status-' + (status === 'running' ? 'running' : status === 'stopped' ? 'stopped' : status === 'provisioning' ? 'provisioning' : 'pending');
+    return (
+      '<div class="msv2-card ' + statusStripe + (isSelected ? ' selected' : '') + '" style="animation-delay:' + delay + '" id="msv2-card-' + labIdEsc + '">' +
+        '<div class="msv2-card-hd">' +
+          '<div class="msv2-card-hd-left">' +
+            '<div class="msv2-card-check' + (isSelected ? ' checked' : '') + '" onclick="event.stopPropagation();Labs._toggleSelect(\'' + labIdEsc + '\')"></div>' +
+            '<div>' +
+              '<div class="msv2-card-name" title="' + _esc(name) + '">' + _esc(name) + '</div>' +
+              '<div class="msv2-card-region">' +
+                '<span class="msv2-card-flag">' + _regionFlag(region) + '</span>' +
+                _esc(_regionLabel(region)) +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="msv2-card-hd-right">' +
+            '<div class="msv2-status ' + stateCls + '">' +
+              '<span class="msv2-status-dot"></span>' +
+              _esc(stateLabel) +
+            '</div>' +
+            '<button class="msv2-dots-btn" onclick="event.stopPropagation();Labs._openMenu(\'' + labIdEsc + '\',event)" title="More actions">' +
+              '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>' +
+            '</button>' +
+            menuHtml +
+          '</div>' +
+        '</div>' +
+        '<div class="msv2-card-body">' +
+          '<div class="msv2-card-meta-row">' +
+            '<span class="msv2-card-meta-label">Instance type</span>' +
+            '<span class="msv2-type-badge">' + _esc(lab.instanceType || '—') + '</span>' +
+          '</div>' +
+          (lab.publicIp
+            ? '<div class="msv2-card-meta-row"><span class="msv2-card-meta-label">Public IP</span><span class="msv2-card-meta-val" style="font-family:var(--mono);font-size:12px;">' + _esc(lab.publicIp) + '</span></div>'
+            : '') +
+          (lab.expiresAt
+            ? '<div class="msv2-card-meta-row"><span class="msv2-card-meta-label">Expires</span><span class="msv2-card-meta-val" style="font-size:12px;">' + _renderExpiry(lab) + '</span></div>'
+            : '') +
+          '<div>' +
+            '<div class="msv2-card-cost-lbl">Monthly cost</div>' +
+            '<div class="msv2-card-cost">' + _esc(nprStr) + '</div>' +
+          '</div>' +
+          tickerHtml +
+          sparkHtml +
+        '</div>' +
+        '<div class="msv2-card-ft">' +
+          (isStopped
+            ? '<button class="msv2-card-btn start" onclick="Labs._quickStart(\'' + labIdEsc + '\')">' +
+                '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>Start' +
+              '</button>'
+            : '') +
+          (isRunning
+            ? '<button class="msv2-card-btn stop" onclick="Labs._quickStop(\'' + labIdEsc + '\')">' +
+                '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Stop' +
+              '</button>'
+            : '') +
+          '<button class="msv2-card-btn detail" onclick="Labs._toggleRowDetail(\'' + labIdEsc + '\')">' +
+            '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7"/></svg>Details' +
+          '</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  // ─── Quick start/stop from card ───────────────────────────────
+
+  async function _quickStart(labId) {
+    var lab = activeLabs.find(function (l) { return l.labId === labId; });
+    if (!lab || !lab.instanceId) { App.showToast('Instance not available', 'err'); return; }
+    try {
+      await API.ec2Action({ action: 'start', instanceId: lab.instanceId, accountId: lab.accountId, region: lab.region });
+      App.showToast((lab.labName || labId) + ' start command sent', 'ok');
+      setTimeout(_loadActiveLabs, 4000);
+    } catch (e) { App.showToast('Start failed: ' + e.message, 'err'); }
+  }
+
+  async function _quickStop(labId) {
+    var lab = activeLabs.find(function (l) { return l.labId === labId; });
+    if (!lab || !lab.instanceId) { App.showToast('Instance not available', 'err'); return; }
+    try {
+      await API.ec2Action({ action: 'stop', instanceId: lab.instanceId, accountId: lab.accountId, region: lab.region });
+      App.showToast((lab.labName || labId) + ' stop command sent', 'ok');
+      setTimeout(_loadActiveLabs, 4000);
+    } catch (e) { App.showToast('Stop failed: ' + e.message, 'err'); }
+  }
+
+  // ─── Cost tickers ─────────────────────────────────────────────
+
+  function _stopAllTickers() {
+    Object.keys(_tickerTimers).forEach(function (id) {
+      clearInterval(_tickerTimers[id]);
+    });
+    _tickerTimers = {};
+  }
+
+  function _startTickers() {
+    _stopAllTickers();
+    activeLabs.forEach(function (lab) {
+      if (lab.status !== 'running') return;
+      var b = typeof BillingEngine !== 'undefined'
+        ? BillingEngine.compute({ instanceType: lab.instanceType, storageGb: lab.storageGb || 20, hoursPerDay: lab.hoursPerDay || 24, isRunning: true })
+        : null;
+      if (!b || b.perSecondNpr <= 0) return;
+
+      var labId = lab.labId;
+      var start = Date.now();
+      var rate  = b.perSecondNpr;
+      var el    = document.getElementById('msv2-tick-' + labId);
+      if (!el) return;
+
+      _tickerTimers[labId] = setInterval(function () {
+        var el2 = document.getElementById('msv2-tick-' + labId);
+        if (!el2) { clearInterval(_tickerTimers[labId]); delete _tickerTimers[labId]; return; }
+        var spent = rate * ((Date.now() - start) / 1000);
+        el2.textContent = 'NPR ' + spent.toFixed(4);
+      }, 333);
+    });
+  }
+
+  // ─── 12-month forecast chart ──────────────────────────────────
+
+  function _renderForecastChart(totalMonthlyNpr) {
+    if (!totalMonthlyNpr || totalMonthlyNpr <= 0 || typeof BillingEngine === 'undefined') return '';
+    var points = BillingEngine.forecast12m(totalMonthlyNpr, 0.04);
+    var W = 440, H = 120;
+    var vals  = points.map(function (p) { return p.value; });
+    var maxV  = Math.max.apply(null, vals) * 1.1;
+    var minV  = Math.min.apply(null, vals) * 0.9;
+    var range = maxV - minV || 1;
+    var pad   = { l: 60, r: 14, t: 10, b: 28 };
+    var cW    = W - pad.l - pad.r;
+    var cH    = H - pad.t - pad.b;
+
+    var xs = vals.map(function (_, i) { return pad.l + (i / (vals.length - 1)) * cW; });
+    var ys = vals.map(function (v) { return pad.t + cH - ((v - minV) / range) * cH; });
+
+    var linePath = xs.map(function (x, i) { return (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + ys[i].toFixed(1); }).join(' ');
+    var areaPath = linePath + ' L' + xs[xs.length - 1].toFixed(1) + ',' + (pad.t + cH) + ' L' + pad.l + ',' + (pad.t + cH) + ' Z';
+
+    var dots = xs.map(function (x, i) {
+      return '<circle cx="' + x.toFixed(1) + '" cy="' + ys[i].toFixed(1) + '" r="3" fill="var(--blue2)"/>';
+    }).join('');
+
+    var labels = points.map(function (p, i) {
+      return '<text x="' + xs[i].toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="9" fill="var(--ink4)" font-family="Inter,sans-serif">' + p.label + '</text>';
+    }).join('');
+
+    var yLabels = '';
+    for (var t = 0; t <= 3; t++) {
+      var y = pad.t + (t / 3) * cH;
+      var v = maxV - (t / 3) * (maxV - minV);
+      yLabels += '<text x="' + (pad.l - 5) + '" y="' + (y + 3) + '" text-anchor="end" font-size="8" fill="var(--ink4)" font-family="Inter,sans-serif">' + (v / 1000).toFixed(0) + 'k</text>';
+      yLabels += '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (pad.l + cW) + '" y2="' + y + '" stroke="var(--bd)" stroke-width="0.5" stroke-dasharray="3,3"/>';
+    }
+
+    return (
+      '<div class="msv2-forecast">' +
+        '<div class="msv2-forecast-title">' +
+          '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
+          '12-Month Cost Forecast (NPR, +4% growth)' +
+        '</div>' +
+        '<div class="msv2-chart-wrap">' +
+          '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '">' +
+            '<defs><linearGradient id="fcGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--blue2)" stop-opacity=".25"/><stop offset="100%" stop-color="var(--blue2)" stop-opacity="0"/></linearGradient></defs>' +
+            yLabels +
+            '<path d="' + areaPath + '" fill="url(#fcGrad)"/>' +
+            '<path d="' + linePath + '" fill="none" stroke="var(--blue2)" stroke-width="2" stroke-linejoin="round"/>' +
+            dots + labels +
+          '</svg>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  // ─── Skeleton loaders ─────────────────────────────────────────
+
+  function _renderSkeletons(count) {
+    var html = '<div class="msv2-grid">';
+    for (var i = 0; i < (count || 3); i++) {
+      html += '<div class="msv2-skel-card"></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  // ─── Admin billing config panel ───────────────────────────────
+
+  function _renderBillingConfig() {
+    var role = Auth.getRole();
+    if (role !== 'admin') return '';
+    var cfg = typeof BillingEngine !== 'undefined' ? BillingEngine.getConfig() : {};
+    return (
+      '<div class="billing-cfg-section" id="msv2-billing-cfg">' +
+        '<div class="billing-cfg-title">' +
+          '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>' +
+          'Billing Engine Config' +
+          '<span class="msv2-advisor-badge" style="background:var(--bdim);color:var(--blue2);font-size:10px;">Admin Only</span>' +
+        '</div>' +
+        '<div class="billing-cfg-sub">Configure rates applied to all customer invoices. Changes take effect immediately.</div>' +
+        '<div class="billing-cfg-grid">' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">WHT Rate (%)</label><input class="billing-cfg-input" type="number" step="0.1" min="0" max="50" id="bcfg-wht" value="' + ((cfg.wht_rate || 0.18) * 100).toFixed(1) + '"/></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">Margin Rate (%)</label><input class="billing-cfg-input" type="number" step="0.1" min="0" max="100" id="bcfg-margin" value="' + ((cfg.margin_rate || 0.12) * 100).toFixed(1) + '"/></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">VAT Rate (%)</label><input class="billing-cfg-input" type="number" step="0.1" min="0" max="50" id="bcfg-vat" value="' + ((cfg.vat_rate || 0.13) * 100).toFixed(1) + '"/></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">USD → NPR Rate</label><input class="billing-cfg-input" type="number" step="0.5" min="100" max="500" id="bcfg-npr" value="' + (cfg.usd_to_npr || 135) + '"/></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">USD → INR Rate</label><input class="billing-cfg-input" type="number" step="0.5" min="50" max="200" id="bcfg-inr" value="' + (cfg.usd_to_inr || 84) + '"/></div>' +
+        '</div>' +
+        '<div class="billing-cfg-toggle">' +
+          '<input type="checkbox" id="bcfg-breakdown"' + (cfg.show_breakdown ? ' checked' : '') + '/>' +
+          '<label for="bcfg-breakdown">Show tax breakdown to customers (collapsed by default)</label>' +
+        '</div>' +
+        '<button class="billing-cfg-save" onclick="Labs._saveBillingConfig()">Save Config</button>' +
+      '</div>'
+    );
+  }
+
+  function _saveBillingConfig() {
+    if (typeof BillingEngine === 'undefined') return;
+    var wht      = parseFloat(document.getElementById('bcfg-wht').value)    / 100 || 0.18;
+    var margin   = parseFloat(document.getElementById('bcfg-margin').value) / 100 || 0.12;
+    var vat      = parseFloat(document.getElementById('bcfg-vat').value)    / 100 || 0.13;
+    var npr      = parseFloat(document.getElementById('bcfg-npr').value)          || 135;
+    var inr      = parseFloat(document.getElementById('bcfg-inr').value)          || 84;
+    var breakdown = document.getElementById('bcfg-breakdown').checked;
+    BillingEngine.saveConfig({ wht_rate: wht, margin_rate: margin, vat_rate: vat, usd_to_npr: npr, usd_to_inr: inr, show_breakdown: breakdown });
+    App.showToast('Billing config saved', 'ok');
+    _renderLabsList();
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // PATCHED _renderLabsList — v2 card grid
+  // ════════════════════════════════════════════════════════════════
+
+  function _renderLabsListV2() {
+    var listEl = document.getElementById('lbs-list');
+    if (!listEl) return;
+
+    _stopAllTickers();
+
+    // ── Compute bucket counts
+    var counts = { all: activeLabs.length, active: 0, pending: 0, history: 0 };
+    activeLabs.forEach(function (lab) {
+      if (lab.status === 'running' || lab.status === 'provisioning') counts.active++;
+      else if (lab.status === 'pending_approval')                     counts.pending++;
+      else if (lab.status === 'terminated' || lab.status === 'rejected') counts.history++;
+    });
+
+    // Auto-fallback
+    if (_activeFilter === 'active' && counts.active === 0) _activeFilter = 'all';
+
+    // ── Empty-state: full onboarding with hero
+    if (activeLabs.length === 0) {
+      listEl.innerHTML =
+        _renderHero({ active: 0 }) +
+        _renderFeatures() +
+        '<div id="msv2-tpl-anchor"></div>' +
+        _renderQuickLaunch() +
+        _renderAdvisor() +
+        _renderBillingConfig() +
+        '<div class="lbs-onboard-hero">' +
+          '<div class="lbs-onboard-icon">☁️</div>' +
+          '<h2 class="lbs-onboard-title">No servers yet</h2>' +
+          '<p class="lbs-onboard-desc">Provision a dedicated cloud server for your project. Ready within minutes once payment is verified.</p>' +
+          '<button class="btn btn-blue" onclick="Labs.startWizard()">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+            'Create Your First Server' +
+          '</button>' +
+        '</div>';
+
+      // Init canvas
+      setTimeout(function () {
+        var canvas = document.getElementById('msv2-hero-canvas');
+        if (canvas) _initHeroCanvas(canvas);
+      }, 50);
+      return;
+    }
+
+    // ── Filter visible labs
+    var visible = activeLabs.filter(function (lab) {
+      if (_activeFilter === 'active')  return lab.status === 'running' || lab.status === 'provisioning';
+      if (_activeFilter === 'pending') return lab.status === 'pending_approval';
+      if (_activeFilter === 'history') return lab.status === 'terminated' || lab.status === 'rejected';
+      return true;
+    });
+
+    // ── Search filter
+    if (_searchQuery) {
+      var q = _searchQuery.toLowerCase();
+      visible = visible.filter(function (lab) {
+        return (lab.labName || '').toLowerCase().includes(q) ||
+          (lab.instanceType || '').toLowerCase().includes(q) ||
+          (lab.region || '').toLowerCase().includes(q) ||
+          (lab.status || '').toLowerCase().includes(q);
+      });
+    }
+
+    // ── Sort
+    visible = visible.slice().sort(function (a, b) {
+      if (_sortBy === 'name') return (a.labName || '').localeCompare(b.labName || '');
+      if (_sortBy === 'status') return (a.status || '').localeCompare(b.status || '');
+      if (_sortBy === 'cost') {
+        var costA = typeof BillingEngine !== 'undefined' ? BillingEngine.compute({ instanceType: a.instanceType, storageGb: a.storageGb || 20 }).finalNpr : 0;
+        var costB = typeof BillingEngine !== 'undefined' ? BillingEngine.compute({ instanceType: b.instanceType, storageGb: b.storageGb || 20 }).finalNpr : 0;
+        return costB - costA;
+      }
+      return 0;
+    });
+
+    // Total monthly NPR for running servers
+    var totalNpr = 0;
+    activeLabs.forEach(function (lab) {
+      if (lab.status === 'running' && typeof BillingEngine !== 'undefined') {
+        totalNpr += BillingEngine.compute({ instanceType: lab.instanceType, storageGb: lab.storageGb || 20, hoursPerDay: lab.hoursPerDay || 24, isRunning: true }).finalNpr;
+      }
+    });
+
+    var html =
+      _renderHero(counts) +
+      _renderSummaryBar(counts) +
+      _renderQuickLaunch() +
+      _renderAdvisor() +
+      _renderControls(counts) +
+      _renderBulkBar() +
+      _renderCardGrid(visible);
+
+    // Inline detail panel (for expanded card)
+    if (_expandedLabId) {
+      var expandedLab = activeLabs.find(function (l) { return l.labId === _expandedLabId; });
+      if (expandedLab) {
+        html += '<div id="lbs-detail-card-' + _esc(_expandedLabId) + '" style="margin-top:16px;">' +
+          '<div class="lbs-detail-panel" style="border-radius:var(--rlg);">' +
+            '<button class="lbs-detail-close" onclick="Labs._toggleRowDetail(\'' + _esc(_expandedLabId) + '\')" title="Close">✕</button>' +
+            _renderDetailPanel(expandedLab).replace('<div class="lbs-detail-panel">', '').replace(/<\/div>\s*$/, '') +
+          '</div>' +
+        '</div>';
+      }
+    }
+
+    html += _renderForecastChart(totalNpr);
+    html += _renderBillingConfig();
+
+    listEl.innerHTML = html;
+
+    // Init canvas
+    setTimeout(function () {
+      var canvas = document.getElementById('msv2-hero-canvas');
+      if (canvas) _initHeroCanvas(canvas);
+      _startTickers();
+    }, 50);
+  }
+
   // ─── Public API
 
   function refresh() {
@@ -1730,7 +2755,27 @@ const Labs = (function () {
     _toggleGuide:          _toggleGuide,
     _downloadBill:         _downloadBill,
     _downloadRdp:          _downloadRdp,
-    _getWindowsPassword: _getWindowsPassword,
+    _getWindowsPassword:   _getWindowsPassword,
+    // v2 additions
+    _handleSearch:       _handleSearch,
+    _setSort:            _setSort,
+    _toggleSelect:       _toggleSelect,
+    _clearSelection:     _clearSelection,
+    _bulkStart:          _bulkStart,
+    _bulkStop:           _bulkStop,
+    _bulkDelete:         _bulkDelete,
+    _openMenu:           _openMenu,
+    _menuRename:         _menuRename,
+    _menuCloneConfig:    _menuCloneConfig,
+    _menuViewLogs:       _menuViewLogs,
+    _menuBillingHistory: _menuBillingHistory,
+    _launchTemplate:     _launchTemplate,
+    _askAdvisor:         _askAdvisor,
+    _toggleAdvisor:      _toggleAdvisor,
+    _scrollToTemplates:  _scrollToTemplates,
+    _quickStart:         _quickStart,
+    _quickStop:          _quickStop,
+    _saveBillingConfig:  _saveBillingConfig,
   };
 
 })();
