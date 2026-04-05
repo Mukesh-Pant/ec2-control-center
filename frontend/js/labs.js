@@ -17,7 +17,8 @@ const Labs = (function () {
   var _accounts     = [];      // cached enabled accounts list
   var _labsUsers    = [];      // operator + admin emails for Submitted By combobox
   var _confirmCb    = null;    // pending in-page confirm callback
-  var _labFilters = { platform: '', serverType: '', status: '', account: '', region: '', submittedBy: '' };
+  var _labFilters  = { platform: '', serverType: '', status: '', account: '', region: '', submittedBy: '' };
+  var _activeFilter = 'active'; // v2 pill filter: 'all'|'active'|'pending'|'history'
   var _expandedLabId = null;   // labId of currently expanded row, or null
   var _labsPage     = 0;
   var LAB_PAGE_SIZE = 10;
@@ -626,25 +627,31 @@ const Labs = (function () {
     }
   }
 
-  // ─── Row expand / collapse
+  // ─── Row / card expand / collapse (v2: card-grid aware)
 
   function _toggleRowDetail(labId) {
     if (_expandedLabId === labId) {
       _collapseDetail();
       return;
     }
-    if (_expandedLabId) _collapseDetail();
-
+    _expandedLabId = labId;
+    // Card grid path: re-render so detail panel appears below grid
+    if (document.querySelector('.msv2-grid')) {
+      _renderLabsList();
+      setTimeout(function () {
+        var el = document.getElementById('msv2-detail-panel');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 80);
+      return;
+    }
+    // Legacy table path (kept for safety)
     var lab = activeLabs.find(function (l) { return l.labId === labId; });
     if (!lab) return;
-
-    _expandedLabId = labId;
     var row = document.getElementById('lbs-row-' + labId);
     if (!row) return;
     row.classList.add('lbs-tbl-row--expanded');
     var chev = document.getElementById('lbs-chev-' + labId);
     if (chev) chev.classList.add('lbs-chevron--open');
-
     var detailRow = document.createElement('tr');
     detailRow.id        = 'lbs-detail-' + labId;
     detailRow.className = 'lbs-detail-row';
@@ -654,6 +661,13 @@ const Labs = (function () {
 
   function _collapseDetail() {
     if (!_expandedLabId) return;
+    _expandedLabId = null;
+    // Card grid path
+    if (document.querySelector('.msv2-grid')) {
+      _renderLabsList();
+      return;
+    }
+    // Legacy table path
     var row = document.getElementById('lbs-row-' + _expandedLabId);
     if (row) {
       row.classList.remove('lbs-tbl-row--expanded');
@@ -662,7 +676,6 @@ const Labs = (function () {
     }
     var detailRow = document.getElementById('lbs-detail-' + _expandedLabId);
     if (detailRow) detailRow.remove();
-    _expandedLabId = null;
   }
 
   // ─── Render inline detail panel for an expanded row
@@ -2570,12 +2583,12 @@ const Labs = (function () {
         '</div>' +
         '<div class="msv2-card-ft">' +
           (isStopped
-            ? '<button class="msv2-card-btn start" onclick="Labs._quickStart(\'' + labIdEsc + '\')">' +
+            ? '<button class="msv2-card-btn start" onclick="event.stopPropagation();Labs._startLab(\'' + labIdEsc + '\')">' +
                 '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>Start' +
               '</button>'
             : '') +
           (isRunning
-            ? '<button class="msv2-card-btn stop" onclick="Labs._quickStop(\'' + labIdEsc + '\')">' +
+            ? '<button class="msv2-card-btn stop" onclick="event.stopPropagation();Labs._stopLab(\'' + labIdEsc + '\')">' +
                 '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Stop' +
               '</button>'
             : '') +
@@ -2847,15 +2860,14 @@ const Labs = (function () {
       _renderBulkBar() +
       _renderCardGrid(visible);
 
-    // Inline detail panel (for expanded card)
+    // Inline detail panel for the expanded card
     if (_expandedLabId) {
       var expandedLab = activeLabs.find(function (l) { return l.labId === _expandedLabId; });
       if (expandedLab) {
-        html += '<div id="lbs-detail-card-' + _esc(_expandedLabId) + '" style="margin-top:16px;">' +
-          '<div class="lbs-detail-panel" style="border-radius:var(--rlg);">' +
-            '<button class="lbs-detail-close" onclick="Labs._toggleRowDetail(\'' + _esc(_expandedLabId) + '\')" title="Close">✕</button>' +
-            _renderDetailPanel(expandedLab).replace('<div class="lbs-detail-panel">', '').replace(/<\/div>\s*$/, '') +
-          '</div>' +
+        // _renderDetailPanel returns a full <div class="lbs-detail-panel">…</div>
+        // Wrap it in a scroll-anchor div so we can smooth-scroll to it
+        html += '<div id="msv2-detail-panel" style="margin-top:16px;">' +
+          _renderDetailPanel(expandedLab) +
         '</div>';
       }
     }
@@ -2919,6 +2931,8 @@ const Labs = (function () {
     _downloadRdp:          _downloadRdp,
     _getWindowsPassword:   _getWindowsPassword,
     // v2 additions
+    _startLab:           _startLab,
+    _stopLab:            _stopLab,
     _handleSearch:       _handleSearch,
     _setSort:            _setSort,
     _toggleSelect:       _toggleSelect,
