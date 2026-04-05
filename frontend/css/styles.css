@@ -3305,18 +3305,18 @@ code {
   padding: 2px 7px; border-radius: 4px; border: 1px solid var(--bd);
 }
 .msv2-tpl-price-row {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; flex-direction: column; gap: 10px;
   margin-top: auto; padding-top: 12px; border-top: 1px solid var(--bg2);
 }
 .msv2-tpl-price-main { font-size: 16px; font-weight: 800; color: var(--ink); font-family: var(--mono); }
 .msv2-tpl-price-sub  { font-size: 10px; color: var(--ink4); margin-top: 2px; }
 .msv2-tpl-launch {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 9px 16px; border-radius: var(--r);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 10px 16px; border-radius: var(--r);
   background: var(--blue2); color: #fff; border: none;
-  font-size: 12px; font-weight: 700; cursor: pointer;
+  font-size: 13px; font-weight: 700; cursor: pointer;
   transition: background .15s, transform .12s, box-shadow .15s;
-  box-shadow: 0 3px 12px rgba(37,99,235,.3); white-space: nowrap;
+  box-shadow: 0 3px 12px rgba(37,99,235,.3);
 }
 .msv2-tpl-launch:hover { background: #5090ff; transform: translateY(-1px); box-shadow: 0 5px 18px rgba(37,99,235,.45); }
 
@@ -3571,11 +3571,7 @@ code {
 }
 
 /* Launch button — clean */
-.msv2-tpl-launch {
-  position: relative; overflow: visible;
-  border-radius: var(--r); font-size: 12px; font-weight: 600;
-  letter-spacing: 0; padding: 8px 14px;
-}
+.msv2-tpl-launch { position: relative; overflow: visible; letter-spacing: 0; }
 .msv2-tpl-launch::after { display: none; }
 
 /* ── Server cards — clean, no spring bounce ──────────────── */
@@ -3990,3 +3986,76 @@ code {
   .msv2-create-cta-actions { width: 100%; }
   .msv2-create-cta-btn { flex: 1; justify-content: center; }
 }
+
+/* ── Template trust bar ──────────────────────────────────── */
+.msv2-tpl-trust {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px;
+}
+.msv2-tpl-trust-item {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; color: var(--ink4); font-weight: 500;
+}
+.msv2-tpl-trust-item svg { flex-shrink: 0; color: var(--green2); }
+
+/* ── Live bill preview panel (step 1) ────────────────────── */
+.lbs-live-bill {
+  margin: 0 0 16px;
+  background: var(--bg); border: 1.5px solid var(--bd);
+  border-radius: var(--rlg); overflow: hidden;
+}
+.lbs-live-bill-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; background: var(--white);
+  border-bottom: 1px solid var(--bd);
+}
+.lbs-live-bill-title {
+  font-size: 12px; font-weight: 700; color: var(--ink2);
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.lbs-live-bill-total {
+  font-size: 18px; font-weight: 800; color: var(--blue2);
+  font-family: var(--mono);
+}
+.lbs-live-bill-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.lbs-live-bill-table td {
+  padding: 7px 16px; color: var(--ink2);
+}
+.lbs-live-bill-table td:last-child {
+  text-align: right; font-family: var(--mono); font-weight: 600; color: var(--ink);
+}
+.lbs-live-bill-table tr + tr td { border-top: 1px solid var(--bg2); }
+.lbs-live-bill-table .lbs-lb-tax td { color: var(--ink3); }
+.lbs-live-bill-table .lbs-lb-discount td { color: var(--green); font-weight: 600; }
+.lbs-live-bill-note {
+  padding: 8px 16px; font-size: 10px; color: var(--ink4);
+  border-top: 1px solid var(--bg2); background: var(--white);
+}
+
+/* ── Bill diff banners ───────────────────────────────────── */
+.lbs-diff-banner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; font-size: 12px; font-weight: 600;
+}
+.lbs-diff-banner.lbs-diff--up   { background: rgba(220,38,38,.08); color: var(--red); }
+.lbs-diff-banner.lbs-diff--down { background: rgba(5,150,105,.08); color: var(--green); }
+.lbs-diff-arrow { font-size: 18px; line-height: 1; }
+.lbs-diff-reasons {
+  margin: 0; padding: 6px 16px 8px 36px;
+  font-size: 11px; color: var(--ink3); list-style: disc;
+}
+.lbs-diff-reasons li + li { margin-top: 3px; }
+
+/* ── Wizard trust bar ────────────────────────────────────── */
+.lbs-wizard-trust-bar {
+  display: flex; flex-wrap: wrap; gap: 6px 18px;
+  padding: 10px 14px; margin-bottom: 18px;
+  background: var(--bg); border: 1px solid var(--bd);
+  border-radius: var(--r);
+}
+.lbs-wizard-trust-bar span {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--ink3); font-weight: 500;
+}
+.lbs-wizard-trust-bar svg { color: var(--green2); flex-shrink: 0; }

@@ -874,9 +874,11 @@ const Labs = (function () {
 
   // ─── Wizard control
 
-  async function startWizard() {
-    wizardConfig = {};
+  async function startWizard(initialConfig) {
+    wizardConfig = initialConfig ? Object.assign({}, initialConfig) : {};
     currentLabId = null;
+    _prevBilling = null;
+    _currentLiveBilling = null;
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
 
     if (_accounts.length === 0) await _loadAccounts();
@@ -927,6 +929,8 @@ const Labs = (function () {
   function nextStep() {
     if (wizardStep === 1) {
       if (!_collectStep1()) return;
+      // Snapshot current billing so step 1 diff works if customer comes back
+      _prevBilling = _currentLiveBilling || null;
       wizardStep = 2;
       _renderWizard();
     } else if (wizardStep === 2) {
@@ -999,6 +1003,12 @@ const Labs = (function () {
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-body">',
+      '    <div class="lbs-wizard-trust-bar">',
+      '      <span><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Provisioned within minutes of approval</span>',
+      '      <span><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 24/7 support included</span>',
+      '      <span><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Fully managed security</span>',
+      '      <span><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Transparent pricing, no hidden fees</span>',
+      '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Server Name <span class="lbs-help-text">(optional)</span></label>',
       '      <input type="text" id="lbs-s1-name" class="lbs-input" maxlength="100"',
@@ -1018,15 +1028,15 @@ const Labs = (function () {
       '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Server Type</label>',
-      '      <select id="lbs-s1-instance" class="lbs-select">' + instanceGroupHtml + '</select>',
+      '      <select id="lbs-s1-instance" class="lbs-select" onchange="Labs._updateLiveBill()">' + instanceGroupHtml + '</select>',
       '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">EBS Storage (GB)</label>',
-      '      <input type="number" id="lbs-s1-storage" class="lbs-input" min="8" max="500" value="' + storagVal + '">',
+      '      <input type="number" id="lbs-s1-storage" class="lbs-input" min="8" max="500" value="' + storagVal + '" oninput="Labs._updateLiveBill()">',
       '    </div>',
       '    <div class="lbs-form-row lbs-form-row--inline">',
       '      <label class="lbs-label">Elastic IP</label>',
-      '      <input type="checkbox" id="lbs-s1-eip"' + eipChecked + '>',
+      '      <input type="checkbox" id="lbs-s1-eip"' + eipChecked + ' onchange="Labs._updateLiveBill()">',
       '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Server Duration</label>',
@@ -1049,7 +1059,7 @@ const Labs = (function () {
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Daily Uptime</label>',
       '      <div class="lbs-uptime-row">',
-      '        <select id="lbs-s1-uptime" class="lbs-select" style="max-width:180px;" onchange="Labs._onDateRangeChange()">',
+      '        <select id="lbs-s1-uptime" class="lbs-select" style="max-width:180px;" onchange="Labs._onDateRangeChange();Labs._updateLiveBill()">',
       '          <option value="4"'  + (wizardConfig.hoursPerDay ===  4 ? ' selected' : '') + '>4 hrs/day</option>',
       '          <option value="6"'  + (wizardConfig.hoursPerDay ===  6 ? ' selected' : '') + '>6 hrs/day</option>',
       '          <option value="8"'  + (wizardConfig.hoursPerDay ===  8 ? ' selected' : '') + '>8 hrs/day (business hours)</option>',
@@ -1080,6 +1090,7 @@ const Labs = (function () {
       '      <select id="lbs-s1-sg" class="lbs-select"><option value="">— Select VPC above —</option></select>',
       '    </div>',
       '  </div>',
+      '  <div id="lbs-live-bill" class="lbs-live-bill" style="display:none;"></div>',
       '  <div class="lbs-wizard-footer">',
       '    <button class="btn btn-outline" onclick="Labs._exitWizard()">Cancel</button>',
       '    <button class="btn btn-blue" onclick="Labs.nextStep()">Next: Pricing Review</button>',
@@ -1091,6 +1102,9 @@ const Labs = (function () {
 
     // Auto-load network options for the pre-selected account + region
     _autoLoadNetworkOptions();
+
+    // Show live bill immediately (uses current wizardConfig / template defaults)
+    setTimeout(_updateLiveBill, 0);
   }
 
   function _todayStr() {
@@ -1139,6 +1153,100 @@ const Labs = (function () {
       if (cur < 35) storageEl.value = 35;
     }
   }
+
+  // ─── Live bill preview (step 1 — updates as customer changes config)
+
+  var _prevBilling = null;  // stores billing snapshot before customer edits
+
+  function _updateLiveBill() {
+    if (typeof BillingEngine === 'undefined') return;
+    var billEl = document.getElementById('lbs-live-bill');
+    if (!billEl) return;
+
+    var instanceType = (document.getElementById('lbs-s1-instance') || {}).value || '';
+    var storageGb    = parseInt((document.getElementById('lbs-s1-storage') || {}).value || '20', 10) || 20;
+    var elasticIp    = !!((document.getElementById('lbs-s1-eip') || {}).checked);
+    var hoursPerDay  = parseInt((document.getElementById('lbs-s1-uptime') || {}).value || '24', 10) || 24;
+    var accountId    = (document.getElementById('lbs-s1-account') || {}).value || '';
+
+    if (!instanceType) { billEl.style.display = 'none'; return; }
+
+    var bOpts = { instanceType: instanceType, storageGb: storageGb, hoursPerDay: hoursPerDay, isRunning: true, elasticIp: elasticIp };
+    var billing;
+    try {
+      billing = (typeof FinSettings !== 'undefined' && FinSettings.computeWithAccountTax)
+        ? FinSettings.computeWithAccountTax(accountId, bOpts)
+        : BillingEngine.compute(bOpts);
+    } catch (_) { billing = BillingEngine.compute(bOpts); }
+
+    // Build diff vs previous billing (if customer changed something after seeing step 2)
+    var diffHtml = '';
+    if (_prevBilling && _prevBilling.finalNpr > 0) {
+      var delta = billing.finalNpr - _prevBilling.finalNpr;
+      var pct   = Math.abs(delta / _prevBilling.finalNpr * 100).toFixed(1);
+      if (Math.abs(delta) > 0.5) {
+        var sign    = delta > 0 ? '+' : '\u2212';
+        var cls     = delta > 0 ? 'lbs-diff--up' : 'lbs-diff--down';
+        var reasons = [];
+        var prevOpts = _prevBilling._opts || {};
+        if (instanceType !== (prevOpts.instanceType || ''))
+          reasons.push('Server type changed from <b>' + _esc(prevOpts.instanceType || '—') + '</b> to <b>' + _esc(instanceType) + '</b>');
+        if (storageGb !== (prevOpts.storageGb || 0))
+          reasons.push('Storage changed from <b>' + _esc(String(prevOpts.storageGb || '—')) + ' GB</b> to <b>' + _esc(String(storageGb)) + ' GB</b>');
+        if (hoursPerDay !== (prevOpts.hoursPerDay || 24))
+          reasons.push('Daily uptime changed from <b>' + _esc(String(prevOpts.hoursPerDay || 24)) + ' hrs/day</b> to <b>' + _esc(String(hoursPerDay)) + ' hrs/day</b>');
+        if (elasticIp !== !!(prevOpts.elasticIp))
+          reasons.push(elasticIp ? 'Elastic IP <b>added</b>' : 'Elastic IP <b>removed</b>');
+        var reasonList = reasons.length
+          ? '<ul class="lbs-diff-reasons">' + reasons.map(function (r) { return '<li>' + r + '</li>'; }).join('') + '</ul>'
+          : '';
+        diffHtml =
+          '<div class="lbs-diff-banner ' + cls + '">' +
+            '<span class="lbs-diff-arrow">' + (delta > 0 ? '&#8679;' : '&#8681;') + '</span>' +
+            '<span>Bill ' + (delta > 0 ? 'increased' : 'decreased') + ' by <b>' + BillingEngine.fmtNpr(Math.abs(delta)) + '</b> (' + sign + pct + '%)</span>' +
+          '</div>' +
+          reasonList;
+      }
+    }
+
+    // Line-item breakdown
+    var cfg = billing.cfg || BillingEngine.getConfig();
+    var toNpr = function (usd) { return BillingEngine.fmtNpr(usd * cfg.usd_to_npr); };
+    var rows = [
+      { label: 'Compute (' + _esc(instanceType) + ')', val: toNpr(billing.instanceCost) },
+      { label: 'Storage (' + storageGb + ' GB gp3)',    val: toNpr(billing.ebsCost) },
+    ];
+    if (elasticIp && billing.staticIpCost > 0)
+      rows.push({ label: 'Elastic IP (stopped)', val: toNpr(billing.staticIpCost) });
+    rows.push({ label: 'Service charges & taxes', val: toNpr(billing.wht + billing.margin + billing.vat), isTax: true });
+    if (billing.rebateNpr > 0)
+      rows.push({ label: 'Discount (account rebate)', val: '\u2212' + BillingEngine.fmtNpr(billing.rebateNpr), isDiscount: true });
+
+    var tableRows = rows.map(function (r) {
+      return '<tr class="' + (r.isTax ? 'lbs-lb-tax' : r.isDiscount ? 'lbs-lb-discount' : '') + '">' +
+        '<td>' + r.label + '</td><td>' + r.val + '</td></tr>';
+    }).join('');
+
+    billEl.style.display = '';
+    billEl.innerHTML =
+      '<div class="lbs-live-bill-hd">' +
+        '<span class="lbs-live-bill-title">Estimated Monthly Bill</span>' +
+        '<span class="lbs-live-bill-total">' + BillingEngine.fmtNpr(billing.finalNpr) + '</span>' +
+      '</div>' +
+      diffHtml +
+      '<table class="lbs-live-bill-table">' +
+        '<tbody>' + tableRows + '</tbody>' +
+      '</table>' +
+      '<div class="lbs-live-bill-note">All taxes (WHT, service margin, VAT) included · ' +
+        hoursPerDay + ' hrs/day uptime</div>';
+
+    // Tag the billing snapshot with the opts for diff tracking
+    billing._opts = bOpts;
+    // expose so nextStep can snapshot it
+    _currentLiveBilling = billing;
+  }
+
+  var _currentLiveBilling = null;
 
   function _autoLoadNetworkOptions() {
     // Auto-triggers network load after step 1 renders; wire account/region change events
@@ -2168,9 +2276,23 @@ const Labs = (function () {
               '<div class="msv2-tpl-price-sub">/ month &nbsp;&middot;&nbsp; all taxes incl.</div>' +
             '</div>' +
             '<button class="msv2-tpl-launch" onclick="Labs._launchTemplate(\'' + _esc(t.id) + '\')">' +
-              '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+              '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
               'Deploy Now' +
             '</button>' +
+          '</div>' +
+          '<div class="msv2-tpl-trust">' +
+            '<span class="msv2-tpl-trust-item">' +
+              '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>' +
+              'Ready in minutes' +
+            '</span>' +
+            '<span class="msv2-tpl-trust-item">' +
+              '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' +
+              '24/7 support' +
+            '</span>' +
+            '<span class="msv2-tpl-trust-item">' +
+              '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>' +
+              'Secure &amp; managed' +
+            '</span>' +
           '</div>' +
         '</div>';
     });
@@ -2183,15 +2305,14 @@ const Labs = (function () {
     if (typeof BillingEngine === 'undefined') { startWizard(); return; }
     var tpl = BillingEngine.getTemplates().find(function (t) { return t.id === tplId; });
     if (!tpl) { startWizard(); return; }
-    wizardConfig = {
+    startWizard({
       instanceType:    tpl.instanceType,
       storageGb:       tpl.storageGb,
       detailedMonitor: tpl.detailedMonitor,
       labName:         tpl.name + ' Server',
       platform:        'ubuntu',
       region:          'ap-south-1',
-    };
-    startWizard();
+    });
   }
 
   // ─── AI Advisor ───────────────────────────────────────────────
@@ -3042,6 +3163,7 @@ const Labs = (function () {
     _menuCloneConfig:    _menuCloneConfig,
     _menuViewLogs:       _menuViewLogs,
     _menuBillingHistory: _menuBillingHistory,
+    _updateLiveBill:     _updateLiveBill,
     _launchTemplate:     _launchTemplate,
     _askAdvisor:         _askAdvisor,
     _toggleAdvisor:      _toggleAdvisor,
