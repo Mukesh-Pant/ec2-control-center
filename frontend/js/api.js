@@ -214,6 +214,20 @@ const API = (function () {
     return call('/labs/payment?labId=' + encodeURIComponent(labId), 'GET', null);
   }
 
+  /**
+   * GET /labs/pricing-settings — get admin pricing settings (admin only)
+   */
+  function getLabPricingSettings() {
+    return call('/labs/pricing-settings', 'GET', null);
+  }
+
+  /**
+   * POST /labs/pricing-settings — update admin pricing settings (admin only)
+   */
+  function updateLabPricingSettings(body) {
+    return call('/labs/pricing-settings', 'POST', body);
+  }
+
   return {
     call,
     ec2Action,
@@ -236,6 +250,8 @@ const API = (function () {
     getLabPricing,
     getLabNetworkOptions,
     getLabPaymentScreenshot,
+    getLabPricingSettings,
+    updateLabPricingSettings,
   };
 
 })();

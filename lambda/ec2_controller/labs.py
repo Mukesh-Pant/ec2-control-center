@@ -282,68 +282,247 @@ def handle_labs_payment(event):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Pricing settings helpers (stored as a special record in LABS_TABLE)
+# ─────────────────────────────────────────────────────────────────────────────
+
+PRICING_SETTINGS_ID = 'PRICING_SETTINGS'
+
+_DEFAULT_PRICING_SETTINGS = {
+    'whtPercent':             0.0,   # Withholding Tax %
+    'vatPercent':             13.0,  # VAT %
+    'marginPercent':          12.0,  # Admin margin %
+    'dataTransferMonthlyUsd': 3.0,   # Estimated data transfer cost per month (USD)
+    'includeBackup':          False, # Include AWS Backup cost estimate
+    'includeMonitoring':      False, # Include detailed CloudWatch monitoring cost
+    'currencyRate':           135.0, # Local currency per USD (e.g. NPR)
+    'currencyCode':           'NPR', # Local currency code
+    'discountPercent':        0.0,   # Global discount/rebate shown to customers
+}
+
+
+def _load_pricing_settings():
+    """Load admin-configured pricing settings from DynamoDB. Returns defaults if not set."""
+    try:
+        result = _get_labs_table().get_item(Key={'labId': PRICING_SETTINGS_ID})
+        item = result.get('Item', {})
+        settings = dict(_DEFAULT_PRICING_SETTINGS)
+        for k in settings:
+            if k in item:
+                settings[k] = float(item[k]) if isinstance(item[k], (int, float)) else item[k]
+        return settings
+    except Exception:
+        logger.warning('Could not load pricing settings, using defaults')
+        return dict(_DEFAULT_PRICING_SETTINGS)
+
+
+def _apply_tax_model(subtotal_usd, settings, is_admin=False):
+    """Apply WHT → margin → discount → VAT to a subtotal. Returns enriched dict.
+
+    Customers never see marginAmount; only see finalTotal and discountAmount.
+    """
+    wht_pct      = float(settings.get('whtPercent', 0))
+    margin_pct   = float(settings.get('marginPercent', 0))
+    discount_pct = float(settings.get('discountPercent', 0))
+    vat_pct      = float(settings.get('vatPercent', 0))
+
+    wht_amount        = round(subtotal_usd * wht_pct / 100, 4)
+    total_after_wht   = round(subtotal_usd + wht_amount, 4)
+    margin_amount     = round(total_after_wht * margin_pct / 100, 4)
+    total_before_disc = round(total_after_wht + margin_amount, 4)
+    discount_amount   = round(total_before_disc * discount_pct / 100, 4)
+    total_before_vat  = round(total_before_disc - discount_amount, 4)
+    vat_amount        = round(total_before_vat * vat_pct / 100, 4)
+    final_total       = round(total_before_vat + vat_amount, 4)
+
+    result = {
+        'subtotalUsd':     subtotal_usd,
+        'whtPercent':      wht_pct,
+        'whtAmount':       wht_amount,
+        'totalAfterWht':   total_after_wht,
+        'discountPercent': discount_pct,
+        'discountAmount':  discount_amount,
+        'vatPercent':      vat_pct,
+        'vatAmount':       vat_amount,
+        'totalBeforeVat':  total_before_vat,
+        'finalTotalUsd':   final_total,
+    }
+    if is_admin:
+        result['marginPercent'] = margin_pct
+        result['marginAmount']  = margin_amount
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /labs/pricing-settings  (admin only)
+# POST /labs/pricing-settings (admin only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def handle_labs_pricing_settings_get(event):
+    """Return current admin pricing settings."""
+    guard = require_admin(event)
+    if guard:
+        return guard
+    settings = _load_pricing_settings()
+    return response(200, {'settings': settings})
+
+
+def handle_labs_pricing_settings_update(event):
+    """Update admin pricing settings. Body: partial settings dict."""
+    guard = require_admin(event)
+    if guard:
+        return guard
+
+    try:
+        body = json.loads(event.get('body') or '{}')
+    except json.JSONDecodeError:
+        return error_response(400, 'Invalid JSON body.')
+
+    ALLOWED_KEYS = set(_DEFAULT_PRICING_SETTINGS.keys())
+    updates = {k: v for k, v in body.items() if k in ALLOWED_KEYS}
+    if not updates:
+        return error_response(400, 'No valid settings fields provided.')
+
+    # Validate numeric fields
+    numeric_fields = {'whtPercent', 'vatPercent', 'marginPercent', 'dataTransferMonthlyUsd',
+                      'currencyRate', 'discountPercent'}
+    for field in numeric_fields:
+        if field in updates:
+            try:
+                val = float(updates[field])
+                if val < 0:
+                    return error_response(400, f'{field} must be >= 0.')
+                if field in ('whtPercent', 'vatPercent', 'marginPercent', 'discountPercent') and val > 100:
+                    return error_response(400, f'{field} must be <= 100.')
+                updates[field] = val
+            except (TypeError, ValueError):
+                return error_response(400, f'{field} must be numeric.')
+
+    # Load existing, merge, write back
+    existing = _load_pricing_settings()
+    existing.update(updates)
+    existing['labId'] = PRICING_SETTINGS_ID
+
+    try:
+        _get_labs_table().put_item(Item=existing)
+    except Exception as e:
+        logger.exception('Failed to save pricing settings')
+        return error_response(500, str(e))
+
+    return response(200, {'settings': existing, 'message': 'Pricing settings updated.'})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # GET /labs/pricing
 # ─────────────────────────────────────────────────────────────────────────────
 
 def handle_labs_pricing(event):
-    """Return cost breakdown for a lab configuration.
+    """Return fully-loaded cost breakdown for a lab configuration.
 
-    Query params: instanceType, region, os, storageGb, elasticIp, durationHours
+    Query params: instanceType, region, os, storageGb, elasticIp,
+                  hoursPerDay, totalDays
+    EBS is charged for the full calendar duration (24×7), not just uptime hours.
+    EC2 is charged only for actual running hours (hoursPerDay × totalDays).
     """
     guard = _require_operator_or_admin(event)
     if guard:
         return guard
 
-    params = event.get('queryStringParameters') or {}
+    params         = event.get('queryStringParameters') or {}
+    caller_admin   = is_admin(event)
 
-    instance_type  = params.get('instanceType', '')
-    region         = params.get('region', 'ap-south-1')
-    os_param       = params.get('os', 'amazon-linux').lower()
-    storage_gb_str = params.get('storageGb', '20')
-    elastic_ip_str = params.get('elasticIp', 'false')
-    duration_str   = params.get('durationHours', '1')
+    instance_type   = params.get('instanceType', '')
+    region          = params.get('region', 'ap-south-1')
+    os_param        = params.get('os', 'amazon-linux').lower()
+    storage_gb_str  = params.get('storageGb', '20')
+    elastic_ip_str  = params.get('elasticIp', 'false')
+    hours_per_day_s = params.get('hoursPerDay', '24')
+    total_days_s    = params.get('totalDays', '30')
 
     if not instance_type:
         return error_response(400, 'instanceType is required.')
 
     try:
-        storage_gb     = int(storage_gb_str)
-        duration_hours = float(duration_str)
-        elastic_ip     = elastic_ip_str.lower() in ('true', '1', 'yes')
+        storage_gb    = int(storage_gb_str)
+        hours_per_day = float(hours_per_day_s)
+        total_days    = float(total_days_s)
+        elastic_ip    = elastic_ip_str.lower() in ('true', '1', 'yes')
     except (ValueError, TypeError):
-        return error_response(400, 'storageGb and durationHours must be numeric.')
+        return error_response(400, 'storageGb, hoursPerDay, and totalDays must be numeric.')
 
     if storage_gb < 8 or storage_gb > 16384:
         return error_response(400, 'storageGb must be between 8 and 16384.')
-    if duration_hours <= 0:
-        return error_response(400, 'durationHours must be positive.')
-    if duration_hours > MAX_DURATION_HOURS:
-        return error_response(400, f'durationHours cannot exceed {MAX_DURATION_HOURS} (3 years).')
+    if hours_per_day < 1 or hours_per_day > 24:
+        return error_response(400, 'hoursPerDay must be between 1 and 24.')
+    if total_days <= 0:
+        return error_response(400, 'totalDays must be positive.')
+    if total_days * 24 > MAX_DURATION_HOURS:
+        return error_response(400, f'Duration cannot exceed 3 years.')
+
+    running_hours = hours_per_day * total_days          # EC2 uptime hours
+    calendar_months = total_days / 30.0                 # EBS billed by calendar time
+
+    settings = _load_pricing_settings()
 
     try:
+        # ── Core AWS costs
         if os_param == 'windows':
             ec2_hourly = pricing.get_hourly_price_windows(instance_type, region)
         else:
             ec2_hourly = pricing.get_hourly_price(instance_type, region)
 
-        ec2_cost         = round(ec2_hourly * duration_hours, 4)
+        ec2_cost         = round(ec2_hourly * running_hours, 4)
         ebs_per_gb_month = pricing.get_ebs_price(region, 'gp3')
-        ebs_cost         = round(ebs_per_gb_month * storage_gb * (duration_hours / 730), 4)
+        # EBS: charged 24×7 for the full calendar duration, NOT just running hours
+        ebs_cost         = round(ebs_per_gb_month * storage_gb * calendar_months, 4)
         eip_hourly       = pricing.get_eip_price(region) if elastic_ip else 0.0
-        eip_cost         = round(eip_hourly * duration_hours, 4)
-        total            = round(ec2_cost + ebs_cost + eip_cost, 4)
+        # EIP: free while running; charged when stopped. Charge for stopped hours.
+        stopped_hours    = (24 - hours_per_day) * total_days
+        eip_cost         = round(eip_hourly * stopped_hours, 4) if elastic_ip else 0.0
+
+        # ── Additional estimated costs
+        dt_monthly       = float(settings.get('dataTransferMonthlyUsd', 3.0))
+        dt_cost          = round(dt_monthly * calendar_months, 4)
+
+        backup_cost = 0.0
+        if settings.get('includeBackup', False):
+            # AWS Backup warm tier: $0.05/GB-month
+            backup_cost = round(0.05 * storage_gb * calendar_months, 4)
+
+        monitoring_cost = 0.0
+        if settings.get('includeMonitoring', False):
+            # CloudWatch detailed monitoring: ~$3.50/instance-month
+            monitoring_cost = round(3.50 * calendar_months, 4)
+
+        subtotal = round(ec2_cost + ebs_cost + eip_cost + dt_cost + backup_cost + monitoring_cost, 4)
+
+        # ── Apply WHT → margin → discount → VAT
+        tax = _apply_tax_model(subtotal, settings, is_admin=caller_admin)
+
+        breakdown = {
+            'ec2Hourly':       ec2_hourly,
+            'ec2Cost':         ec2_cost,
+            'ebsPerGbMonth':   ebs_per_gb_month,
+            'ebsCost':         ebs_cost,
+            'eipHourly':       eip_hourly,
+            'eipCost':         eip_cost,
+            'dataTransferCost': dt_cost,
+            'backupCost':      backup_cost,
+            'monitoringCost':  monitoring_cost,
+            'includeBackup':   settings.get('includeBackup', False),
+            'includeMonitoring': settings.get('includeMonitoring', False),
+            'currencyRate':    float(settings.get('currencyRate', 135)),
+            'currencyCode':    settings.get('currencyCode', 'NPR'),
+            'totalUsd':        tax['finalTotalUsd'],   # ← customer pays this
+        }
+        breakdown.update(tax)
+
         return response(200, {
-            'breakdown': {
-                'ec2Hourly':    ec2_hourly,
-                'ec2Cost':      ec2_cost,
-                'ebsPerGbMonth': ebs_per_gb_month,
-                'ebsCost':      ebs_cost,
-                'eipHourly':    eip_hourly,
-                'eipCost':      eip_cost,
-                'totalUsd':     total,
-            },
-            'durationHours': duration_hours,
-            'pricingSource':  'AWS Price List API',
+            'breakdown':     breakdown,
+            'runningHours':  running_hours,
+            'totalDays':     total_days,
+            'hoursPerDay':   hours_per_day,
+            'pricingSource': 'AWS Price List API',
         })
     except Exception as exc:
         logger.exception('handle_labs_pricing error')

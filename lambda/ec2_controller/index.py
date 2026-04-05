@@ -100,6 +100,10 @@ def lambda_handler(event, context):
         return labs.handle_labs_windows_password(event)
     elif path == '/labs/pricing' and method == 'GET':
         return labs.handle_labs_pricing(event)
+    elif path == '/labs/pricing-settings' and method == 'GET':
+        return labs.handle_labs_pricing_settings_get(event)
+    elif path == '/labs/pricing-settings' and method == 'POST':
+        return labs.handle_labs_pricing_settings_update(event)
     elif path == '/labs/network-options' and method == 'GET':
         return labs.handle_labs_network_options(event)
     else:

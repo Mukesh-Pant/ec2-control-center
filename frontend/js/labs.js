@@ -987,7 +987,7 @@ const Labs = (function () {
     var storagVal  = wizardConfig.storageGb || (currentPlatform === 'windows' ? 35 : 20);
     var eipChecked = wizardConfig.elasticIp ? ' checked' : '';
 
-    container.innerHTML = [
+    var _html = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
       '    <h2 class="lbs-wizard-title">New Server — Step 1: Configure</h2>',
@@ -1061,21 +1061,23 @@ const Labs = (function () {
       '      </div>',
       '    </div>',
       '    <div class="lbs-form-row">',
-      '      <label class="lbs-label">Network Options</label>',
-      '      <button class="btn btn-outline btn-sm" onclick="Labs._loadNetworkOptions()">Load VPCs / Subnets / Security Groups</button>',
-      '      <span id="lbs-s1-net-status" class="lbs-help-text"></span>',
-      '    </div>',
-      '    <div class="lbs-form-row">',
-      '      <label class="lbs-label">VPC</label>',
-      '      <select id="lbs-s1-vpc" class="lbs-select" onchange="Labs._onVpcChange()"><option value="">— Load network options first —</option></select>',
+      '      <label class="lbs-label">VPC / Subnet / Security Group</label>',
+      '      <div class="lbs-net-auto-row">',
+      '        <span id="lbs-s1-net-status" class="lbs-net-status-badge">',
+      '          <span class="lbs-net-spinner" id="lbs-net-spinner" style="display:none"></span>',
+      '          <span id="lbs-net-status-text">Loading network options\u2026</span>',
+      '        </span>',
+      '        <button class="btn btn-outline btn-xs" onclick="Labs._loadNetworkOptions()" id="lbs-net-reload-btn" style="display:none;">Reload</button>',
+      '      </div>',
+      '      <select id="lbs-s1-vpc" class="lbs-select" onchange="Labs._onVpcChange()" style="margin-top:8px;"><option value="">Loading\u2026</option></select>',
       '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Subnet</label>',
-      '      <select id="lbs-s1-subnet" class="lbs-select"><option value="">— Select VPC first —</option></select>',
+      '      <select id="lbs-s1-subnet" class="lbs-select"><option value="">— Select VPC above —</option></select>',
       '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Security Group</label>',
-      '      <select id="lbs-s1-sg" class="lbs-select"><option value="">— Select VPC first —</option></select>',
+      '      <select id="lbs-s1-sg" class="lbs-select"><option value="">— Select VPC above —</option></select>',
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-footer">',
@@ -1084,6 +1086,11 @@ const Labs = (function () {
       '  </div>',
       '</div>',
     ].join('\n');
+
+    container.innerHTML = _html;
+
+    // Auto-load network options for the pre-selected account + region
+    _autoLoadNetworkOptions();
   }
 
   function _todayStr() {
@@ -1133,18 +1140,33 @@ const Labs = (function () {
     }
   }
 
-  async function _loadNetworkOptions() {
-    var statusEl  = document.getElementById('lbs-s1-net-status');
+  function _autoLoadNetworkOptions() {
+    // Auto-triggers network load after step 1 renders; wire account/region change events
     var accountEl = document.getElementById('lbs-s1-account');
     var regionEl  = document.getElementById('lbs-s1-region');
-    var accountId = accountEl ? accountEl.value : '';
-    var region    = regionEl  ? regionEl.value  : '';
+    if (accountEl) accountEl.addEventListener('change', function () { _loadNetworkOptions(); });
+    if (regionEl)  regionEl.addEventListener('change',  function () { _loadNetworkOptions(); });
+    // Trigger immediately
+    _loadNetworkOptions();
+  }
+
+  async function _loadNetworkOptions() {
+    var statusTextEl = document.getElementById('lbs-net-status-text');
+    var spinnerEl    = document.getElementById('lbs-net-spinner');
+    var reloadBtn    = document.getElementById('lbs-net-reload-btn');
+    var accountEl    = document.getElementById('lbs-s1-account');
+    var regionEl     = document.getElementById('lbs-s1-region');
+    var accountId    = accountEl ? accountEl.value : '';
+    var region       = regionEl  ? regionEl.value  : '';
 
     if (!accountId || !region) {
-      if (statusEl) statusEl.textContent = 'Select account and region first.';
+      if (statusTextEl) statusTextEl.textContent = 'Select account and region first.';
+      if (reloadBtn) reloadBtn.style.display = '';
       return;
     }
-    if (statusEl) statusEl.textContent = 'Loading…';
+    if (statusTextEl) statusTextEl.textContent = 'Loading\u2026';
+    if (spinnerEl) spinnerEl.style.display = '';
+    if (reloadBtn) reloadBtn.style.display = 'none';
 
     try {
       var res  = await API.getLabNetworkOptions(accountId, region);
@@ -1157,19 +1179,30 @@ const Labs = (function () {
 
       var vpcSel = document.getElementById('lbs-s1-vpc');
       if (vpcSel) {
+        // Find default VPC (isDefault=true) for auto-selection
+        var defaultVpc = vpcs.find(function (v) { return v.isDefault; }) || vpcs[0] || null;
         vpcSel.innerHTML = '<option value="">— Select VPC —</option>' +
           vpcs.map(function (v) {
-            var label = v.vpcId + (v.name ? ' (' + _esc(v.name) + ')' : '');
-            return '<option value="' + _esc(v.vpcId) + '">' + label + '</option>';
+            var label = v.vpcId +
+              (v.isDefault ? ' (default)' : '') +
+              (v.name ? ' \u2014 ' + _esc(v.name) : '');
+            var sel = (defaultVpc && v.vpcId === defaultVpc.vpcId) ? ' selected' : '';
+            return '<option value="' + _esc(v.vpcId) + '"' + sel + '>' + label + '</option>';
           }).join('');
-        // Stash subnets + SGs for filtering by VPC
+        // Stash subnets + SGs for VPC filtering
         vpcSel._subnets = subnets;
         vpcSel._sgs     = sgs;
+        // Auto-select subnets/SGs for the default VPC
+        if (defaultVpc) _onVpcChange();
       }
 
-      if (statusEl) statusEl.textContent = 'Loaded ' + vpcs.length + ' VPC(s).';
+      if (spinnerEl)    spinnerEl.style.display    = 'none';
+      if (statusTextEl) statusTextEl.textContent   = vpcs.length + ' VPC' + (vpcs.length !== 1 ? 's' : '') + ' loaded';
+      if (reloadBtn)    reloadBtn.style.display     = '';
     } catch (e) {
-      if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+      if (spinnerEl)    spinnerEl.style.display    = 'none';
+      if (statusTextEl) statusTextEl.textContent   = 'Error: ' + e.message;
+      if (reloadBtn)    reloadBtn.style.display     = '';
       App.showToast('Network options error: ' + e.message, 'err');
     }
   }
@@ -1188,16 +1221,16 @@ const Labs = (function () {
     var filteredSgs  = allSgs.filter(function (g)     { return g.vpcId === selectedVpc; });
 
     subnetSel.innerHTML = '<option value="">— Select Subnet —</option>' +
-      filteredSubs.map(function (s) {
-        var label = s.subnetId + (s.name ? ' (' + _esc(s.name) + ')' : '') +
+      filteredSubs.map(function (s, i) {
+        var label = s.subnetId + (s.name ? ' \u2014 ' + _esc(s.name) : '') +
                     (s.availabilityZone ? ' / ' + _esc(s.availabilityZone) : '');
-        return '<option value="' + _esc(s.subnetId) + '">' + label + '</option>';
+        return '<option value="' + _esc(s.subnetId) + '"' + (i === 0 ? ' selected' : '') + '>' + label + '</option>';
       }).join('');
 
     sgSel.innerHTML = '<option value="">— Select Security Group —</option>' +
-      filteredSgs.map(function (g) {
-        var label = g.groupId + ' — ' + _esc(g.groupName || '');
-        return '<option value="' + _esc(g.groupId) + '">' + label + '</option>';
+      filteredSgs.map(function (g, i) {
+        var label = g.groupId + ' \u2014 ' + _esc(g.groupName || '');
+        return '<option value="' + _esc(g.groupId) + '"' + (i === 0 ? ' selected' : '') + '>' + label + '</option>';
       }).join('');
   }
 
@@ -1313,62 +1346,72 @@ const Labs = (function () {
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Pricing fetch failed');
 
-      var b           = data.breakdown;
-      var hoursPerDay = wizardConfig.hoursPerDay;
-      var months      = wizardConfig.months;
+      var b             = data.breakdown;
       var durationHours = wizardConfig.durationHours;
-      wizardConfig.estimatedCost = b.totalUsd;
+      wizardConfig.estimatedCost  = b.totalUsd;
       wizardConfig.priceBreakdown = b;
 
-      var startDate     = wizardConfig.startDate || '';
-      var endDate       = wizardConfig.endDate   || '';
-      var totalDays     = wizardConfig.totalDays || Math.round(durationHours / 24);
-      var durationLabel = startDate + ' \u2192 ' + endDate + ' (' + totalDays + ' days, ' + durationHours.toLocaleString() + ' hrs)';
+      var startDate  = wizardConfig.startDate || '';
+      var endDate    = wizardConfig.endDate   || '';
+      var totalDays  = wizardConfig.totalDays || Math.round(durationHours / 24);
 
-      var rows = [
-        '<tr><td>' + _esc(wizardConfig.instanceType || '\u2014') + ' (server)</td>' +
-          '<td>$' + b.ec2Hourly.toFixed(4) + '/hr</td>' +
-          '<td>' + _npmFmt(b.ec2Cost) + '</td></tr>',
-        '<tr><td>EBS gp3 (' + _esc(String(wizardConfig.storageGb)) + ' GB)</td>' +
-          '<td>$' + b.ebsPerGbMonth.toFixed(4) + '/GB-mo</td>' +
-          '<td>' + _npmFmt(b.ebsCost) + '</td></tr>',
-      ];
-      if (wizardConfig.elasticIp) {
-        rows.push(
-          '<tr><td>Elastic IP</td>' +
-          '<td>$' + b.eipHourly.toFixed(4) + '/hr</td>' +
-          '<td>' + _npmFmt(b.eipCost) + '</td></tr>'
-        );
+      // Compute final tax-inclusive price using BillingEngine (account-specific rates if available)
+      var finalNpr = _npmFmt(b.totalUsd);
+      var billing  = null;
+      if (typeof BillingEngine !== 'undefined') {
+        var bOpts = {
+          instanceType: wizardConfig.instanceType,
+          storageGb:    wizardConfig.storageGb,
+          hoursPerDay:  wizardConfig.hoursPerDay || 24,
+          isRunning:    true,
+          elasticIp:    wizardConfig.elasticIp,
+        };
+        // Use account-specific taxes if FinSettings has them
+        if (typeof FinSettings !== 'undefined' && FinSettings.computeWithAccountTax) {
+          billing = FinSettings.computeWithAccountTax(wizardConfig.accountId, bOpts);
+        } else {
+          billing = BillingEngine.compute(bOpts);
+        }
+        if (billing) finalNpr = BillingEngine.fmtNpr(billing.finalNpr);
       }
 
-      var regionLabel = (REGIONS.find(function (r) { return r.value === wizardConfig.region; }) || { label: wizardConfig.region }).label;
-      var osLabel     = wizardConfig.platform === 'windows' ? 'Windows Server' : 'Linux (Ubuntu)';
+      var cfg           = (typeof BillingEngine !== 'undefined') ? BillingEngine.getConfig() : {};
+      var showBreakdown = cfg.show_breakdown;
+
+      // Build line items (only show if admin toggle is on)
+      var breakdownHtml = '';
+      if (showBreakdown && billing) {
+        var items = [
+          { label: 'Cloud compute (' + _esc(wizardConfig.instanceType) + ')', val: BillingEngine.fmtNpr(billing.instanceCost * billing.cfg.usd_to_npr) },
+          { label: 'Storage (' + _esc(String(wizardConfig.storageGb)) + ' GB gp3)', val: BillingEngine.fmtNpr(billing.ebsCost * billing.cfg.usd_to_npr) },
+        ];
+        if (wizardConfig.elasticIp && billing.staticIpCost > 0)
+          items.push({ label: 'Elastic IP', val: BillingEngine.fmtNpr(billing.staticIpCost * billing.cfg.usd_to_npr) });
+        items.push({ label: 'Service & taxes', val: BillingEngine.fmtNpr((billing.wht + billing.margin + billing.vat) * billing.cfg.usd_to_npr) });
+        if (billing.rebateNpr > 0)
+          items.push({ label: '&#x2212; Rebate / discount', val: '&minus;' + BillingEngine.fmtNpr(billing.rebateNpr), isDiscount: true });
+        var rows = items.map(function (it) {
+          return '<tr class="' + (it.isDiscount ? 'lbs-price-discount' : '') + '"><td>' + it.label + '</td><td>' + it.val + '</td></tr>';
+        }).join('');
+        breakdownHtml =
+          '<table class="lbs-price-table lbs-price-table--breakdown">' +
+          '<thead><tr><th>Component</th><th>Cost (NPR)</th></tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+          '</table>';
+      }
 
       contentEl.innerHTML = [
-        '<table class="lbs-price-table">',
-        '  <thead><tr><th>Component</th><th>Rate</th><th>Cost</th></tr></thead>',
-        '  <tbody>' + rows.join('') + '</tbody>',
-        '  <tfoot>',
-        '    <tr class="lbs-price-total">',
-        '      <td colspan="2"><b>Total (' + _esc(durationLabel) + ')</b></td>',
-        '      <td><b>' + _npmFmt(b.totalUsd) + '</b></td>',
-        '    </tr>',
-        '  </tfoot>',
-        '</table>',
-        '<p class="lbs-pricing-source">Live pricing · Verify with the AWS Pricing Calculator below</p>',
-        '<div class="lbs-calc-hint">',
-        '  <p class="lbs-calc-hint-title">Your configuration for AWS Pricing Calculator:</p>',
-        '  <ul class="lbs-calc-hint-list">',
-        '    <li>Region: ' + _esc(regionLabel) + '</li>',
-        '    <li>Operating System: ' + _esc(osLabel) + '</li>',
-        '    <li>Server Type: ' + _esc(wizardConfig.instanceType || '\u2014') + '</li>',
-        '    <li>Duration: ' + _esc(String(totalDays)) + ' days (' + _esc(startDate) + ' \u2192 ' + _esc(endDate) + ')</li>',
-        '    <li>EBS: ' + _esc(String(wizardConfig.storageGb)) + ' GB gp3</li>',
-        '  </ul>',
-        '  <a href="https://calculator.aws/#/createCalculator/ec2-enhancement" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">',
-        '    Open AWS Pricing Calculator \u2192',
-        '  </a>',
+        '<div class="lbs-price-summary-card">',
+        '  <div class="lbs-price-summary-label">Total for your server</div>',
+        '  <div class="lbs-price-summary-amount">' + _esc(finalNpr) + '</div>',
+        '  <div class="lbs-price-summary-meta">',
+        '    ' + _esc(startDate) + ' \u2192 ' + _esc(endDate) + ' &nbsp;&middot;&nbsp; ' + totalDays + ' days &nbsp;&middot;&nbsp; ' + _esc(wizardConfig.instanceType || '') + ' &nbsp;&middot;&nbsp; ' + _esc(String(wizardConfig.storageGb)) + ' GB',
+        '  </div>',
+        '  <div class="lbs-price-incl-note">All taxes &amp; service charges included</div>',
+        (billing && billing.rebateNpr > 0 ? '  <div class="lbs-price-rebate-badge">Discount of ' + BillingEngine.fmtNpr(billing.rebateNpr) + ' applied to your account</div>' : ''),
         '</div>',
+        breakdownHtml,
+        '<p class="lbs-pricing-source" style="margin-top:12px;">Live AWS pricing · Final amount is all-inclusive</p>',
       ].join('\n');
 
       // Store breakdown reference for bill download
@@ -2048,33 +2091,66 @@ const Labs = (function () {
       '</div>' +
       '<div class="msv2-tpl-grid">';
 
-    tpls.forEach(function (t, idx) {
+    // Compute "savings vs next tier" for each template
+    var prevNpr = 0;
+    var tplsWithSavings = tpls.map(function (t, idx) {
+      var npm = typeof BillingEngine !== 'undefined' ? BillingEngine.fmtNpr(t.billing.finalNpr) : '—';
+      var pct = (idx > 0 && prevNpr > 0) ? null : null;  // savings vs custom-config baseline
+      prevNpr = t.billing.finalNpr;
+      return Object.assign({}, t, { npr: npm });
+    });
+
+    // Annotate "best value" and "most popular"
+    var popularIdx = 2;   // E-Commerce (index 2)
+    var bestValIdx = 1;   // Dev Sandbox (index 1)
+
+    tplsWithSavings.forEach(function (t, idx) {
       var b    = t.billing;
       var col  = colors[idx % colors.length];
-      var npr  = typeof BillingEngine !== 'undefined' ? BillingEngine.fmtNpr(b.finalNpr) : '—';
+      var npr  = t.npr;
       var uses = t.useCases.map(function (u) { return '<span class="msv2-tpl-use">' + _esc(u) + '</span>'; }).join('');
+
+      // Highlight banners
+      var ribbonHtml = '';
+      if (idx === popularIdx) ribbonHtml = '<div class="msv2-tpl-ribbon msv2-tpl-ribbon--popular">Most Popular</div>';
+      if (idx === bestValIdx) ribbonHtml = '<div class="msv2-tpl-ribbon msv2-tpl-ribbon--value">Best Value</div>';
+
+      // Savings badge (monthly tax-inclusive price converted to a catchy phrase)
+      var savingsBadge = '';
+      if (t.id === 'starter-blog') savingsBadge = 'Starting from ' + _esc(npr) + '/mo';
+      else if (t.id === 'dev-sandbox') savingsBadge = 'Save with bundles — from ' + _esc(npr) + '/mo';
+      else savingsBadge = 'From ' + _esc(npr) + '/mo';
+
+      // Hardware highlights
+      var specIcons = [
+        '<div class="msv2-tpl-hw"><span class="msv2-tpl-hw-ico">&#xFE0F;</span><span>' + t.vcpu + ' vCPU</span></div>',
+        '<div class="msv2-tpl-hw"><span class="msv2-tpl-hw-ico">&#xFE0F;</span><span>' + t.ram + '</span></div>',
+        '<div class="msv2-tpl-hw"><span class="msv2-tpl-hw-ico">&#xFE0F;</span><span>' + t.storageGb + ' GB SSD</span></div>',
+      ].join('');
+
       html +=
-        '<div class="msv2-tpl-card ' + col + '">' +
+        '<div class="msv2-tpl-card ' + col + (idx === popularIdx ? ' msv2-tpl-card--featured' : '') + '">' +
+          ribbonHtml +
           '<div class="msv2-tpl-top">' +
-            '<span class="msv2-tpl-icon">' + t.icon + '</span>' +
+            '<div class="msv2-tpl-icon-wrap">' +
+              '<span class="msv2-tpl-icon">' + t.icon + '</span>' +
+            '</div>' +
             '<span class="tpl-badge ' + _esc(t.badgeClass) + '">' + _esc(t.badge) + '</span>' +
           '</div>' +
           '<div class="msv2-tpl-name">' + _esc(t.name) + '</div>' +
           '<div class="msv2-tpl-desc">' + _esc(t.description) + '</div>' +
-          '<div class="msv2-tpl-specs">' +
-            '<span class="msv2-tpl-spec">' + t.vcpu + ' vCPU</span>' +
-            '<span class="msv2-tpl-spec">' + t.ram + ' RAM</span>' +
-            '<span class="msv2-tpl-spec">' + t.storageGb + ' GB</span>' +
-            '<span class="msv2-tpl-spec">' + _esc(t.instanceType) + '</span>' +
-          '</div>' +
+          '<div class="msv2-tpl-hw-row">' + specIcons + '</div>' +
           '<div class="msv2-tpl-uses">' + uses + '</div>' +
+          '<div class="msv2-tpl-divider"></div>' +
           '<div class="msv2-tpl-price-row">' +
-            '<div>' +
+            '<div class="msv2-tpl-price-block">' +
+              '<div class="msv2-tpl-price-from">Starting from</div>' +
               '<div class="msv2-tpl-price-main">' + _esc(npr) + '</div>' +
-              '<div class="msv2-tpl-price-sub">/ month incl. taxes</div>' +
+              '<div class="msv2-tpl-price-sub">/ month &nbsp;&middot;&nbsp; incl. all taxes</div>' +
             '</div>' +
             '<button class="msv2-tpl-launch" onclick="Labs._launchTemplate(\'' + _esc(t.id) + '\')">' +
-              'Launch Now' +
+              '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+              'Deploy' +
             '</button>' +
           '</div>' +
         '</div>';
@@ -2537,18 +2613,31 @@ const Labs = (function () {
         '</div>';
     }
 
-    var delay = (idx * 0.04).toFixed(2) + 's';
+    var delay = (idx * 0.05).toFixed(2) + 's';
     var statusStripe = 'status-' + (status === 'running' ? 'running' : status === 'stopped' ? 'stopped' : status === 'provisioning' ? 'provisioning' : 'pending');
+    var platformIcon = lab.platform === 'windows'
+      ? '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="color:var(--blue2)"><path d="M3 5.6L10.5 4.5V11.6H3V5.6ZM11.5 4.35L21 3V11.6H11.5V4.35ZM3 12.4H10.5V19.5L3 18.4V12.4ZM11.5 12.4H21V21L11.5 19.65V12.4Z"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--green2)"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+
+    var expiryHtml = lab.expiresAt
+      ? '<div class="msv2-card-info-item"><span class="msv2-card-info-lbl">Expires</span><span class="msv2-card-info-val">' + _renderExpiry(lab) + '</span></div>'
+      : '';
+    var ipHtml = lab.publicIp
+      ? '<div class="msv2-card-info-item"><span class="msv2-card-info-lbl">IP Address</span><span class="msv2-card-info-val msv2-card-info-mono">' + _esc(lab.publicIp) + '</span></div>'
+      : '';
+
     return (
       '<div class="msv2-card ' + statusStripe + (isSelected ? ' selected' : '') + '" style="animation-delay:' + delay + '" id="msv2-card-' + labIdEsc + '">' +
+        // ── Header
         '<div class="msv2-card-hd">' +
           '<div class="msv2-card-hd-left">' +
-            '<div class="msv2-card-check' + (isSelected ? ' checked' : '') + '" onclick="event.stopPropagation();Labs._toggleSelect(\'' + labIdEsc + '\')"></div>' +
-            '<div>' +
+            '<div class="msv2-card-check' + (isSelected ? ' checked' : '') + '" onclick="event.stopPropagation();Labs._toggleSelect(\'' + labIdEsc + '\')" title="Select"></div>' +
+            '<div class="msv2-card-title-block">' +
               '<div class="msv2-card-name" title="' + _esc(name) + '">' + _esc(name) + '</div>' +
-              '<div class="msv2-card-region">' +
+              '<div class="msv2-card-subtitle">' +
                 '<span class="msv2-card-flag">' + _regionFlag(region) + '</span>' +
-                _esc(_regionLabel(region)) +
+                '<span class="msv2-card-region-lbl">' + _esc(_regionLabel(region)) + '</span>' +
+                '<span class="msv2-card-platform-ico">' + platformIcon + '</span>' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -2558,42 +2647,43 @@ const Labs = (function () {
               _esc(stateLabel) +
             '</div>' +
             '<button class="msv2-dots-btn" onclick="event.stopPropagation();Labs._openMenu(\'' + labIdEsc + '\',event)" title="More actions">' +
-              '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>' +
+              '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>' +
             '</button>' +
             menuHtml +
           '</div>' +
         '</div>' +
-        '<div class="msv2-card-body">' +
-          '<div class="msv2-card-meta-row">' +
-            '<span class="msv2-card-meta-label">Instance type</span>' +
-            '<span class="msv2-type-badge">' + _esc(lab.instanceType || '—') + '</span>' +
-          '</div>' +
-          (lab.publicIp
-            ? '<div class="msv2-card-meta-row"><span class="msv2-card-meta-label">Public IP</span><span class="msv2-card-meta-val" style="font-family:var(--mono);font-size:12px;">' + _esc(lab.publicIp) + '</span></div>'
-            : '') +
-          (lab.expiresAt
-            ? '<div class="msv2-card-meta-row"><span class="msv2-card-meta-label">Expires</span><span class="msv2-card-meta-val" style="font-size:12px;">' + _renderExpiry(lab) + '</span></div>'
-            : '') +
-          '<div>' +
-            '<div class="msv2-card-cost-lbl">Monthly cost</div>' +
-            '<div class="msv2-card-cost">' + _esc(nprStr) + '</div>' +
-          '</div>' +
-          tickerHtml +
-          sparkHtml +
+        // ── Spec chips row
+        '<div class="msv2-card-specs">' +
+          '<span class="msv2-card-spec-chip">' + _esc(lab.instanceType || '—') + '</span>' +
+          '<span class="msv2-card-spec-chip">' + _esc(String(lab.storageGb || '—')) + ' GB</span>' +
+          (lab.elasticIp ? '<span class="msv2-card-spec-chip msv2-chip--eip">Fixed IP</span>' : '') +
         '</div>' +
+        // ── Info grid
+        '<div class="msv2-card-info-grid">' +
+          ipHtml +
+          expiryHtml +
+        '</div>' +
+        // ── Cost block
+        '<div class="msv2-card-cost-block">' +
+          '<div class="msv2-card-cost-lbl">Monthly cost (incl. taxes)</div>' +
+          '<div class="msv2-card-cost">' + _esc(nprStr) + '</div>' +
+          tickerHtml +
+        '</div>' +
+        sparkHtml +
+        // ── Actions
         '<div class="msv2-card-ft">' +
           (isStopped
             ? '<button class="msv2-card-btn start" onclick="event.stopPropagation();Labs._startLab(\'' + labIdEsc + '\')">' +
-                '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>Start' +
+                '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start' +
               '</button>'
             : '') +
           (isRunning
             ? '<button class="msv2-card-btn stop" onclick="event.stopPropagation();Labs._stopLab(\'' + labIdEsc + '\')">' +
-                '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Stop' +
+                '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg> Stop' +
               '</button>'
             : '') +
           '<button class="msv2-card-btn detail" onclick="Labs._toggleRowDetail(\'' + labIdEsc + '\')">' +
-            '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7"/></svg>Details' +
+            '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7"/></svg> Details' +
           '</button>' +
         '</div>' +
       '</div>'
@@ -2793,7 +2883,6 @@ const Labs = (function () {
         '<div id="msv2-tpl-anchor"></div>' +
         _renderQuickLaunch() +
         _renderAdvisor() +
-        _renderBillingConfig() +
         '<div class="lbs-onboard-hero">' +
           '<div class="lbs-onboard-icon">☁️</div>' +
           '<h2 class="lbs-onboard-title">No servers yet</h2>' +
@@ -2864,8 +2953,6 @@ const Labs = (function () {
     if (_expandedLabId) {
       var expandedLab = activeLabs.find(function (l) { return l.labId === _expandedLabId; });
       if (expandedLab) {
-        // _renderDetailPanel returns a full <div class="lbs-detail-panel">…</div>
-        // Wrap it in a scroll-anchor div so we can smooth-scroll to it
         html += '<div id="msv2-detail-panel" style="margin-top:16px;">' +
           _renderDetailPanel(expandedLab) +
         '</div>';
@@ -2873,7 +2960,6 @@ const Labs = (function () {
     }
 
     html += _renderForecastChart(totalNpr);
-    html += _renderBillingConfig();
 
     listEl.innerHTML = html;
 

@@ -1796,9 +1796,11 @@
         <div class="ph">
           <div class="ph-l">
             <h1 class="ph-title">Finance Settings</h1>
-            <p class="ph-sub">Exchange rates, alert thresholds, defaults</p>
+            <p class="ph-sub">Exchange rates, billing engine, tax management, alert thresholds</p>
           </div>
         </div>
+
+        <!-- Exchange Rates & Basic Settings -->
         <div class="card fset-card">
           <p class="fset-section-title">Exchange Rates</p>
           <div class="fset-grid">
@@ -1839,6 +1841,13 @@
             <button class="btn btn-blue" onclick="FinSettings.saveFromForm()">Save Settings</button>
           </div>
         </div>
+
+        <!-- Billing Engine Config (admin only — rendered by JS) -->
+        <div class="card fset-card fset-card--admin" id="fset-billing-engine"></div>
+
+        <!-- Tax per Account (admin only — rendered by JS) -->
+        <div class="card fset-card fset-card--admin" id="fset-tax-accounts"></div>
+
       </div><!-- /#pv-finsettings -->
 
     </main><!-- /content -->
