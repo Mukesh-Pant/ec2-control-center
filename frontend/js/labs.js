@@ -507,7 +507,7 @@ const Labs = (function () {
 
     return '<tr class="' + rowClass + '" id="lbs-row-' + labIdEsc + '" onclick="Labs._toggleRowDetail(\'' + labIdEsc + '\')">' +
       '<td><span class="' + chevClass + '" id="lbs-chev-' + labIdEsc + '">&#9658;</span></td>' +
-      '<td>' + _esc(lab.labName || ('ec2ctrl-lab-' + lab.labId.substring(0, 8))) + '</td>' +
+      '<td>' + _esc(lab.labName || ('server-' + lab.labId.substring(0, 8))) + '</td>' +
       '<td>' + _esc(platformLabel) + '</td>' +
       '<td>' + _esc(lab.instanceType || '\u2014') + '</td>' +
       '<td><span class="lbs-badge ' + statusClass + '">' + _esc(statusLabel) + '</span></td>' +
@@ -587,7 +587,7 @@ const Labs = (function () {
 
   async function _startLab(labId) {
     var lab = activeLabs.find(function (l) { return l.labId === labId; });
-    if (!lab || !lab.instanceId) { App.showToast('Instance ID not available', 'err'); return; }
+    if (!lab || !lab.instanceId) { App.showToast('Server ID not available', 'err'); return; }
     try {
       var res  = await API.ec2Action({
         action:       'start',
@@ -608,7 +608,7 @@ const Labs = (function () {
 
   async function _stopLab(labId) {
     var lab = activeLabs.find(function (l) { return l.labId === labId; });
-    if (!lab || !lab.instanceId) { App.showToast('Instance ID not available', 'err'); return; }
+    if (!lab || !lab.instanceId) { App.showToast('Server ID not available', 'err'); return; }
     try {
       var res  = await API.ec2Action({
         action:       'stop',
@@ -1626,7 +1626,7 @@ const Labs = (function () {
       '    </p>',
       '  </div>',
       '  <div class="lbs-wizard-footer">',
-      '    <button class="btn btn-blue" onclick="Labs._exitWizard()">View My Labs</button>',
+      '    <button class="btn btn-blue" onclick="Labs._exitWizard()">View My Servers</button>',
       '  </div>',
       '</div>',
     ].join('\n');
@@ -1744,7 +1744,7 @@ const Labs = (function () {
             _labFilters = { platform: '', serverType: '', status: '', account: '', region: '', submittedBy: '' };
             _renderLabsList();
             _toggleRowDetail(labId);
-            App.showToast('Lab is ready!', 'ok');
+            App.showToast('Server is ready!', 'ok');
             return;  // stop polling
           }
           if (lab.status === 'error') {
@@ -1783,7 +1783,7 @@ const Labs = (function () {
       ? '$' + Number(lab.estimatedCost).toFixed(4) + ' USD' : '—';
     var expiry        = lab.expiresAt ? _formatExpiry(lab.expiresAt) : '—';
     var labIdEsc      = _esc(lab.labId);
-    var displayName   = lab.labName || ('ec2ctrl-lab-' + lab.labId);
+    var displayName   = lab.labName || ('server-' + lab.labId.substring(0, 8));
 
     var connectionHtml = isWindows
       ? [
@@ -1805,12 +1805,12 @@ const Labs = (function () {
     container.innerHTML = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
-      '    <div class="lbs-success-banner">Lab Ready!</div>',
+      '    <div class="lbs-success-banner">Server Ready!</div>',
       '  </div>',
       '  <div class="lbs-wizard-body">',
       '    <div class="lbs-info-grid">',
-      '      <div class="lbs-info-row"><b>Lab ID:</b> <code>' + labIdEsc + '</code></div>',
-      '      <div class="lbs-info-row"><b>Lab Name:</b> '      + _esc(displayName)          + '</div>',
+      '      <div class="lbs-info-row"><b>Server ID:</b> <code>' + labIdEsc + '</code></div>',
+      '      <div class="lbs-info-row"><b>Server Name:</b> '      + _esc(displayName)          + '</div>',
       '      <div class="lbs-info-row"><b>Server ID:</b> <code>' + _esc(lab.instanceId || '—') + '</code></div>',
       '      <div class="lbs-info-row"><b>Platform:</b> '      + _esc(platformLabel)        + '</div>',
       '      <div class="lbs-info-row"><b>Server Type:</b> ' + _esc(lab.instanceType || '—') + '</div>',
@@ -1819,14 +1819,14 @@ const Labs = (function () {
       '      <div class="lbs-info-row"><b>Estimated Cost:</b> '+ _esc(costStr)              + '</div>',
       '      <div class="lbs-info-row"><b>Expires:</b> '       + _esc(expiry)               + '</div>',
       '    </div>',
-      '    <p class="lbs-help-text" style="margin-top:8px;">Your server is now live. You can also find it in the <b>Servers</b> tab.</p>',
+      '    <p class="lbs-help-text" style="margin-top:8px;">Your server is now live. You can find it in your <b>My Servers</b> dashboard.</p>',
       '    ' + connectionHtml,
       '    <div style="margin-top:16px;">',
-      '      <button class="btn btn-outline btn-sm" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Lab Info (.txt)</button>',
+      '      <button class="btn btn-outline btn-sm" onclick="Labs.downloadLabInfo(\'' + labIdEsc + '\')">Download Server Info (.txt)</button>',
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-footer">',
-      '    <button class="btn btn-blue" onclick="Labs._exitWizard()">View My Labs</button>',
+      '    <button class="btn btn-blue" onclick="Labs._exitWizard()">View My Servers</button>',
       '  </div>',
       '</div>',
     ].join('\n');
@@ -1854,7 +1854,7 @@ const Labs = (function () {
     var rdp = 'full address:s:' + ip + '\r\nusername:s:Administrator\r\nprompt for credentials:i:1\r\n';
     var url = URL.createObjectURL(new Blob([rdp], { type: 'application/rdp' }));
     var a   = document.createElement('a');
-    a.href = url; a.download = 'lab-' + labId + '.rdp'; a.click();
+    a.href = url; a.download = 'server-' + labId + '.rdp'; a.click();
     URL.revokeObjectURL(url);
   }
 
@@ -1898,7 +1898,7 @@ const Labs = (function () {
     var content = [
       'Server Connection Info',
       '═══════════════════════════════════════',
-      'Lab ID:         ' + (labId || '—'),
+      'Server ID:      ' + (labId || '—'),
       'Platform:       ' + (PLATFORM_LABELS[platform] || platform || '—'),
       'Server Type:    ' + ((lab && lab.instanceType) || wizardConfig.instanceType || '—'),
       'Region:         ' + ((lab && lab.region)       || wizardConfig.region       || '—'),
@@ -2020,16 +2020,12 @@ const Labs = (function () {
       '<div class="msv2-hero">' +
         '<canvas class="msv2-hero-canvas" id="msv2-hero-canvas"></canvas>' +
         '<div class="msv2-hero-content">' +
-          '<div class="msv2-hero-eyebrow"><span class="msv2-hero-eyebrow-dot"></span>Cloud Servers · ap-south-1</div>' +
-          '<h1 class="msv2-hero-h1">Your Servers,<br>Instantly Deployed.</h1>' +
-          '<p class="msv2-hero-sub">Provision dedicated cloud servers in minutes. Production-grade AWS infrastructure, managed billing, and real-time monitoring — all in one place.</p>' +
+          '<div class="msv2-hero-eyebrow"><span class="msv2-hero-eyebrow-dot"></span>My Servers · ap-south-1</div>' +
+          '<h1 class="msv2-hero-h1">Cloud Servers, Instantly.</h1>' +
+          '<p class="msv2-hero-sub">Production-grade servers on AWS — billed transparently, managed centrally.</p>' +
           '<div class="msv2-hero-actions">' +
-            '<button class="msv2-hero-btn-primary" onclick="Labs.startWizard()">' +
-              '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
-              'Provision Server' +
-            '</button>' +
             '<button class="msv2-hero-btn-secondary" onclick="Labs._scrollToTemplates()">' +
-              '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>' +
+              '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>' +
               'Browse Templates' +
             '</button>' +
           '</div>' +
@@ -2046,6 +2042,29 @@ const Labs = (function () {
   function _scrollToTemplates() {
     var el = document.getElementById('msv2-tpl-anchor');
     if (el) el.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // ─── Create Server CTA ────────────────────────────────────────
+
+  function _renderCreateCta() {
+    return (
+      '<div class="msv2-create-cta">' +
+        '<div class="msv2-create-cta-left">' +
+          '<div class="msv2-create-cta-title">Create Your Server</div>' +
+          '<p class="msv2-create-cta-sub">Launch a dedicated server in minutes. Choose a template or configure manually.</p>' +
+        '</div>' +
+        '<div class="msv2-create-cta-actions">' +
+          '<button class="msv2-create-cta-btn" onclick="Labs.startWizard()">' +
+            '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+            'Create Your Server' +
+          '</button>' +
+          '<button class="msv2-create-cta-link" onclick="Labs._scrollToTemplates()">' +
+            'Browse Templates' +
+            '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '</button>' +
+        '</div>' +
+      '</div>'
+    );
   }
 
   // ─── Feature columns ──────────────────────────────────────────
@@ -2123,9 +2142,9 @@ const Labs = (function () {
 
       // Hardware highlights
       var specIcons = [
-        '<div class="msv2-tpl-hw"><span class="msv2-tpl-hw-ico">&#xFE0F;</span><span>' + t.vcpu + ' vCPU</span></div>',
-        '<div class="msv2-tpl-hw"><span class="msv2-tpl-hw-ico">&#xFE0F;</span><span>' + t.ram + '</span></div>',
-        '<div class="msv2-tpl-hw"><span class="msv2-tpl-hw-ico">&#xFE0F;</span><span>' + t.storageGb + ' GB SSD</span></div>',
+        '<div class="msv2-tpl-hw"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--blue2)"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M9 2v2M15 20v2M9 20v2M2 15h2M2 9h2M20 15h2M20 9h2"/></svg><span>' + t.vcpu + ' vCPU</span></div>',
+        '<div class="msv2-tpl-hw"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--green2)"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg><span>' + t.ram + '</span></div>',
+        '<div class="msv2-tpl-hw"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--amber)"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg><span>' + t.storageGb + ' GB SSD</span></div>',
       ].join('');
 
       html +=
@@ -2146,11 +2165,11 @@ const Labs = (function () {
             '<div class="msv2-tpl-price-block">' +
               '<div class="msv2-tpl-price-from">Starting from</div>' +
               '<div class="msv2-tpl-price-main">' + _esc(npr) + '</div>' +
-              '<div class="msv2-tpl-price-sub">/ month &nbsp;&middot;&nbsp; incl. all taxes</div>' +
+              '<div class="msv2-tpl-price-sub">/ month &nbsp;&middot;&nbsp; all taxes incl.</div>' +
             '</div>' +
             '<button class="msv2-tpl-launch" onclick="Labs._launchTemplate(\'' + _esc(t.id) + '\')">' +
               '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
-              'Deploy' +
+              'Deploy Now' +
             '</button>' +
           '</div>' +
         '</div>';
@@ -2298,7 +2317,7 @@ const Labs = (function () {
         '</div>' +
         '<button class="lbs-cta-btn" onclick="Labs.startWizard()">' +
           '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
-          'Provision Server' +
+          'New Server' +
         '</button>' +
       '</div>'
     );
@@ -2437,7 +2456,7 @@ const Labs = (function () {
     _openMenuId = null;
     var lab = activeLabs.find(function (l) { return l.labId === labId; });
     if (!lab) return;
-    var newName = prompt('Rename server:', lab.labName || ('ec2ctrl-lab-' + labId.substring(0, 8)));
+    var newName = prompt('Rename server:', lab.labName || ('server-' + labId.substring(0, 8)));
     if (newName && newName.trim()) {
       lab.labName = newName.trim();
       App.showToast('Renamed (local only — backend rename coming soon)', 'info');
@@ -2545,7 +2564,7 @@ const Labs = (function () {
     var isRunning  = status === 'running';
     var isStopped  = status === 'stopped';
     var region     = lab.region || 'ap-south-1';
-    var name       = lab.labName || ('ec2ctrl-lab-' + lab.labId.substring(0, 8));
+    var name       = lab.labName || ('server-' + lab.labId.substring(0, 8));
 
     // Billing
     var billing = null;
@@ -2694,7 +2713,7 @@ const Labs = (function () {
 
   async function _quickStart(labId) {
     var lab = activeLabs.find(function (l) { return l.labId === labId; });
-    if (!lab || !lab.instanceId) { App.showToast('Instance not available', 'err'); return; }
+    if (!lab || !lab.instanceId) { App.showToast('Server not available', 'err'); return; }
     try {
       await API.ec2Action({ action: 'start', instanceId: lab.instanceId, accountId: lab.accountId, region: lab.region });
       App.showToast((lab.labName || labId) + ' start command sent', 'ok');
@@ -2704,7 +2723,7 @@ const Labs = (function () {
 
   async function _quickStop(labId) {
     var lab = activeLabs.find(function (l) { return l.labId === labId; });
-    if (!lab || !lab.instanceId) { App.showToast('Instance not available', 'err'); return; }
+    if (!lab || !lab.instanceId) { App.showToast('Server not available', 'err'); return; }
     try {
       await API.ec2Action({ action: 'stop', instanceId: lab.instanceId, accountId: lab.accountId, region: lab.region });
       App.showToast((lab.labName || labId) + ' stop command sent', 'ok');
@@ -2879,19 +2898,10 @@ const Labs = (function () {
     if (activeLabs.length === 0) {
       listEl.innerHTML =
         _renderHero({ active: 0 }) +
-        _renderFeatures() +
+        _renderCreateCta() +
         '<div id="msv2-tpl-anchor"></div>' +
         _renderQuickLaunch() +
-        _renderAdvisor() +
-        '<div class="lbs-onboard-hero">' +
-          '<div class="lbs-onboard-icon">☁️</div>' +
-          '<h2 class="lbs-onboard-title">No servers yet</h2>' +
-          '<p class="lbs-onboard-desc">Provision a dedicated cloud server for your project. Ready within minutes once payment is verified.</p>' +
-          '<button class="btn btn-blue" onclick="Labs.startWizard()">' +
-            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
-            'Create Your First Server' +
-          '</button>' +
-        '</div>';
+        _renderAdvisor();
 
       // Init canvas
       setTimeout(function () {
@@ -2942,9 +2952,9 @@ const Labs = (function () {
 
     var html =
       _renderHero(counts) +
-      _renderSummaryBar(counts) +
+      _renderCreateCta() +
       _renderQuickLaunch() +
-      _renderAdvisor() +
+      _renderSummaryBar(counts) +
       _renderControls(counts) +
       _renderBulkBar() +
       _renderCardGrid(visible);
@@ -2960,6 +2970,7 @@ const Labs = (function () {
     }
 
     html += _renderForecastChart(totalNpr);
+    html += _renderAdvisor();
 
     listEl.innerHTML = html;
 
