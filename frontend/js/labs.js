@@ -1,7 +1,7 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════
-   Labs Module — EC2 Lab Provisioning (M11)
+   Labs Module - EC2 Lab Provisioning (M11)
    IIFE → Labs global
    ═══════════════════════════════════════════════════ */
 
@@ -79,18 +79,18 @@ const Labs = (function () {
 
   var INSTANCE_GROUPS = [
     { label: 'General Purpose', types: [
-      { value: 't3.micro',  label: 't3.micro  — 2 vCPU \u00b7 1 GB RAM  \u00b7 Burstable'  },
-      { value: 't3.small',  label: 't3.small  — 2 vCPU \u00b7 2 GB RAM  \u00b7 Burstable'  },
-      { value: 't3.medium', label: 't3.medium — 2 vCPU \u00b7 4 GB RAM  \u00b7 Burstable'  },
-      { value: 't3.large',  label: 't3.large  — 2 vCPU \u00b7 8 GB RAM  \u00b7 Burstable'  },
+      { value: 't3.micro',  label: 't3.micro  - 2 vCPU \u00b7 1 GB RAM  \u00b7 Burstable'  },
+      { value: 't3.small',  label: 't3.small  - 2 vCPU \u00b7 2 GB RAM  \u00b7 Burstable'  },
+      { value: 't3.medium', label: 't3.medium - 2 vCPU \u00b7 4 GB RAM  \u00b7 Burstable'  },
+      { value: 't3.large',  label: 't3.large  - 2 vCPU \u00b7 8 GB RAM  \u00b7 Burstable'  },
     ]},
     { label: 'Compute Optimized', types: [
-      { value: 'c5.large',  label: 'c5.large  — 2 vCPU \u00b7 4 GB RAM  \u00b7 Intel Xeon' },
-      { value: 'c5.xlarge', label: 'c5.xlarge — 4 vCPU \u00b7 8 GB RAM  \u00b7 Intel Xeon' },
+      { value: 'c5.large',  label: 'c5.large  - 2 vCPU \u00b7 4 GB RAM  \u00b7 Intel Xeon' },
+      { value: 'c5.xlarge', label: 'c5.xlarge - 4 vCPU \u00b7 8 GB RAM  \u00b7 Intel Xeon' },
     ]},
     { label: 'Memory Optimized', types: [
-      { value: 'r5.large',  label: 'r5.large  — 2 vCPU \u00b7 16 GB RAM \u00b7 Intel Xeon' },
-      { value: 'r5.xlarge', label: 'r5.xlarge — 4 vCPU \u00b7 32 GB RAM \u00b7 Intel Xeon' },
+      { value: 'r5.large',  label: 'r5.large  - 2 vCPU \u00b7 16 GB RAM \u00b7 Intel Xeon' },
+      { value: 'r5.xlarge', label: 'r5.xlarge - 4 vCPU \u00b7 32 GB RAM \u00b7 Intel Xeon' },
     ]},
   ];
 
@@ -530,7 +530,7 @@ const Labs = (function () {
       '<td class="msv2-row-num">' + number + '</td>' +
       '<td><div class="msv2-row-main"><div class="msv2-row-name">' + _esc(lab.labName || ('server-' + lab.labId.substring(0, 8))) + '</div><div class="msv2-row-sub">' + _esc(platformIcon) + ' · ' + _esc(lab.accountName || lab.accountId || 'Central') + '</div></div></td>' +
       '<td><span class="lbs-badge ' + statusClass + '">' + _esc(statusLabel) + '</span></td>' +
-      '<td>' + _esc(lab.instanceType || '—') + '</td>' +
+      '<td>' + _esc(lab.instanceType || '-') + '</td>' +
       '<td>' + _esc(_regionLabel(lab.region || 'ap-south-1')) + '</td>' +
       '<td>' + _renderExpiry(lab) + '</td>' +
       '</tr>';
@@ -986,7 +986,7 @@ const Labs = (function () {
           var sel   = wizardConfig.accountId === a.accountId ? ' selected' : '';
           return '<option value="' + _esc(a.accountId) + '"' + sel + '>' + _esc(label) + '</option>';
         }).join('')
-      : '<option value="">— No enabled accounts found —</option>';
+      : '<option value="">- No enabled accounts found -</option>';
 
     var nameVal = wizardConfig.labName != null ? _esc(wizardConfig.labName) : '';
 
@@ -1019,7 +1019,7 @@ const Labs = (function () {
     var _html = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
-      '    <h2 class="lbs-wizard-title">New Server — Step 1: Configure</h2>',
+      '    <h2 class="lbs-wizard-title">New Server - Step 1: Configure</h2>',
       '    <div class="lbs-steps">',
       '      <span class="lbs-step lbs-step--active">1</span>',
       '      <span class="lbs-step">2</span>',
@@ -1090,9 +1090,9 @@ const Labs = (function () {
       '          <option value="8"'  + (wizardConfig.hoursPerDay ===  8 ? ' selected' : '') + '>8 hrs/day (business hours)</option>',
       '          <option value="12"' + (wizardConfig.hoursPerDay === 12 ? ' selected' : '') + '>12 hrs/day</option>',
       '          <option value="16"' + (wizardConfig.hoursPerDay === 16 ? ' selected' : '') + '>16 hrs/day</option>',
-      '          <option value="24"' + (!wizardConfig.hoursPerDay || wizardConfig.hoursPerDay === 24 ? ' selected' : '') + '>24 hrs/day — always on (default)</option>',
+      '          <option value="24"' + (!wizardConfig.hoursPerDay || wizardConfig.hoursPerDay === 24 ? ' selected' : '') + '>24 hrs/day - always on (default)</option>',
       '        </select>',
-      '        <span class="lbs-help-text" style="margin-top:0;">Uptime is <b>24 hrs/day</b> by default. Choose a lower value if you plan to shut the server down between sessions — it reduces your estimated cost.</span>',
+      '        <span class="lbs-help-text" style="margin-top:0;">Uptime is <b>24 hrs/day</b> by default. Choose a lower value if you plan to shut the server down between sessions - it reduces your estimated cost.</span>',
       '      </div>',
       '    </div>',
       '    <div class="lbs-form-row">',
@@ -1108,11 +1108,11 @@ const Labs = (function () {
       '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Subnet</label>',
-      '      <select id="lbs-s1-subnet" class="lbs-select"><option value="">— Select VPC above —</option></select>',
+      '      <select id="lbs-s1-subnet" class="lbs-select"><option value="">- Select VPC above -</option></select>',
       '    </div>',
       '    <div class="lbs-form-row">',
       '      <label class="lbs-label">Security Group</label>',
-      '      <select id="lbs-s1-sg" class="lbs-select"><option value="">— Select VPC above —</option></select>',
+      '      <select id="lbs-s1-sg" class="lbs-select"><option value="">- Select VPC above -</option></select>',
       '    </div>',
       '  </div>',
       '  <div class="lbs-wizard-footer">',
@@ -1178,7 +1178,7 @@ const Labs = (function () {
     }
   }
 
-  // ─── Live bill preview (step 1 — updates as customer changes config)
+  // ─── Live bill preview (step 1 - updates as customer changes config)
 
   var _prevBilling = null;  // stores billing snapshot before customer edits
 
@@ -1214,9 +1214,9 @@ const Labs = (function () {
         var reasons = [];
         var prevOpts = _prevBilling._opts || {};
         if (instanceType !== (prevOpts.instanceType || ''))
-          reasons.push('Server type changed from <b>' + _esc(prevOpts.instanceType || '—') + '</b> to <b>' + _esc(instanceType) + '</b>');
+          reasons.push('Server type changed from <b>' + _esc(prevOpts.instanceType || '-') + '</b> to <b>' + _esc(instanceType) + '</b>');
         if (storageGb !== (prevOpts.storageGb || 0))
-          reasons.push('Storage changed from <b>' + _esc(String(prevOpts.storageGb || '—')) + ' GB</b> to <b>' + _esc(String(storageGb)) + ' GB</b>');
+          reasons.push('Storage changed from <b>' + _esc(String(prevOpts.storageGb || '-')) + ' GB</b> to <b>' + _esc(String(storageGb)) + ' GB</b>');
         if (hoursPerDay !== (prevOpts.hoursPerDay || 24))
           reasons.push('Daily uptime changed from <b>' + _esc(String(prevOpts.hoursPerDay || 24)) + ' hrs/day</b> to <b>' + _esc(String(hoursPerDay)) + ' hrs/day</b>');
         if (elasticIp !== !!(prevOpts.elasticIp))
@@ -1313,7 +1313,7 @@ const Labs = (function () {
       if (vpcSel) {
         // Find default VPC (isDefault=true) for auto-selection
         var defaultVpc = vpcs.find(function (v) { return v.isDefault; }) || vpcs[0] || null;
-        vpcSel.innerHTML = '<option value="">— Select VPC —</option>' +
+        vpcSel.innerHTML = '<option value="">- Select VPC -</option>' +
           vpcs.map(function (v) {
             var label = v.vpcId +
               (v.isDefault ? ' (default)' : '') +
@@ -1352,14 +1352,14 @@ const Labs = (function () {
     var filteredSubs = allSubnets.filter(function (s) { return s.vpcId === selectedVpc; });
     var filteredSgs  = allSgs.filter(function (g)     { return g.vpcId === selectedVpc; });
 
-    subnetSel.innerHTML = '<option value="">— Select Subnet —</option>' +
+    subnetSel.innerHTML = '<option value="">- Select Subnet -</option>' +
       filteredSubs.map(function (s, i) {
         var label = s.subnetId + (s.name ? ' \u2014 ' + _esc(s.name) : '') +
                     (s.availabilityZone ? ' / ' + _esc(s.availabilityZone) : '');
         return '<option value="' + _esc(s.subnetId) + '"' + (i === 0 ? ' selected' : '') + '>' + label + '</option>';
       }).join('');
 
-    sgSel.innerHTML = '<option value="">— Select Security Group —</option>' +
+    sgSel.innerHTML = '<option value="">- Select Security Group -</option>' +
       filteredSgs.map(function (g, i) {
         var label = g.groupId + ' \u2014 ' + _esc(g.groupName || '');
         return '<option value="' + _esc(g.groupId) + '"' + (i === 0 ? ' selected' : '') + '>' + label + '</option>';
@@ -1439,7 +1439,7 @@ const Labs = (function () {
     container.innerHTML = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
-      '    <h2 class="lbs-wizard-title">New Server — Step 2: Pricing Review</h2>',
+      '    <h2 class="lbs-wizard-title">New Server - Step 2: Pricing Review</h2>',
       '    <div class="lbs-steps">',
       '      <span class="lbs-step lbs-step--done">1</span>',
       '      <span class="lbs-step lbs-step--active">2</span>',
@@ -1567,14 +1567,14 @@ const Labs = (function () {
 
     var REGIONS_MAP = {};
     (REGIONS || []).forEach(function (r) { REGIONS_MAP[r.value] = r.label; });
-    var regionLabel = REGIONS_MAP[config.region] || config.region || '—';
+    var regionLabel = REGIONS_MAP[config.region] || config.region || '-';
     var osLabel     = config.platform === 'windows' ? 'Windows Server' : 'Linux (Ubuntu)';
-    var startDate   = config.startDate || '—';
-    var endDate     = config.endDate   || '—';
+    var startDate   = config.startDate || '-';
+    var endDate     = config.endDate   || '-';
     var totalDays   = config.totalDays || 0;
 
     function nprLine(usd) {
-      if (!usd || usd <= 0) return '—';
+      if (!usd || usd <= 0) return '-';
       return 'NPR ' + (usd * rate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
@@ -1589,11 +1589,11 @@ const Labs = (function () {
       'CONFIGURATION',
       sep2,
       'Server Name:    ' + (config.labName || '(not named)'),
-      'Account:        ' + (config.accountId || '—'),
+      'Account:        ' + (config.accountId || '-'),
       'Region:         ' + regionLabel,
       'Operating System: ' + osLabel,
-      'Server Type:    ' + (config.instanceType || '—'),
-      'Storage:        ' + (config.storageGb || '—') + ' GB (gp3 SSD)',
+      'Server Type:    ' + (config.instanceType || '-'),
+      'Storage:        ' + (config.storageGb || '-') + ' GB (gp3 SSD)',
       'Fixed IP:       ' + (config.elasticIp ? 'Yes' : 'No'),
       'Daily Uptime:   ' + (config.hoursPerDay || 24) + ' hrs/day',
       'Duration:       ' + startDate + ' \u2192 ' + endDate + ' (' + totalDays + ' days, ' + ((config.durationHours || 0).toLocaleString()) + ' total hrs)',
@@ -1639,12 +1639,12 @@ const Labs = (function () {
   function _renderStep3(container) {
     var totalStr = wizardConfig.estimatedCost != null
       ? _npmFmt(Number(wizardConfig.estimatedCost))
-      : '—';
+      : '-';
 
     container.innerHTML = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
-      '    <h2 class="lbs-wizard-title">New Server — Step 3: Payment</h2>',
+      '    <h2 class="lbs-wizard-title">New Server - Step 3: Payment</h2>',
       '    <div class="lbs-steps">',
       '      <span class="lbs-step lbs-step--done">1</span>',
       '      <span class="lbs-step lbs-step--done">2</span>',
@@ -1735,7 +1735,7 @@ const Labs = (function () {
     container.innerHTML = [
       '<div class="lbs-wizard-wrap">',
       '  <div class="lbs-wizard-header">',
-      '    <h2 class="lbs-wizard-title">New Server — Step 4: Submitted</h2>',
+      '    <h2 class="lbs-wizard-title">New Server - Step 4: Submitted</h2>',
       '    <div class="lbs-steps">',
       '      <span class="lbs-step lbs-step--done">1</span>',
       '      <span class="lbs-step lbs-step--done">2</span>',
@@ -1764,7 +1764,7 @@ const Labs = (function () {
     ].join('\n');
   }
 
-  // ─── Submit lab request to backend (action=submit — no EC2 launched)
+  // ─── Submit lab request to backend (action=submit - no EC2 launched)
 
   async function _handleLabsSubmit() {
     var btnEl = document.querySelector('#lbs-s3-proceed button');
@@ -1812,7 +1812,7 @@ const Labs = (function () {
           var res  = await API.provisionLab({ action: 'approve', labId: labId });
           var data = await res.json();
           if (!res.ok) throw new Error(data.message || data.error || 'Approval failed');
-          App.showToast('Lab approved — provisioning started', 'ok');
+          App.showToast('Lab approved - provisioning started', 'ok');
           _expandedLabId = null;
           await _loadActiveLabs();
         } catch (e) {
@@ -1912,8 +1912,8 @@ const Labs = (function () {
     var sshUser       = _sshUser(lab.platform);
     var sshCmd        = 'ssh -i keypair.pem ' + sshUser + '@' + ip;
     var costStr       = lab.estimatedCost != null
-      ? '$' + Number(lab.estimatedCost).toFixed(4) + ' USD' : '—';
-    var expiry        = lab.expiresAt ? _formatExpiry(lab.expiresAt) : '—';
+      ? '$' + Number(lab.estimatedCost).toFixed(4) + ' USD' : '-';
+    var expiry        = lab.expiresAt ? _formatExpiry(lab.expiresAt) : '-';
     var labIdEsc      = _esc(lab.labId);
     var displayName   = lab.labName || ('server-' + lab.labId.substring(0, 8));
 
@@ -1943,9 +1943,9 @@ const Labs = (function () {
       '    <div class="lbs-info-grid">',
       '      <div class="lbs-info-row"><b>Server ID:</b> <code>' + labIdEsc + '</code></div>',
       '      <div class="lbs-info-row"><b>Server Name:</b> '      + _esc(displayName)          + '</div>',
-      '      <div class="lbs-info-row"><b>Server ID:</b> <code>' + _esc(lab.instanceId || '—') + '</code></div>',
+      '      <div class="lbs-info-row"><b>Server ID:</b> <code>' + _esc(lab.instanceId || '-') + '</code></div>',
       '      <div class="lbs-info-row"><b>Platform:</b> '      + _esc(platformLabel)        + '</div>',
-      '      <div class="lbs-info-row"><b>Server Type:</b> ' + _esc(lab.instanceType || '—') + '</div>',
+      '      <div class="lbs-info-row"><b>Server Type:</b> ' + _esc(lab.instanceType || '-') + '</div>',
       '      <div class="lbs-info-row"><b>Region:</b> '        + _esc(lab.region)           + '</div>',
       '      <div class="lbs-info-row"><b>Public IP:</b> '     + _esc(ip)                   + '</div>',
       '      <div class="lbs-info-row"><b>Estimated Cost:</b> '+ _esc(costStr)              + '</div>',
@@ -2016,25 +2016,25 @@ const Labs = (function () {
     var ip       = (lab && lab.publicIp)  ? lab.publicIp  :
                    (lab && lab.publicDns) ? lab.publicDns : '';
     var sshUser  = _sshUser(platform);
-    var expiry   = (lab && lab.expiresAt) ? new Date(lab.expiresAt).toUTCString() : '—';
+    var expiry   = (lab && lab.expiresAt) ? new Date(lab.expiresAt).toUTCString() : '-';
     var costStr  = (lab && lab.estimatedCost) != null
       ? '$' + Number(lab.estimatedCost).toFixed(4) + ' USD'
-      : (wizardConfig.estimatedCost != null ? '$' + Number(wizardConfig.estimatedCost).toFixed(4) + ' USD' : '—');
+      : (wizardConfig.estimatedCost != null ? '$' + Number(wizardConfig.estimatedCost).toFixed(4) + ' USD' : '-');
 
     var connectSection = platform === 'windows'
-      ? ['RDP Host:       ' + (ip || '—'),
+      ? ['RDP Host:       ' + (ip || '-'),
          'Username:       Administrator',
          'Password:       (retrieve from portal via "Get Windows Password")'].join('\n')
-      : ['SSH Command:    ssh -i keypair.pem ' + sshUser + '@' + (ip || '—')].join('\n');
+      : ['SSH Command:    ssh -i keypair.pem ' + sshUser + '@' + (ip || '-')].join('\n');
 
     var content = [
       'Server Connection Info',
       '═══════════════════════════════════════',
-      'Server ID:      ' + (labId || '—'),
-      'Platform:       ' + (PLATFORM_LABELS[platform] || platform || '—'),
-      'Server Type:    ' + ((lab && lab.instanceType) || wizardConfig.instanceType || '—'),
-      'Region:         ' + ((lab && lab.region)       || wizardConfig.region       || '—'),
-      'Public IP:      ' + (ip || '—'),
+      'Server ID:      ' + (labId || '-'),
+      'Platform:       ' + (PLATFORM_LABELS[platform] || platform || '-'),
+      'Server Type:    ' + ((lab && lab.instanceType) || wizardConfig.instanceType || '-'),
+      'Region:         ' + ((lab && lab.region)       || wizardConfig.region       || '-'),
+      'Public IP:      ' + (ip || '-'),
       'Estimated Cost: ' + costStr,
       'Expires At:     ' + expiry,
       '',
@@ -2050,7 +2050,7 @@ const Labs = (function () {
   }
 
   // ════════════════════════════════════════════════════════════════
-  // MY SERVERS v2 — Hero · Quick Launch · Cards · Billing · AI
+  // MY SERVERS v2 - Hero · Quick Launch · Cards · Billing · AI
   // ════════════════════════════════════════════════════════════════
 
   // ─── Region flags + labels ────────────────────────────────────
@@ -2070,7 +2070,7 @@ const Labs = (function () {
   };
 
   function _regionFlag(region)  { return (REGION_META[region] || {}).flag  || '🌐'; }
-  function _regionLabel(region) { return (REGION_META[region] || {}).label || (region || '—'); }
+  function _regionLabel(region) { return (REGION_META[region] || {}).label || (region || '-'); }
 
   // ─── Hero canvas animation ────────────────────────────────────
 
@@ -2147,14 +2147,14 @@ const Labs = (function () {
     });
     var nprStr = runningNpr > 0 && typeof BillingEngine !== 'undefined'
       ? BillingEngine.fmtNpr(runningNpr)
-      : '—';
+      : '-';
     return (
       '<div class="msv2-hero">' +
         '<canvas class="msv2-hero-canvas" id="msv2-hero-canvas"></canvas>' +
         '<div class="msv2-hero-content">' +
           '<div class="msv2-hero-eyebrow"><span class="msv2-hero-eyebrow-dot"></span>My Servers · ap-south-1</div>' +
           '<h1 class="msv2-hero-h1">Cloud Servers, Instantly.</h1>' +
-          '<p class="msv2-hero-sub">Production-grade servers on AWS — billed transparently, managed centrally.</p>' +
+          '<p class="msv2-hero-sub">Production-grade servers on AWS - billed transparently, managed centrally.</p>' +
           '<div class="msv2-hero-actions">' +
             '<button class="msv2-hero-btn-secondary" onclick="Labs._scrollToTemplates()">' +
               '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>' +
@@ -2212,7 +2212,7 @@ const Labs = (function () {
         '<div class="msv2-feat">' +
           '<div class="msv2-feat-ico green">🔒</div>' +
           '<div class="msv2-feat-title">Managed Security</div>' +
-          '<div class="msv2-feat-desc">Custom security groups, encrypted storage, SSH key management, and Windows RDP password retrieval — all secured and audited.</div>' +
+          '<div class="msv2-feat-desc">Custom security groups, encrypted storage, SSH key management, and Windows RDP password retrieval - all secured and audited.</div>' +
         '</div>' +
         '<div class="msv2-feat">' +
           '<div class="msv2-feat-ico violet">💳</div>' +
@@ -2237,7 +2237,7 @@ const Labs = (function () {
             '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>' +
             'Quick Launch' +
           '</div>' +
-          '<div class="msv2-ql-sub" style="margin-top:3px;">Pre-configured templates with real AWS ap-south-1 pricing — ready in one click</div>' +
+          '<div class="msv2-ql-sub" style="margin-top:3px;">Pre-configured templates with real AWS ap-south-1 pricing - ready in one click</div>' +
         '</div>' +
       '</div>' +
       '<div class="msv2-tpl-grid">';
@@ -2245,7 +2245,7 @@ const Labs = (function () {
     // Compute "savings vs next tier" for each template
     var prevNpr = 0;
     var tplsWithSavings = tpls.map(function (t, idx) {
-      var npm = typeof BillingEngine !== 'undefined' ? BillingEngine.fmtNpr(t.billing.finalNpr) : '—';
+      var npm = typeof BillingEngine !== 'undefined' ? BillingEngine.fmtNpr(t.billing.finalNpr) : '-';
       var pct = (idx > 0 && prevNpr > 0) ? null : null;  // savings vs custom-config baseline
       prevNpr = t.billing.finalNpr;
       return Object.assign({}, t, { npr: npm });
@@ -2269,7 +2269,7 @@ const Labs = (function () {
       // Savings badge (monthly tax-inclusive price converted to a catchy phrase)
       var savingsBadge = '';
       if (t.id === 'starter-blog') savingsBadge = 'Starting from ' + _esc(npr) + '/mo';
-      else if (t.id === 'dev-sandbox') savingsBadge = 'Save with bundles — from ' + _esc(npr) + '/mo';
+      else if (t.id === 'dev-sandbox') savingsBadge = 'Save with bundles - from ' + _esc(npr) + '/mo';
       else savingsBadge = 'From ' + _esc(npr) + '/mo';
 
       // Hardware highlights
@@ -2336,7 +2336,7 @@ const Labs = (function () {
       labName:         tpl.name + ' Server',
       platform:        tpl.platform || 'ubuntu',
       region:          'ap-south-1',
-      hoursPerDay:     8,   // cards display 8 hrs/day price — keep it consistent
+      hoursPerDay:     8,   // cards display 8 hrs/day price - keep it consistent
       elasticIp:       true,
     });
   }
@@ -2406,7 +2406,7 @@ const Labs = (function () {
       if (res.ok && data.recommendation) {
         resEl.innerHTML = '<div style="line-height:1.7;">' + _esc(data.recommendation).replace(/\n/g, '<br>') + '</div>';
       } else if (data.message) {
-        // Backend not wired — show a client-side recommendation
+        // Backend not wired - show a client-side recommendation
         resEl.innerHTML = _clientAdvisor(prompt);
       } else {
         resEl.innerHTML = _clientAdvisor(prompt);
@@ -2452,7 +2452,7 @@ const Labs = (function () {
         if (b) totalNpr += b.finalNpr;
       }
     });
-    var nprStr = totalNpr > 0 && typeof BillingEngine !== 'undefined' ? BillingEngine.fmtNpr(totalNpr) : '—';
+    var nprStr = totalNpr > 0 && typeof BillingEngine !== 'undefined' ? BillingEngine.fmtNpr(totalNpr) : '-';
     return (
       '<div class="msv2-summary-bar">' +
         '<div class="msv2-summary-stats">' +
@@ -2606,7 +2606,7 @@ const Labs = (function () {
     var newName = prompt('Rename server:', lab.labName || ('server-' + labId.substring(0, 8)));
     if (newName && newName.trim()) {
       lab.labName = newName.trim();
-      App.showToast('Renamed (local only — backend rename coming soon)', 'info');
+      App.showToast('Renamed (local only - backend rename coming soon)', 'info');
       _renderLabsList();
     }
   }
@@ -2628,12 +2628,12 @@ const Labs = (function () {
 
   function _menuViewLogs(labId) {
     _openMenuId = null;
-    App.showToast('Log viewer — coming soon', 'info');
+    App.showToast('Log viewer - coming soon', 'info');
   }
 
   function _menuBillingHistory(labId) {
     _openMenuId = null;
-    App.showToast('Billing history — coming soon', 'info');
+    App.showToast('Billing history - coming soon', 'info');
   }
 
   // ─── Sparkline SVG ────────────────────────────────────────────
@@ -2724,7 +2724,7 @@ const Labs = (function () {
         detailedMonitor: !!(lab.detailedMonitor),
       });
     }
-    var nprStr  = billing ? BillingEngine.fmtNpr(billing.finalNpr) : (lab.estimatedCost ? _npmFmt(Number(lab.estimatedCost)) : '—');
+    var nprStr  = billing ? BillingEngine.fmtNpr(billing.finalNpr) : (lab.estimatedCost ? _npmFmt(Number(lab.estimatedCost)) : '-');
     var perSec  = billing ? billing.perSecondNpr : 0;
 
     // Sparkline (for active servers)
@@ -2825,8 +2825,8 @@ const Labs = (function () {
         '</div>' +
         // ── Spec chips row
         '<div class="msv2-card-specs">' +
-          '<span class="msv2-card-spec-chip">' + _esc(lab.instanceType || '—') + '</span>' +
-          '<span class="msv2-card-spec-chip">' + _esc(String(lab.storageGb || '—')) + ' GB</span>' +
+          '<span class="msv2-card-spec-chip">' + _esc(lab.instanceType || '-') + '</span>' +
+          '<span class="msv2-card-spec-chip">' + _esc(String(lab.storageGb || '-')) + ' GB</span>' +
           (lab.elasticIp ? '<span class="msv2-card-spec-chip msv2-chip--eip">Fixed IP</span>' : '') +
         '</div>' +
         // ── Info grid
@@ -3026,7 +3026,7 @@ const Labs = (function () {
   }
 
   // ════════════════════════════════════════════════════════════════
-  // PATCHED _renderLabsList — v2 card grid
+  // PATCHED _renderLabsList - v2 card grid
   // ════════════════════════════════════════════════════════════════
 
   function _renderLabsListV2() {

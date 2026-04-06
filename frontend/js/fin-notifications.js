@@ -1,7 +1,7 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════
-   Finance Notifications — vendor/customer alert engine
+   Finance Notifications - vendor/customer alert engine
    IIFE → FinNotifications global
    ═══════════════════════════════════════════════════ */
 

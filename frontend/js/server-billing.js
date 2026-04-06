@@ -1,7 +1,7 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════
-   Server Billing Engine — BillingEngine global
+   Server Billing Engine - BillingEngine global
    Computes final NPR price from raw server config.
    All tax/margin logic is internal; customers see only the final.
    Admin config lives in window.BillingConfig (set by FinSettings
@@ -154,13 +154,13 @@ const BillingEngine = (function () {
 
   // ─── Format NPR with grouping ─────────────────────────────────────────────
   function fmtNpr(amount) {
-    if (!amount || amount <= 0) return '—';
+    if (!amount || amount <= 0) return '-';
     return 'NPR\u00a0' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   // ─── Format USD ───────────────────────────────────────────────────────────
   function fmtUsd(amount) {
-    if (!amount || amount <= 0) return '—';
+    if (!amount || amount <= 0) return '-';
     return '$' + amount.toFixed(2);
   }
 

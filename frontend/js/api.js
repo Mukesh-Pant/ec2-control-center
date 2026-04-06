@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   API Module — Fetch wrapper with auto-refresh
+   API Module - Fetch wrapper with auto-refresh
    ═══════════════════════════════════════════════ */
 
 const API = (function () {
@@ -64,7 +64,7 @@ const API = (function () {
   }
 
   /**
-   * GET /audit  — event log
+   * GET /audit  - event log
    * @param {object} params - { instanceId?, userEmail?, limit?, lastKey? }
    */
   async function getAuditLog(params) {
@@ -79,7 +79,7 @@ const API = (function () {
   }
 
   /**
-   * GET /audit/daily — per-day running hours + estimated cost
+   * GET /audit/daily - per-day running hours + estimated cost
    * @param {string} instanceId
    * @param {number} days
    */
@@ -92,14 +92,14 @@ const API = (function () {
   }
 
   /**
-   * POST /accounts — account mutations (add, update, enable, disable, remove, test)
+   * POST /accounts - account mutations (add, update, enable, disable, remove, test)
    */
   async function postAccounts(body) {
     return call('/accounts', 'POST', body);
   }
 
   /**
-   * GET /pricing — live on-demand hourly rates
+   * GET /pricing - live on-demand hourly rates
    * @param {string} region - AWS region code (e.g. 'ap-south-1')
    * @param {string[]} types - instance type list (e.g. ['t3.micro', 'm5.large'])
    */
@@ -110,21 +110,21 @@ const API = (function () {
   }
 
   /**
-   * GET /users — list all users with roles and account assignments (admin only)
+   * GET /users - list all users with roles and account assignments (admin only)
    */
   async function getUsers() {
     return call('/users', 'GET', null);
   }
 
   /**
-   * POST /users — setRole, grantAccount, revokeAccount, getPermissions (admin only)
+   * POST /users - setRole, grantAccount, revokeAccount, getPermissions (admin only)
    */
   async function postUsers(body) {
     return call('/users', 'POST', body);
   }
 
   /**
-   * GET /backup — list backups for an instance
+   * GET /backup - list backups for an instance
    * @param {string} instanceId
    * @param {string} accountId
    * @param {string} region
@@ -136,14 +136,14 @@ const API = (function () {
   }
 
   /**
-   * POST /backup — backup mutations (create, delete, restore)
+   * POST /backup - backup mutations (create, delete, restore)
    */
   async function postBackup(body) {
     return call('/backup', 'POST', body);
   }
 
   /**
-   * POST /console-login — generate a federated AWS Console signin URL
+   * POST /console-login - generate a federated AWS Console signin URL
    * @param {string} accountId - target AWS account ID
    * @param {string} region    - AWS region to open in console
    */
@@ -152,77 +152,77 @@ const API = (function () {
   }
 
   /**
-   * GET /labs — list all labs
+   * GET /labs - list all labs
    */
   function getLabsList() {
     return call('/labs', 'GET', null);
   }
 
   /**
-   * POST /labs — provision a new lab
+   * POST /labs - provision a new lab
    */
   function provisionLab(body) {
     return call('/labs', 'POST', body);
   }
 
   /**
-   * DELETE /labs — delete a lab instance
+   * DELETE /labs - delete a lab instance
    */
   function deleteLabInstance(body) {
     return call('/labs', 'DELETE', body);
   }
 
   /**
-   * POST /labs/payment — upload/manage lab payment
+   * POST /labs/payment - upload/manage lab payment
    */
   function uploadLabPayment(body) {
     return call('/labs/payment', 'POST', body);
   }
 
   /**
-   * GET /labs/keypair — get lab EC2 keypair
+   * GET /labs/keypair - get lab EC2 keypair
    */
   function getLabKeypair(labId) {
     return call('/labs/keypair?labId=' + encodeURIComponent(labId), 'GET', null);
   }
 
   /**
-   * GET /labs/windows-password — get Windows RDP password
+   * GET /labs/windows-password - get Windows RDP password
    */
   function getLabWindowsPassword(labId) {
     return call('/labs/windows-password?labId=' + encodeURIComponent(labId), 'GET', null);
   }
 
   /**
-   * GET /labs/pricing — get lab pricing
+   * GET /labs/pricing - get lab pricing
    */
   function getLabPricing(params) {
     return call('/labs/pricing?' + new URLSearchParams(params).toString(), 'GET', null);
   }
 
   /**
-   * GET /labs/network-options — get network options for a lab
+   * GET /labs/network-options - get network options for a lab
    */
   function getLabNetworkOptions(accountId, region) {
     return call('/labs/network-options?accountId=' + encodeURIComponent(accountId) + '&region=' + encodeURIComponent(region), 'GET', null);
   }
 
   /**
-   * GET /labs/payment — get presigned URL for a lab's payment screenshot (admin only)
+   * GET /labs/payment - get presigned URL for a lab's payment screenshot (admin only)
    */
   function getLabPaymentScreenshot(labId) {
     return call('/labs/payment?labId=' + encodeURIComponent(labId), 'GET', null);
   }
 
   /**
-   * GET /labs/pricing-settings — get admin pricing settings (admin only)
+   * GET /labs/pricing-settings - get admin pricing settings (admin only)
    */
   function getLabPricingSettings() {
     return call('/labs/pricing-settings', 'GET', null);
   }
 
   /**
-   * POST /labs/pricing-settings — update admin pricing settings (admin only)
+   * POST /labs/pricing-settings - update admin pricing settings (admin only)
    */
   function updateLabPricingSettings(body) {
     return call('/labs/pricing-settings', 'POST', body);

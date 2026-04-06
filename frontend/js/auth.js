@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   Auth Module — Cognito SDK (SRP) Authentication
+   Auth Module - Cognito SDK (SRP) Authentication
    Replaces PKCE Hosted UI with custom login page
    ═══════════════════════════════════════════════ */
 
@@ -205,14 +205,14 @@ const Auth = (function () {
       }
     } catch (e) { /* no valid session */ }
 
-    // 3. No session — show login page
+    // 3. No session - show login page
     _showAuthPage();
     return false;
   }
 
   // Silently refresh the ID token in the background to pick up latest Cognito group
   // assignments. If the user's role changed since the last token was issued, reload
-  // so the new permissions take effect immediately — no hard reload required.
+  // so the new permissions take effect immediately - no hard reload required.
   async function _syncGroupsFromCognito() {
     try {
       var cognitoUser = _pool().getCurrentUser();
@@ -229,7 +229,7 @@ const Auth = (function () {
               var oldGroups = sessionStorage.getItem('user_groups') || '[]';
               _storeSession(newSession);
               var newGroups = sessionStorage.getItem('user_groups') || '[]';
-              // Role changed — reload to apply updated permissions
+              // Role changed - reload to apply updated permissions
               if (oldGroups !== newGroups) {
                 window.location.reload();
               }
@@ -238,7 +238,7 @@ const Auth = (function () {
           });
         });
       });
-    } catch (e) { /* silent — never break the session */ }
+    } catch (e) { /* silent - never break the session */ }
   }
 
   function _getRole() {

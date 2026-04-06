@@ -1,12 +1,12 @@
 /**
- * background.js — EC2 Control Console Login Extension
+ * background.js - EC2 Control Console Login Extension
  *
  * Manages one named Firefox container per AWS account and tracks the open tab
  * inside it. On each "Console Login" request:
  *   - If the account's tab is already open → focus it (no new login needed)
  *   - If the container exists but tab was closed → open a new tab with the
  *     federation URL inside the same container (session cookies may still be valid)
- *   - If no container exists yet → create one named "EC2Ctrl — <accountName>"
+ *   - If no container exists yet → create one named "EC2Ctrl - <accountName>"
  *     and open the federation URL inside it
  *
  * Storage key "accountSessions":
@@ -41,12 +41,12 @@ async function openConsoleTab({ accountId, accountName, loginUrl }) {
   if (existing && existing.tabId) {
     try {
       const tab = await browser.tabs.get(existing.tabId);
-      // Tab is still open — just switch to it
+      // Tab is still open - just switch to it
       await browser.tabs.update(existing.tabId, { active: true });
       await browser.windows.update(tab.windowId, { focused: true });
       return;
     } catch (_) {
-      // Tab was closed — fall through to create a new one
+      // Tab was closed - fall through to create a new one
     }
   }
 
@@ -56,9 +56,9 @@ async function openConsoleTab({ accountId, accountName, loginUrl }) {
   if (containerId) {
     try {
       await browser.contextualIdentities.get(containerId);
-      // Container still exists — reuse it
+      // Container still exists - reuse it
     } catch (_) {
-      // Container was deleted — recreate
+      // Container was deleted - recreate
       containerId = null;
     }
   }

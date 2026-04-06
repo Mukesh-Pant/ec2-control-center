@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   AuthUI Module — Login Page UI Controller
+   AuthUI Module - Login Page UI Controller
    Handles form interactions, validation, errors
    ═══════════════════════════════════════════════ */
 
@@ -53,7 +53,7 @@ const AuthUI = (function () {
       if (result.type === 'NEW_PASSWORD_REQUIRED') {
         showView('newpass');
       } else {
-        // SUCCESS — boot dashboard
+        // SUCCESS - boot dashboard
         Auth.init();
       }
     } catch (err) {

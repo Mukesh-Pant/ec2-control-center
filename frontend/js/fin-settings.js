@@ -1,7 +1,7 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════
-   Finance Settings — exchange rates, billing engine,
+   Finance Settings - exchange rates, billing engine,
    tax management, alert thresholds, defaults
    IIFE → FinSettings global
    ═══════════════════════════════════════════════════ */
@@ -264,7 +264,7 @@ const FinSettings = (function () {
         }).join('');
 
     container.innerHTML =
-      '<div class="fset-section-title">Tax Management — Per Account</div>' +
+      '<div class="fset-section-title">Tax Management - Per Account</div>' +
       '<p class="fset-section-desc">Override global rates per customer account. Rebate (discount) is applied to the final price and shown as a discount line item to customers. Leave a field blank to use the global default.</p>' +
       '<div class="fset-tax-list">' + rowsHtml + '</div>' +
       '<div class="fset-err" id="fset-tax-err"></div>';

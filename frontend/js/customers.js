@@ -1,7 +1,7 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════
-   Customers — clients who pay us
+   Customers - clients who pay us
    IIFE → Customers global
    ═══════════════════════════════════════════════════ */
 
@@ -82,7 +82,7 @@ const Customers = (function () {
       nextDueDate:'2026-04-15', paymentForm:'SWIFT Transfer',
       agreementStart:'2025-10-01', agreementEnd:'2026-09-30',
       billingType:'milestone', billingFrequency:null,
-      notes:'Custom SaaS platform development — 5 milestone project',
+      notes:'Custom SaaS platform development - 5 milestone project',
       signedBy:'Adarsh', accountManager:'Adarsh',
       milestones:[
         {id:'ms-c3-1',name:'Phase 1 \u2014 Requirements & Design',amount:3000,dueDate:'2025-11-30',paid:true, paidDate:'2025-11-28'},
@@ -98,9 +98,9 @@ const Customers = (function () {
         {id:'pay-c3-3',date:'2026-03-12',amount:3000,notes:'Phase 3'},
       ],
       contracts:[
-        {id:'ctr-c3-1',name:'SaaS Platform Development',description:'Full-stack development — 5 milestone delivery plan',startDate:'2025-10-01',endDate:'2026-05-31',value:15000,status:'active',tasks:[
-          {id:'tsk-c3-1',name:'Phase 4 — Testing & QA',assignee:'Adarsh',dueDate:'2026-04-15',status:'todo',priority:'high'},
-          {id:'tsk-c3-2',name:'Phase 5 — Launch & Handover',assignee:'Adarsh',dueDate:'2026-05-31',status:'todo',priority:'medium'},
+        {id:'ctr-c3-1',name:'SaaS Platform Development',description:'Full-stack development - 5 milestone delivery plan',startDate:'2025-10-01',endDate:'2026-05-31',value:15000,status:'active',tasks:[
+          {id:'tsk-c3-1',name:'Phase 4 - Testing & QA',assignee:'Adarsh',dueDate:'2026-04-15',status:'todo',priority:'high'},
+          {id:'tsk-c3-2',name:'Phase 5 - Launch & Handover',assignee:'Adarsh',dueDate:'2026-05-31',status:'todo',priority:'medium'},
           {id:'tsk-c3-3',name:'Deploy staging environment',assignee:'Adarsh',dueDate:'2026-04-01',status:'in_progress',priority:'high'},
         ]},
       ],
@@ -195,7 +195,7 @@ const Customers = (function () {
     _persist();
   }
 
-  // ─── Payment status (public — used by FinNotifications) ───────────────
+  // ─── Payment status (public - used by FinNotifications) ───────────────
 
   function computePaymentStatus(c) {
     if (c.amountPaid >= c.contractValue) return 'paid';
@@ -847,7 +847,7 @@ const Customers = (function () {
   function _addMilestoneForm() {
     return '<div class="dr-inline-form">' +
       '<div class="dr-inline-grid">' +
-        '<div class="fg" style="padding:0;grid-column:1/-1"><label class="fl">Milestone Name</label><input class="finp" id="dr-ms-name" placeholder="e.g. Phase 4 — Testing"/></div>' +
+        '<div class="fg" style="padding:0;grid-column:1/-1"><label class="fl">Milestone Name</label><input class="finp" id="dr-ms-name" placeholder="e.g. Phase 4 - Testing"/></div>' +
         '<div class="fg" style="padding:0"><label class="fl">Amount</label><input class="finp" id="dr-ms-amount" type="number" min="0" placeholder="0.00"/></div>' +
         '<div class="fg" style="padding:0"><label class="fl">Due Date</label><input class="finp" id="dr-ms-due" type="date"/></div>' +
       '</div>' +

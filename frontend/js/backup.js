@@ -13,7 +13,7 @@ const Backup = (function () {
   var _lastRestoreJobId  = null;   // restoreJobId from most recent restore call
   var _lastRestoreInst   = null;   // {accountId, region} snapshot for status check
 
-  // ─── Schedule preset retention defaults (no hardcoded time — user picks it)
+  // ─── Schedule preset retention defaults (no hardcoded time - user picks it)
   var CRON_PRESETS = {
     daily:   { days: 30  },
     weekly:  { days: 90  },
@@ -52,12 +52,12 @@ const Backup = (function () {
     if (!sel) return;
 
     var instances = (typeof Instances !== 'undefined') ? Instances.getAll() : [];
-    sel.innerHTML = '<option value="">— Choose an instance to manage backups —</option>';
+    sel.innerHTML = '<option value="">- Choose an instance to manage backups -</option>';
 
     var role = Auth.getRole();
     instances.forEach(function (inst) {
       if (role === 'none') return;
-      var label = inst.instanceId + (inst.name && inst.name !== inst.instanceId ? ' (' + inst.name + ')' : '') + ' — ' + inst.accountId;
+      var label = inst.instanceId + (inst.name && inst.name !== inst.instanceId ? ' (' + inst.name + ')' : '') + ' - ' + inst.accountId;
       var val   = JSON.stringify({
         instanceId:  inst.instanceId,
         accountId:   inst.accountId,
@@ -155,12 +155,12 @@ const Backup = (function () {
   // ─── Render helpers
 
   function _fmtBytes(bytes) {
-    if (!bytes) return '—';
+    if (!bytes) return '-';
     return (bytes / 1073741824).toFixed(1) + ' GB';
   }
 
   function _fmtDate(d) {
-    if (!d || d === 'None') return '—';
+    if (!d || d === 'None') return '-';
     try { return new Date(d).toLocaleString(); } catch (e) { return d; }
   }
 
@@ -181,7 +181,7 @@ const Backup = (function () {
 
   function _friendlyCron(cron) {
     var match = cron && cron.match(/^cron\(\s*(\d+)\s+(\d+)\s+(.+)\)$/);
-    if (!match) return cron || '—';
+    if (!match) return cron || '-';
     var m    = parseInt(match[1], 10);
     var h    = parseInt(match[2], 10);
     var body = match[3].trim();
@@ -194,7 +194,7 @@ const Backup = (function () {
 
   function _nextCronRun(cron) {
     var match = cron && cron.match(/^cron\(\s*(\d+)\s+(\d+)\s+(.+)\)$/);
-    if (!match) return '—';
+    if (!match) return '-';
     var m    = parseInt(match[1], 10);
     var h    = parseInt(match[2], 10);
     var body = match[3].trim();
@@ -251,7 +251,7 @@ const Backup = (function () {
     wrap.innerHTML = recoveryPoints.map(function (rp) {
       var safeArn = rp.recoveryPointArn.replace(/'/g, '');
       var statusClass = 'bk-status-' + (rp.status || '').toLowerCase();
-      // Delete button is intentionally removed — use AWS Console to delete recovery points
+      // Delete button is intentionally removed - use AWS Console to delete recovery points
       var actions = canAct
         ? '<button class="btn btn-sm btn-out bk-restore-btn" onclick="Backup.openRestoreModal(\'' + safeArn + '\')">Restore</button>'
         : '<span class="bk-view-only">View only</span>';
@@ -294,7 +294,7 @@ const Backup = (function () {
         '</div>' +
         '<div><div class="bk-plan-name">' + _friendlyCron(p.scheduleCron) + '</div>' +
         '<div class="bk-plan-meta">' + (p.backupPlanName || '') + '</div></div>' +
-        '<span class="bk-plan-ret">' + (p.retentionDays ? p.retentionDays + ' days' : '—') + '</span>' +
+        '<span class="bk-plan-ret">' + (p.retentionDays ? p.retentionDays + ' days' : '-') + '</span>' +
         (p.lastExecutionDate && p.lastExecutionDate !== 'None' && p.lastExecutionDate !== ''
           ? '<span class="bk-plan-last">Last run: ' + _fmtDate(p.lastExecutionDate) + '</span>'
           : '<span class="bk-plan-last bk-plan-last--next">Next run: ' + _nextCronRun(p.scheduleCron) + '</span>') +
@@ -405,7 +405,7 @@ const Backup = (function () {
       '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
       '</button>';
     el.style.display = 'flex';
-    // Don't auto-dismiss — user needs time to click Check Status
+    // Don't auto-dismiss - user needs time to click Check Status
   }
 
   async function checkRestoreStatus() {
@@ -517,7 +517,7 @@ const Backup = (function () {
     var restoreType = radio ? radio.value : 'new_instance';
     var msg = restoreType === 'replace'
       ? 'This will launch a new EC2 instance and immediately STOP your original instance. Manually terminate the original after verifying the new one.'
-      : 'This will launch a new EC2 instance from this snapshot. Your original instance keeps running — verify the new one before terminating the old.';
+      : 'This will launch a new EC2 instance from this snapshot. Your original instance keeps running - verify the new one before terminating the old.';
     _showConfirm({
       title:        'Confirm Restore',
       message:      msg,
