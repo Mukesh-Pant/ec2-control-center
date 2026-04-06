@@ -45,6 +45,106 @@ _PAYMENT_EXTENSIONS = {
     'image/webp': '.webp',
     'application/pdf': '.pdf',
 }
+PRICING_SETTINGS_ID = 'PRICING_SETTINGS'
+TEMPLATE_SETTINGS_ID = 'LAB_TEMPLATE_SETTINGS'
+_DEFAULT_LAB_TEMPLATES = [
+    {
+        'id': 'starter-blog',
+        'name': 'Starter Blog',
+        'description': 'Personal websites, portfolios, and blogs',
+        'badge': 'Most Affordable',
+        'badgeClass': 'tpl-badge--green',
+        'icon': 'Blog',
+        'instanceType': 't3.micro',
+        'vcpu': 2,
+        'ram': '1 GB',
+        'storageGb': 20,
+        'platform': 'ubuntu',
+        'detailedMonitor': True,
+        'elasticIp': True,
+        'useCases': ['WordPress', 'Ghost', 'Static sites'],
+    },
+    {
+        'id': 'dev-sandbox',
+        'name': 'Dev Sandbox',
+        'description': 'Development, testing, and CI environments',
+        'badge': 'Developer Pick',
+        'badgeClass': 'tpl-badge--blue',
+        'icon': 'Dev',
+        'instanceType': 't3.medium',
+        'vcpu': 2,
+        'ram': '4 GB',
+        'storageGb': 30,
+        'platform': 'ubuntu',
+        'detailedMonitor': True,
+        'elasticIp': True,
+        'useCases': ['Node.js', 'Python', 'Docker'],
+    },
+    {
+        'id': 'ecommerce',
+        'name': 'E-Commerce',
+        'description': 'Online stores with moderate traffic',
+        'badge': 'Popular',
+        'badgeClass': 'tpl-badge--amber',
+        'icon': 'Store',
+        'instanceType': 't3.large',
+        'vcpu': 2,
+        'ram': '8 GB',
+        'storageGb': 50,
+        'platform': 'ubuntu',
+        'detailedMonitor': True,
+        'elasticIp': True,
+        'useCases': ['WooCommerce', 'Magento', 'Shopify self-hosted'],
+    },
+    {
+        'id': 'analytics',
+        'name': 'Analytics Engine',
+        'description': 'Data processing and analytics workloads',
+        'badge': 'High Memory',
+        'badgeClass': 'tpl-badge--violet',
+        'icon': 'Analytics',
+        'instanceType': 'm5.large',
+        'vcpu': 2,
+        'ram': '8 GB',
+        'storageGb': 100,
+        'platform': 'ubuntu',
+        'detailedMonitor': True,
+        'elasticIp': True,
+        'useCases': ['Jupyter', 'Pandas', 'Spark'],
+    },
+    {
+        'id': 'game-server',
+        'name': 'Game Server',
+        'description': 'High-performance multiplayer game hosting',
+        'badge': 'High CPU',
+        'badgeClass': 'tpl-badge--red',
+        'icon': 'Game',
+        'instanceType': 'c5.xlarge',
+        'vcpu': 4,
+        'ram': '8 GB',
+        'storageGb': 80,
+        'platform': 'ubuntu',
+        'detailedMonitor': True,
+        'elasticIp': True,
+        'useCases': ['Minecraft', 'CS2', 'Valheim'],
+    },
+    {
+        'id': 'enterprise-api',
+        'name': 'Enterprise API',
+        'description': 'High-traffic backends and microservices',
+        'badge': 'Enterprise',
+        'badgeClass': 'tpl-badge--cyan',
+        'icon': 'API',
+        'instanceType': 'm5.xlarge',
+        'vcpu': 4,
+        'ram': '16 GB',
+        'storageGb': 200,
+        'platform': 'ubuntu',
+        'detailedMonitor': True,
+        'elasticIp': True,
+        'useCases': ['REST APIs', 'GraphQL', 'gRPC'],
+    },
+]
 
 
 def _get_ddb():
@@ -73,6 +173,92 @@ def _get_sts():
 
 def _get_labs_table():
     return _get_ddb().Table(LABS_TABLE)
+
+
+def _normalize_template_id(name, fallback):
+    value = (name or fallback or 'template').strip().lower()
+    chars = []
+    prev_dash = False
+    for ch in value:
+        if ch.isalnum():
+            chars.append(ch)
+            prev_dash = False
+        elif not prev_dash:
+            chars.append('-')
+            prev_dash = True
+    return ''.join(chars).strip('-') or fallback or 'template'
+
+
+def _sanitize_lab_template(raw, index=0):
+    if not isinstance(raw, dict):
+        raise ValueError(f'Template #{index + 1} must be an object.')
+
+    name = str(raw.get('name') or '').strip()
+    description = str(raw.get('description') or '').strip()
+    instance_type = str(raw.get('instanceType') or '').strip()
+    if not name:
+        raise ValueError(f'Template #{index + 1} name is required.')
+    if not description:
+        raise ValueError(f'Template #{index + 1} description is required.')
+    if not instance_type:
+        raise ValueError(f'Template #{index + 1} instanceType is required.')
+
+    try:
+        vcpu = int(raw.get('vcpu', 0))
+        storage_gb = int(raw.get('storageGb', 0))
+    except (TypeError, ValueError):
+        raise ValueError(f'Template "{name}" requires numeric vcpu and storageGb.')
+
+    if vcpu <= 0:
+        raise ValueError(f'Template "{name}" must have vcpu > 0.')
+    if storage_gb < 8:
+        raise ValueError(f'Template "{name}" must have storageGb >= 8.')
+
+    ram = str(raw.get('ram') or '').strip()
+    if not ram:
+        raise ValueError(f'Template "{name}" ram is required.')
+
+    platform = str(raw.get('platform') or 'ubuntu').strip().lower()
+    if platform not in ('ubuntu', 'windows'):
+        raise ValueError(f'Template "{name}" platform must be ubuntu or windows.')
+
+    badge = str(raw.get('badge') or '').strip() or 'Custom'
+    badge_class = str(raw.get('badgeClass') or 'tpl-badge--blue').strip() or 'tpl-badge--blue'
+    icon = str(raw.get('icon') or '').strip() or 'Server'
+    use_cases = raw.get('useCases') or []
+    if not isinstance(use_cases, list):
+        raise ValueError(f'Template "{name}" useCases must be a list.')
+
+    template_id = _normalize_template_id(raw.get('id'), f'template-{index + 1}')
+    return {
+        'id': template_id,
+        'name': name,
+        'description': description,
+        'badge': badge[:40],
+        'badgeClass': badge_class[:40],
+        'icon': icon[:24],
+        'instanceType': instance_type,
+        'vcpu': vcpu,
+        'ram': ram[:24],
+        'storageGb': storage_gb,
+        'platform': platform,
+        'detailedMonitor': bool(raw.get('detailedMonitor', True)),
+        'elasticIp': bool(raw.get('elasticIp', True)),
+        'useCases': [str(item).strip()[:40] for item in use_cases if str(item).strip()][:6],
+    }
+
+
+def _load_template_settings():
+    try:
+        item = _get_labs_table().get_item(Key={'labId': TEMPLATE_SETTINGS_ID}).get('Item')
+    except Exception:
+        logger.exception('Failed to load lab template settings')
+        item = None
+
+    templates = item.get('templates') if item else None
+    if not templates:
+        return [dict(t) for t in _DEFAULT_LAB_TEMPLATES]
+    return [dict(t) for t in templates]
 
 
 # ─── Cross-account helpers ────────────────────────────────────────────────────
@@ -321,8 +507,6 @@ def handle_labs_payment(event):
 # Pricing settings helpers (stored as a special record in LABS_TABLE)
 # ─────────────────────────────────────────────────────────────────────────────
 
-PRICING_SETTINGS_ID = 'PRICING_SETTINGS'
-
 _DEFAULT_PRICING_SETTINGS = {
     'whtPercent':             0.0,   # Withholding Tax %
     'vatPercent':             13.0,  # VAT %
@@ -331,8 +515,10 @@ _DEFAULT_PRICING_SETTINGS = {
     'includeBackup':          False, # Include AWS Backup cost estimate
     'includeMonitoring':      False, # Include detailed CloudWatch monitoring cost
     'currencyRate':           135.0, # Local currency per USD (e.g. NPR)
+    'usdToInrRate':           84.0,  # INR display conversion for frontend helpers
     'currencyCode':           'NPR', # Local currency code
     'discountPercent':        0.0,   # Global discount/rebate shown to customers
+    'showBreakdown':          False, # Whether to reveal detailed tax lines in UI
 }
 
 
@@ -342,9 +528,17 @@ def _load_pricing_settings():
         result = _get_labs_table().get_item(Key={'labId': PRICING_SETTINGS_ID})
         item = result.get('Item', {})
         settings = dict(_DEFAULT_PRICING_SETTINGS)
+        bool_fields = {'includeBackup', 'includeMonitoring', 'showBreakdown'}
         for k in settings:
             if k in item:
-                settings[k] = float(item[k]) if isinstance(item[k], (int, float)) else item[k]
+                if k in bool_fields:
+                    settings[k] = bool(item[k])
+                elif isinstance(item[k], bool):
+                    settings[k] = item[k]
+                elif isinstance(item[k], (int, float)):
+                    settings[k] = float(item[k])
+                else:
+                    settings[k] = item[k]
         return settings
     except Exception:
         logger.warning('Could not load pricing settings, using defaults')
@@ -420,7 +614,7 @@ def handle_labs_pricing_settings_update(event):
 
     # Validate numeric fields
     numeric_fields = {'whtPercent', 'vatPercent', 'marginPercent', 'dataTransferMonthlyUsd',
-                      'currencyRate', 'discountPercent'}
+                      'currencyRate', 'usdToInrRate', 'discountPercent'}
     for field in numeric_fields:
         if field in updates:
             try:
@@ -432,6 +626,10 @@ def handle_labs_pricing_settings_update(event):
                 updates[field] = val
             except (TypeError, ValueError):
                 return error_response(400, f'{field} must be numeric.')
+
+    for field in ('includeBackup', 'includeMonitoring', 'showBreakdown'):
+        if field in updates:
+            updates[field] = bool(updates[field])
 
     # Load existing, merge, write back
     existing = _load_pricing_settings()
@@ -445,6 +643,58 @@ def handle_labs_pricing_settings_update(event):
         return error_response(500, str(e))
 
     return response(200, {'settings': existing, 'message': 'Pricing settings updated.'})
+
+
+def handle_labs_templates_get(event):
+    """Return admin-managed quick-launch templates."""
+    guard = _require_operator_or_admin(event)
+    if guard:
+        return guard
+    return response(200, {'templates': _load_template_settings()})
+
+
+def handle_labs_templates_update(event):
+    """Replace admin-managed quick-launch templates."""
+    guard = require_admin(event)
+    if guard:
+        return guard
+
+    try:
+        body = json.loads(event.get('body') or '{}')
+    except json.JSONDecodeError:
+        return error_response(400, 'Invalid JSON body.')
+
+    templates = body.get('templates')
+    if not isinstance(templates, list) or not templates:
+        return error_response(400, 'templates must be a non-empty array.')
+    if len(templates) > 12:
+        return error_response(400, 'A maximum of 12 templates is allowed.')
+
+    sanitized = []
+    seen_ids = set()
+    for idx, tpl in enumerate(templates):
+        try:
+            clean = _sanitize_lab_template(tpl, idx)
+        except ValueError as exc:
+            return error_response(400, str(exc))
+        if clean['id'] in seen_ids:
+            return error_response(400, f'Duplicate template id: {clean["id"]}')
+        seen_ids.add(clean['id'])
+        sanitized.append(clean)
+
+    item = {
+        'labId': TEMPLATE_SETTINGS_ID,
+        'templates': sanitized,
+        'updatedAt': datetime.utcnow().isoformat() + 'Z',
+        'updatedBy': get_caller(event),
+    }
+    try:
+        _get_labs_table().put_item(Item=item)
+    except Exception as e:
+        logger.exception('Failed to save lab templates')
+        return error_response(500, str(e))
+
+    return response(200, {'templates': sanitized, 'message': 'Templates updated.'})
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -228,6 +228,20 @@ const API = (function () {
     return call('/labs/pricing-settings', 'POST', body);
   }
 
+  /**
+   * GET /labs/templates - get admin-managed quick-launch templates
+   */
+  function getLabTemplates() {
+    return call('/labs/templates', 'GET', null);
+  }
+
+  /**
+   * POST /labs/templates - replace quick-launch templates (admin only)
+   */
+  function updateLabTemplates(body) {
+    return call('/labs/templates', 'POST', body);
+  }
+
   return {
     call,
     ec2Action,
@@ -252,6 +266,8 @@ const API = (function () {
     getLabPaymentScreenshot,
     getLabPricingSettings,
     updateLabPricingSettings,
+    getLabTemplates,
+    updateLabTemplates,
   };
 
 })();

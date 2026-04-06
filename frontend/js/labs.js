@@ -30,11 +30,79 @@ const Labs = (function () {
   var _openMenuId   = null;    // labId whose 3-dot menu is open
   var _tickerTimers = {};      // {labId: intervalId}
   var _statusPollers = {};     // {labId: timeoutId}
+  var _settingsLoaded = false;
 
   function _getNprRate() { return (window.NPR_RATE && window.NPR_RATE > 0) ? window.NPR_RATE : 135; }
   function _npmFmt(usd) {
-    if (usd == null || usd <= 0) return '\u2014';
+    if (usd == null || usd <= 0) return '-';
     return 'NPR\u00a0' + (usd * _getNprRate()).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function _billingConfigFromSettings(settings) {
+    settings = settings || {};
+    return {
+      wht_rate: (parseFloat(settings.whtPercent) || 0) / 100,
+      margin_rate: (parseFloat(settings.marginPercent) || 12) / 100,
+      vat_rate: (parseFloat(settings.vatPercent) || 13) / 100,
+      usd_to_npr: parseFloat(settings.currencyRate) || 135,
+      usd_to_inr: parseFloat(settings.usdToInrRate) || 84,
+      show_breakdown: !!settings.showBreakdown,
+    };
+  }
+
+  function _pricingSettingsFromBilling(cfg) {
+    cfg = cfg || {};
+    return {
+      whtPercent: ((cfg.wht_rate || 0) * 100),
+      marginPercent: ((cfg.margin_rate || 0) * 100),
+      vatPercent: ((cfg.vat_rate || 0) * 100),
+      currencyRate: cfg.usd_to_npr || 135,
+      usdToInrRate: cfg.usd_to_inr || 84,
+      showBreakdown: !!cfg.show_breakdown,
+    };
+  }
+
+  function _templateIconGlyph(icon) {
+    var map = {
+      blog: '📝',
+      dev: '🛠️',
+      store: '🛒',
+      analytics: '📊',
+      game: '🎮',
+      api: '⚡',
+      server: '🖥️',
+    };
+    var key = String(icon || '').trim().toLowerCase();
+    return map[key] || icon || '🖥️';
+  }
+
+  async function _loadLabSettings() {
+    if (_settingsLoaded || typeof BillingEngine === 'undefined') return;
+    var role = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : '';
+
+    try {
+      var tplRes = await API.getLabTemplates();
+      var tplData = await tplRes.json();
+      if (tplRes.ok && Array.isArray(tplData.templates) && tplData.templates.length) {
+        BillingEngine.setTemplates(tplData.templates);
+      } else {
+        BillingEngine.setTemplates(BillingEngine.getDefaultTemplates());
+      }
+    } catch (_) {
+      BillingEngine.setTemplates(BillingEngine.getDefaultTemplates());
+    }
+
+    if (role === 'admin') {
+      try {
+        var cfgRes = await API.getLabPricingSettings();
+        var cfgData = await cfgRes.json();
+        if (cfgRes.ok && cfgData.settings) {
+          BillingEngine.saveConfig(_billingConfigFromSettings(cfgData.settings));
+        }
+      } catch (_) {}
+    }
+
+    _settingsLoaded = true;
   }
 
   // ─── Display maps
@@ -231,6 +299,7 @@ const Labs = (function () {
     var role = typeof Auth !== 'undefined' && Auth.getRole ? Auth.getRole() : '';
     if (_accounts.length === 0) await _loadAccounts();
     if (role === 'admin' && typeof _labsUsers !== 'undefined' && _labsUsers.length === 0 && typeof _loadLabsUsers === 'function') await _loadLabsUsers();
+    await _loadLabSettings();
 
 
     try {
@@ -2284,7 +2353,7 @@ const Labs = (function () {
           ribbonHtml +
           '<div class="msv2-tpl-top">' +
             '<div class="msv2-tpl-icon-wrap">' +
-              '<span class="msv2-tpl-icon">' + t.icon + '</span>' +
+              '<span class="msv2-tpl-icon">' + _templateIconGlyph(t.icon) + '</span>' +
             '</div>' +
             '<span class="tpl-badge ' + _esc(t.badgeClass) + '">' + _esc(t.badge) + '</span>' +
           '</div>' +
@@ -2990,12 +3059,12 @@ const Labs = (function () {
     var cfg = typeof BillingEngine !== 'undefined' ? BillingEngine.getConfig() : {};
     return (
       '<div class="billing-cfg-section" id="msv2-billing-cfg">' +
-        '<div class="billing-cfg-title">' +
+          '<div class="billing-cfg-title">' +
           '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>' +
-          'Billing Engine Config' +
+          'Billing Config' +
           '<span class="msv2-advisor-badge" style="background:var(--bdim);color:var(--blue2);font-size:10px;">Admin Only</span>' +
         '</div>' +
-        '<div class="billing-cfg-sub">Configure rates applied to all customer invoices. Changes take effect immediately.</div>' +
+        '<div class="billing-cfg-sub">Configure production billing defaults used across Labs. Saved values are shared for every admin session.</div>' +
         '<div class="billing-cfg-grid">' +
           '<div class="billing-cfg-field"><label class="billing-cfg-label">WHT Rate (%)</label><input class="billing-cfg-input" type="number" step="0.1" min="0" max="50" id="bcfg-wht" value="' + ((cfg.wht_rate || 0.18) * 100).toFixed(1) + '"/></div>' +
           '<div class="billing-cfg-field"><label class="billing-cfg-label">Margin Rate (%)</label><input class="billing-cfg-input" type="number" step="0.1" min="0" max="100" id="bcfg-margin" value="' + ((cfg.margin_rate || 0.12) * 100).toFixed(1) + '"/></div>' +
@@ -3007,12 +3076,67 @@ const Labs = (function () {
           '<input type="checkbox" id="bcfg-breakdown"' + (cfg.show_breakdown ? ' checked' : '') + '/>' +
           '<label for="bcfg-breakdown">Show tax breakdown to customers (collapsed by default)</label>' +
         '</div>' +
-        '<button class="billing-cfg-save" onclick="Labs._saveBillingConfig()">Save Config</button>' +
+        '<button class="billing-cfg-save" onclick="Labs._saveBillingConfig()">Save Billing Config</button>' +
       '</div>'
     );
   }
 
-  function _saveBillingConfig() {
+  function _renderTemplateManager() {
+    var role = Auth.getRole();
+    if (role !== 'admin' || typeof BillingEngine === 'undefined') return '';
+    var templates = BillingEngine.getTemplates();
+    return (
+      '<div class="billing-cfg-section" id="msv2-template-cfg">' +
+        '<div class="billing-cfg-title">' +
+          '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/></svg>' +
+          'Quick Launch Templates' +
+          '<span class="msv2-advisor-badge" style="background:var(--bdim);color:var(--blue2);font-size:10px;">Admin Only</span>' +
+        '</div>' +
+        '<div class="billing-cfg-sub">Add or edit the preconfigured templates shown to admins and operators in Quick Launch.</div>' +
+        '<div class="tpl-admin-list">' +
+          templates.map(function (tpl, index) {
+            return _renderTemplateEditor(tpl, index);
+          }).join('') +
+        '</div>' +
+        '<div class="tpl-admin-actions">' +
+          '<button class="billing-cfg-save tpl-admin-secondary" onclick="Labs._addTemplateDraft()">Add Template</button>' +
+          '<button class="billing-cfg-save tpl-admin-secondary" onclick="Labs._restoreDefaultTemplates()">Restore Defaults</button>' +
+          '<button class="billing-cfg-save" onclick="Labs._saveTemplateConfig()">Save Templates</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function _renderTemplateEditor(tpl, index) {
+    tpl = tpl || {};
+    var useCases = Array.isArray(tpl.useCases) ? tpl.useCases.join(', ') : '';
+    return (
+      '<div class="tpl-admin-card" data-index="' + index + '">' +
+        '<div class="tpl-admin-head">' +
+          '<div class="tpl-admin-title">Template ' + (index + 1) + '</div>' +
+          '<button class="tpl-admin-remove" onclick="Labs._removeTemplateDraft(' + index + ')">Remove</button>' +
+        '</div>' +
+        '<div class="billing-cfg-grid tpl-admin-grid">' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">Name</label><input class="billing-cfg-input" id="tpl-name-' + index + '" value="' + _esc(tpl.name || '') + '"/></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">Badge</label><input class="billing-cfg-input" id="tpl-badge-' + index + '" value="' + _esc(tpl.badge || 'Custom') + '"/></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">Icon</label><input class="billing-cfg-input" id="tpl-icon-' + index + '" value="' + _esc(tpl.icon || 'Server') + '"/></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">Platform</label><select class="billing-cfg-input" id="tpl-platform-' + index + '"><option value="ubuntu"' + ((tpl.platform || 'ubuntu') === 'ubuntu' ? ' selected' : '') + '>Ubuntu</option><option value="windows"' + (tpl.platform === 'windows' ? ' selected' : '') + '>Windows</option></select></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">Instance Type</label><input class="billing-cfg-input" id="tpl-instance-' + index + '" value="' + _esc(tpl.instanceType || '') + '"/></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">vCPU</label><input class="billing-cfg-input" type="number" min="1" step="1" id="tpl-vcpu-' + index + '" value="' + _esc(tpl.vcpu || 2) + '"/></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">RAM Label</label><input class="billing-cfg-input" id="tpl-ram-' + index + '" value="' + _esc(tpl.ram || '4 GB') + '"/></div>' +
+          '<div class="billing-cfg-field"><label class="billing-cfg-label">Storage (GB)</label><input class="billing-cfg-input" type="number" min="8" step="1" id="tpl-storage-' + index + '" value="' + _esc(tpl.storageGb || 20) + '"/></div>' +
+          '<div class="billing-cfg-field tpl-admin-wide"><label class="billing-cfg-label">Description</label><input class="billing-cfg-input" id="tpl-desc-' + index + '" value="' + _esc(tpl.description || '') + '"/></div>' +
+          '<div class="billing-cfg-field tpl-admin-wide"><label class="billing-cfg-label">Use Cases</label><input class="billing-cfg-input" id="tpl-usecases-' + index + '" value="' + _esc(useCases) + '" placeholder="Comma-separated examples"/></div>' +
+        '</div>' +
+        '<div class="billing-cfg-toggle tpl-admin-toggles">' +
+          '<label><input type="checkbox" id="tpl-monitor-' + index + '"' + (tpl.detailedMonitor !== false ? ' checked' : '') + '/> Detailed monitoring</label>' +
+          '<label><input type="checkbox" id="tpl-eip-' + index + '"' + (tpl.elasticIp !== false ? ' checked' : '') + '/> Elastic IP</label>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  async function _saveBillingConfig() {
     if (typeof BillingEngine === 'undefined') return;
     var wht      = parseFloat(document.getElementById('bcfg-wht').value)    / 100 || 0.18;
     var margin   = parseFloat(document.getElementById('bcfg-margin').value) / 100 || 0.12;
@@ -3020,9 +3144,92 @@ const Labs = (function () {
     var npr      = parseFloat(document.getElementById('bcfg-npr').value)          || 135;
     var inr      = parseFloat(document.getElementById('bcfg-inr').value)          || 84;
     var breakdown = document.getElementById('bcfg-breakdown').checked;
-    BillingEngine.saveConfig({ wht_rate: wht, margin_rate: margin, vat_rate: vat, usd_to_npr: npr, usd_to_inr: inr, show_breakdown: breakdown });
-    App.showToast('Billing config saved', 'ok');
+    var nextCfg = BillingEngine.saveConfig({ wht_rate: wht, margin_rate: margin, vat_rate: vat, usd_to_npr: npr, usd_to_inr: inr, show_breakdown: breakdown });
+    try {
+      var res = await API.updateLabPricingSettings(_pricingSettingsFromBilling(nextCfg));
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Save failed');
+      App.showToast('Billing config saved', 'ok');
+    } catch (e) {
+      App.showToast('Billing config save failed: ' + e.message, 'err');
+      return;
+    }
     _renderLabsList();
+  }
+
+  function _collectTemplateDrafts() {
+    var cards = document.querySelectorAll('.tpl-admin-card');
+    return Array.prototype.map.call(cards, function (card, index) {
+      return {
+        name: document.getElementById('tpl-name-' + index).value.trim(),
+        badge: document.getElementById('tpl-badge-' + index).value.trim(),
+        icon: document.getElementById('tpl-icon-' + index).value.trim(),
+        platform: document.getElementById('tpl-platform-' + index).value,
+        instanceType: document.getElementById('tpl-instance-' + index).value.trim(),
+        vcpu: parseInt(document.getElementById('tpl-vcpu-' + index).value, 10) || 0,
+        ram: document.getElementById('tpl-ram-' + index).value.trim(),
+        storageGb: parseInt(document.getElementById('tpl-storage-' + index).value, 10) || 0,
+        description: document.getElementById('tpl-desc-' + index).value.trim(),
+        useCases: document.getElementById('tpl-usecases-' + index).value.split(',').map(function (item) { return item.trim(); }).filter(Boolean),
+        detailedMonitor: document.getElementById('tpl-monitor-' + index).checked,
+        elasticIp: document.getElementById('tpl-eip-' + index).checked,
+      };
+    });
+  }
+
+  function _addTemplateDraft() {
+    if (typeof BillingEngine === 'undefined') return;
+    var drafts = BillingEngine.getTemplates();
+    drafts.push({
+      name: 'New Template',
+      badge: 'Custom',
+      icon: 'Server',
+      platform: 'ubuntu',
+      instanceType: 't3.medium',
+      vcpu: 2,
+      ram: '4 GB',
+      storageGb: 30,
+      description: 'Describe the workload for this template',
+      useCases: ['Example'],
+      detailedMonitor: true,
+      elasticIp: true,
+    });
+    BillingEngine.setTemplates(drafts);
+    _renderLabsList();
+  }
+
+  function _removeTemplateDraft(index) {
+    if (typeof BillingEngine === 'undefined') return;
+    var drafts = BillingEngine.getTemplates();
+    if (drafts.length <= 1) {
+      App.showToast('At least one template is required', 'err');
+      return;
+    }
+    drafts.splice(index, 1);
+    BillingEngine.setTemplates(drafts);
+    _renderLabsList();
+  }
+
+  function _restoreDefaultTemplates() {
+    if (typeof BillingEngine === 'undefined') return;
+    BillingEngine.setTemplates(BillingEngine.getDefaultTemplates());
+    App.showToast('Default templates restored locally. Save to publish them.', 'ok');
+    _renderLabsList();
+  }
+
+  async function _saveTemplateConfig() {
+    if (typeof BillingEngine === 'undefined') return;
+    var drafts = _collectTemplateDrafts();
+    try {
+      var res = await API.updateLabTemplates({ templates: drafts });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Template save failed');
+      BillingEngine.setTemplates(data.templates || drafts);
+      App.showToast('Templates saved', 'ok');
+      _renderLabsList();
+    } catch (e) {
+      App.showToast('Template save failed: ' + e.message, 'err');
+    }
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -3052,7 +3259,9 @@ const Labs = (function () {
         _renderHero({ active: 0 }) +
         _renderCreateCta() +
         '<div id="msv2-tpl-anchor"></div>' +
-        _renderQuickLaunch();
+        _renderQuickLaunch() +
+        _renderBillingConfig() +
+        _renderTemplateManager();
 
       // Init canvas
       setTimeout(function () {
@@ -3101,6 +3310,8 @@ const Labs = (function () {
       _renderHero(counts) +
       _renderCreateCta() +
       _renderQuickLaunch() +
+      _renderBillingConfig() +
+      _renderTemplateManager() +
       _renderSummaryBar(counts) +
       _renderControls(counts) +
       _renderBulkBar();
@@ -3211,6 +3422,10 @@ const Labs = (function () {
     _quickStart:         _quickStart,
     _quickStop:          _quickStop,
     _saveBillingConfig:  _saveBillingConfig,
+    _addTemplateDraft:   _addTemplateDraft,
+    _removeTemplateDraft: _removeTemplateDraft,
+    _restoreDefaultTemplates: _restoreDefaultTemplates,
+    _saveTemplateConfig: _saveTemplateConfig,
   };
 
 })();

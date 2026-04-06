@@ -16,6 +16,8 @@ Routes:
   GET  /labs/keypair        — get pre-signed .pem download URL
   GET  /labs/windows-password — decrypt Windows RDP password
   GET  /labs/pricing        — cost breakdown from AWS Price List API
+  GET  /labs/templates      — list quick-launch templates
+  POST /labs/templates      — replace quick-launch templates (admin only)
   GET  /labs/network-options  — VPCs, subnets, security groups for account
 """
 
@@ -118,6 +120,10 @@ def lambda_handler(event, context):
         return labs.handle_labs_pricing_settings_get(event)
     elif path == '/labs/pricing-settings' and method == 'POST':
         return labs.handle_labs_pricing_settings_update(event)
+    elif path == '/labs/templates' and method == 'GET':
+        return labs.handle_labs_templates_get(event)
+    elif path == '/labs/templates' and method == 'POST':
+        return labs.handle_labs_templates_update(event)
     elif path == '/labs/network-options' and method == 'GET':
         return labs.handle_labs_network_options(event)
     else:

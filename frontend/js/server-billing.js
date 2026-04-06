@@ -205,7 +205,7 @@ const BillingEngine = (function () {
   }
 
   // ─── Quick Launch Templates ───────────────────────────────────────────────
-  var TEMPLATES = [
+  var DEFAULT_TEMPLATES = [
     {
       id:          'starter-blog',
       name:        'Starter Blog',
@@ -304,39 +304,30 @@ const BillingEngine = (function () {
     },
   ];
 
-  // Custom admin-added templates stored in localStorage
-  var CUSTOM_TEMPLATES_KEY = 'ec2ctrl_custom_templates';
+  var ACTIVE_TEMPLATES = DEFAULT_TEMPLATES.slice();
 
-  function _loadCustomTemplates() {
-    try {
-      var raw = localStorage.getItem(CUSTOM_TEMPLATES_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (_) { return []; }
+  function setTemplates(templates) {
+    if (!Array.isArray(templates) || templates.length === 0) {
+      ACTIVE_TEMPLATES = DEFAULT_TEMPLATES.slice();
+      return getTemplates();
+    }
+    ACTIVE_TEMPLATES = templates.map(function (t) { return Object.assign({}, t); });
+    return getTemplates();
   }
 
-  function saveCustomTemplate(tpl) {
-    var customs = _loadCustomTemplates();
-    var idx = customs.findIndex(function (t) { return t.id === tpl.id; });
-    if (idx >= 0) customs[idx] = tpl; else customs.push(tpl);
-    localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(customs));
+  function getDefaultTemplates() {
+    return DEFAULT_TEMPLATES.map(function (t) { return Object.assign({}, t); });
   }
 
-  function deleteCustomTemplate(tplId) {
-    var customs = _loadCustomTemplates().filter(function (t) { return t.id !== tplId; });
-    localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(customs));
+  function getTemplates() {
+    return ACTIVE_TEMPLATES.map(function (t) { return Object.assign({}, t); });
   }
-
-  function getAllTemplates() {
-    return TEMPLATES.concat(_loadCustomTemplates());
-  }
-
-  function getTemplates() { return TEMPLATES; }
 
   // ─── Compute billing for each template at 8 hrs/day (business hours) ─────
   // Cards show 8-hr price as the "from" price (lower = more attractive).
   // Wizard step 2 always shows the exact price for the customer's chosen uptime.
   function templatePrices() {
-    return getAllTemplates().map(function (t) {
+    return getTemplates().map(function (t) {
       var b = compute({
         instanceType:    t.instanceType,
         hoursPerDay:     8,          // display price at business hours
@@ -371,7 +362,9 @@ const BillingEngine = (function () {
     saveConfig:     saveConfig,
     compute:        compute,
     getHourlyRate:  getHourlyRate,
+    getDefaultTemplates: getDefaultTemplates,
     getTemplates:   getTemplates,
+    setTemplates:   setTemplates,
     templatePrices: templatePrices,
     forecast12m:    forecast12m,
     fmtNpr:         fmtNpr,

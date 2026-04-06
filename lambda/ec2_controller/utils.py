@@ -7,13 +7,16 @@ import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
+ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', 'http://localhost:3000')
+ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGIN.split(',') if origin.strip()]
 
 
 def get_cors():
     """Return CORS headers dict."""
+    allow_origin = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else 'http://localhost:3000'
     return {
-        'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+        'Access-Control-Allow-Origin': allow_origin,
+        'Vary': 'Origin',
         'Access-Control-Allow-Headers': 'Content-Type,Authorization',
         'Access-Control-Allow-Methods': 'POST,GET,DELETE,OPTIONS',
         'Content-Type': 'application/json',
