@@ -2752,23 +2752,19 @@ code {
 .lbs-cta-btn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 9px 18px; border-radius: var(--rlg);
-  background: linear-gradient(135deg, var(--blue) 0%, var(--blue2) 100%);
+  background: var(--blue);
   color: #fff; font-size: 13px; font-weight: 700; letter-spacing: .1px;
   border: none; cursor: pointer;
-  box-shadow: 0 2px 8px rgba(37,99,235,.28), 0 1px 3px rgba(37,99,235,.14);
-  transition: transform .15s ease, box-shadow .15s ease;
+  box-shadow: none;
+  transition: transform .15s ease, background .15s ease;
   position: relative; overflow: hidden; white-space: nowrap;
 }
-.lbs-cta-btn::after {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,.13) 0%, transparent 55%);
-  pointer-events: none;
-}
 .lbs-cta-btn:hover {
+  background: var(--blue2);
   transform: translateY(-1px);
-  box-shadow: 0 6px 22px rgba(37,99,235,.36), 0 2px 6px rgba(37,99,235,.18);
+  box-shadow: none;
 }
-.lbs-cta-btn:active { transform: translateY(0); box-shadow: 0 2px 8px rgba(37,99,235,.22); }
+.lbs-cta-btn:active { transform: translateY(0); box-shadow: none; }
 
 /* ── My Servers — stats dashboard row ── */
 .lbs-stats-row {
