@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   Billing Module — Per-instance daily history & session
+   Billing Module - Per-instance daily history & session
    estimates using live on-demand pricing from /pricing.
    ═══════════════════════════════════════════════════════ */
 
@@ -7,7 +7,7 @@ const Billing = (function () {
 
   function _getNprRate() { return (window.NPR_RATE && window.NPR_RATE > 0) ? window.NPR_RATE : 135; }
   function _npr(usd) {
-    if (!usd || usd <= 0) return '—';
+    if (!usd || usd <= 0) return '-';
     return 'NPR\u00a0' + (usd * _getNprRate()).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
@@ -60,7 +60,7 @@ const Billing = (function () {
     var rowsHtml = '';
     rows.forEach(function (r) {
       var pct     = Math.min(100, (r.runningHours / 24) * 100).toFixed(1);
-      var costTxt = r.estimatedCost > 0 ? _npr(r.estimatedCost) : '—';
+      var costTxt = r.estimatedCost > 0 ? _npr(r.estimatedCost) : '-';
       rowsHtml +=
         '<tr>' +
         '<td class="audit-cell-mono">' + App.esc(r.date) + '</td>' +
@@ -153,11 +153,11 @@ const Billing = (function () {
               App.esc(i.instanceId) + ' · ' + App.esc(i.accountName || i.accountId) + ' · ' + App.esc(region) +
             '</div>' +
           '</div>' +
-          '<div class="session-type">' + App.esc(i.instanceType || '—') + '</div>' +
+          '<div class="session-type">' + App.esc(i.instanceType || '-') + '</div>' +
           '<div style="font-family:var(--mono);font-size:11px;color:var(--ink3)">' +
-            (rate > 0 ? _npr(rate) + '/hr' : '—') +
+            (rate > 0 ? _npr(rate) + '/hr' : '-') +
           '</div>' +
-          '<div class="session-cost">' + (rate > 0 ? '~' + _npr(rate * 24) + '/day' : '—') + '</div>' +
+          '<div class="session-cost">' + (rate > 0 ? '~' + _npr(rate * 24) + '/day' : '-') + '</div>' +
         '</div>'
       );
     }).join('');
@@ -170,7 +170,7 @@ const Billing = (function () {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────
   function _fmtCost(n) {
-    if (!n || n < 0.00001) return '<span class="cost-zero">—</span>';
+    if (!n || n < 0.00001) return '<span class="cost-zero">-</span>';
     return '<span class="cost-num">' + _npr(n) + '</span>';
   }
 

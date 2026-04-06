@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   Accounts Module — Multi-Account Management (M5)
+   Accounts Module - Multi-Account Management (M5)
    ═══════════════════════════════════════════════ */
 
 const Accounts = (function () {
@@ -78,7 +78,7 @@ const Accounts = (function () {
     var consoleBtn = (!isCentral && acct.enabled && role !== 'viewer')
       ? (hasConsoleRole
           ? '<button class="act-btn act-btn-console" id="console-btn-' + _esc(acct.accountId) + '" onclick="Accounts.consoleLogin(\'' + _esc(acct.accountId) + '\')" title="Open AWS Console in Firefox container tab">Console Login</button>'
-          : '<button class="act-btn act-btn-console" disabled title="Console Login Role not configured — add it by editing this account">Console Login</button>')
+          : '<button class="act-btn act-btn-console" disabled title="Console Login Role not configured - add it by editing this account">Console Login</button>')
       : '';
 
     return (
@@ -136,10 +136,10 @@ const Accounts = (function () {
 
       if (data.success) {
         App.showToast('✓ ' + data.message, 'ok');
-        App.log('Connection test OK — ' + accountId + ': ' + data.message, 'ok');
+        App.log('Connection test OK - ' + accountId + ': ' + data.message, 'ok');
       } else {
         App.showToast('Connection failed: ' + data.message, 'err');
-        App.log('Connection test FAILED — ' + accountId + ': ' + data.message, 'err');
+        App.log('Connection test FAILED - ' + accountId + ': ' + data.message, 'err');
       }
     } catch (err) {
       App.showToast('Test error: ' + err.message, 'err');
@@ -267,7 +267,7 @@ const Accounts = (function () {
     var region = (el && el.value) || 'ap-south-1';
     var url = _buildQuickCreateUrl(region);
     if (!url) {
-      App.showToast('Deploy URL not available — please redeploy the portal to enable this feature.', 'error');
+      App.showToast('Deploy URL not available - please redeploy the portal to enable this feature.', 'error');
       return;
     }
     window.open(url, '_blank');
@@ -344,6 +344,18 @@ const Accounts = (function () {
         if (e.key === 'Enter') confirmAdd();
       });
     });
+
+    // Auto-populate Account ID from pasted RoleArn (arn:aws:iam::{accountId}:role/...)
+    if (modalAcctRole) {
+      modalAcctRole.addEventListener('input', function () {
+        var parts = modalAcctRole.value.trim().split(':');
+        if (parts.length >= 5 && parts[0] === 'arn' && parts[2] === 'iam' && /^\d{12}$/.test(parts[4])) {
+          if (!modalAcctId.value.trim()) {
+            modalAcctId.value = parts[4];
+          }
+        }
+      });
+    }
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────

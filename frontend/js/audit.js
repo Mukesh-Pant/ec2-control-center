@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   Audit Module — Event Log
+   Audit Module - Event Log
    ═══════════════════════════════════════════════
 
    Displays a paginated, filterable table of every
@@ -143,7 +143,7 @@ const Audit = (function () {
     if (!prevBtn || !nextBtn || !pgInfo) return;
 
     var totalPages = Math.max(1, Math.ceil(_allEvents.length / PAGE_SIZE));
-    // Clamp _auditPage — guards against "Page 6 of 5" if a next-page fetch fails
+    // Clamp _auditPage - guards against "Page 6 of 5" if a next-page fetch fails
     // after _auditPage was already incremented in the Next button handler
     _auditPage = Math.min(_auditPage, totalPages - 1);
     var onLastPage = _auditPage >= totalPages - 1;
@@ -158,7 +158,7 @@ const Audit = (function () {
     var actionCls = actionClass(item.action);
     var actionLabel = (item.action || '--').toUpperCase();
 
-    // INSTANCE cell — bold name + smaller blue mono ID
+    // INSTANCE cell - bold name + smaller blue mono ID
     var instName = escHtml(item.instanceName || item.instanceId || '--');
     var instId   = item.instanceName ? escHtml(item.instanceId || '') : '';
     var instCell =
@@ -167,7 +167,7 @@ const Audit = (function () {
         (instId ? '<div class="audit-inst-id">' + instId + '</div>' : '') +
       '</td>';
 
-    // ACCOUNT cell — account name + smaller mono ID
+    // ACCOUNT cell - account name + smaller mono ID
     var acctName = escHtml(item.accountName || item.accountId || '--');
     var acctId   = item.accountId && item.accountName ? escHtml(item.accountId) : '';
     var acctCell =
@@ -325,7 +325,7 @@ const Audit = (function () {
     }
   }
 
-  // ─── Init — wire all event listeners ──────────────────────────────────
+  // ─── Init - wire all event listeners ──────────────────────────────────
 
   function init() {
     // Search button
@@ -345,7 +345,7 @@ const Audit = (function () {
       }
     });
 
-    // Clear button — reset all 4 filters then reload
+    // Clear button - reset all 4 filters then reload
     document.getElementById('btn-audit-clear').addEventListener('click', function () {
       document.getElementById('audit-filter-instance').value = '';
       document.getElementById('audit-filter-user').value     = '';

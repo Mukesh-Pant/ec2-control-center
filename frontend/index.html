@@ -4,9 +4,9 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="theme-color" content="#122c53"/>
-  <title>EC2 Control — One Cloud Utopia</title>
+  <title>One Cloud Utopia - Your Cloud. Unified. Simplified.</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='2' y='2' width='20' height='8' rx='2' fill='%232460e0'/><rect x='2' y='14' width='20' height='8' rx='2' fill='%232460e0'/></svg>">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="css/styles.css"/>
   <link rel="stylesheet" href="css/fin-module.css"/>
 </head>
@@ -33,7 +33,7 @@
       <div class="fg"><label class="fl" for="vnd-m-name">Vendor Name</label><input class="finp" id="vnd-m-name" type="text" placeholder="e.g. Anthropic"/></div>
       <div class="fg"><label class="fl" for="vnd-m-category">Category</label>
         <select class="finp" id="vnd-m-category">
-          <option value="">— Select category —</option>
+          <option value="">- Select category -</option>
           <option>AI Services</option><option>Cloud Infrastructure</option><option>AI Tools</option>
           <option>HR &amp; Payroll</option><option>Cloud / Productivity</option>
           <option>Security</option><option>Analytics</option><option>Communication</option>
@@ -48,7 +48,7 @@
           <div class="tag-picker-tags" id="vnd-m-tags"></div>
           <div class="tag-picker-input-row">
             <select class="finp" id="vnd-m-svc-sel" onchange="Vendors.onSvcSelChange()">
-              <option value="">— Pick a service to add —</option>
+              <option value="">- Pick a service to add -</option>
               <option>Cloud Compute</option><option>Cloud Storage</option><option>CDN</option>
               <option>Database</option><option>Serverless</option><option>AI / LLM API</option>
               <option>Machine Learning</option><option>AI Code Editor</option>
@@ -69,14 +69,14 @@
       <!-- Currency + Amount -->
       <div class="fg"><label class="fl" for="vnd-m-currency">Currency</label>
         <select class="finp" id="vnd-m-currency">
-          <option value="USD">USD — US Dollar</option><option value="EUR">EUR — Euro</option>
-          <option value="GBP">GBP — British Pound</option><option value="AED">AED — UAE Dirham</option>
-          <option value="SAR">SAR — Saudi Riyal</option><option value="SGD">SGD — Singapore Dollar</option>
-          <option value="AUD">AUD — Australian Dollar</option><option value="CAD">CAD — Canadian Dollar</option>
-          <option value="JPY">JPY — Japanese Yen</option><option value="CNY">CNY — Chinese Yuan</option>
-          <option value="NPR">NPR — Nepali Rupee</option><option value="INR">INR — Indian Rupee</option>
-          <option value="PKR">PKR — Pakistani Rupee</option><option value="BDT">BDT — Bangladeshi Taka</option>
-          <option value="QAR">QAR — Qatari Riyal</option>
+          <option value="USD">USD - US Dollar</option><option value="EUR">EUR - Euro</option>
+          <option value="GBP">GBP - British Pound</option><option value="AED">AED - UAE Dirham</option>
+          <option value="SAR">SAR - Saudi Riyal</option><option value="SGD">SGD - Singapore Dollar</option>
+          <option value="AUD">AUD - Australian Dollar</option><option value="CAD">CAD - Canadian Dollar</option>
+          <option value="JPY">JPY - Japanese Yen</option><option value="CNY">CNY - Chinese Yuan</option>
+          <option value="NPR">NPR - Nepali Rupee</option><option value="INR">INR - Indian Rupee</option>
+          <option value="PKR">PKR - Pakistani Rupee</option><option value="BDT">BDT - Bangladeshi Taka</option>
+          <option value="QAR">QAR - Qatari Riyal</option>
         </select>
       </div>
       <div class="fg"><label class="fl" for="vnd-m-amount">Amount</label><input class="finp" id="vnd-m-amount" type="number" min="0" step="0.01" placeholder="0.00"/></div>
@@ -98,7 +98,7 @@
       <!-- Payment method dropdown -->
       <div class="fg"><label class="fl" for="vnd-m-payment-form">Payment Method</label>
         <select class="finp" id="vnd-m-payment-form" onchange="Vendors.onPaymentChange()">
-          <option value="">— Select —</option>
+          <option value="">- Select -</option>
           <option>Credit Card</option><option>Debit Card</option><option>Bank Transfer</option>
           <option>SWIFT Transfer</option><option>Wire Transfer</option><option>PayPal</option>
           <option>Stripe</option><option>eSewa</option><option>Fonepay</option>
@@ -112,8 +112,8 @@
       <div class="fg"><label class="fl" for="vnd-m-status">Vendor Status</label>
         <select class="finp" id="vnd-m-status">
           <option value="auto">Auto (based on agreement dates)</option>
-          <option value="active">Active — Manual Override</option>
-          <option value="inactive">Inactive — Paused / Cancelled</option>
+          <option value="active">Active - Manual Override</option>
+          <option value="inactive">Inactive - Paused / Cancelled</option>
         </select>
       </div>
       <div class="fg"><label class="fl" for="vnd-m-start">Agreement Start</label><input class="finp" id="vnd-m-start" type="date"/></div>
@@ -151,7 +151,7 @@
       <div class="fg"><label class="fl" for="cust-m-name">Customer Name</label><input class="finp" id="cust-m-name" type="text" placeholder="e.g. Cloudmandap"/></div>
       <div class="fg"><label class="fl" for="cust-m-country">Country</label>
         <select class="finp" id="cust-m-country">
-          <option value="">— Select country —</option>
+          <option value="">- Select country -</option>
           <option>Nepal</option><option>India</option><option>United States</option>
           <option>United Kingdom</option><option>UAE</option><option>Saudi Arabia</option>
           <option>Singapore</option><option>Australia</option><option>Canada</option>
@@ -165,7 +165,7 @@
       <!-- Payment method dropdown -->
       <div class="fg"><label class="fl" for="cust-m-pay-form">Payment Method</label>
         <select class="finp" id="cust-m-pay-form" onchange="Customers.onCustPaymentChange()">
-          <option value="">— Select —</option>
+          <option value="">- Select -</option>
           <option>Bank Transfer</option><option>SWIFT Transfer</option><option>Wire Transfer</option>
           <option>Credit Card</option><option>Debit Card</option>
           <option>eSewa</option><option>Fonepay</option><option>Khalti</option><option>IME Pay</option>
@@ -185,7 +185,7 @@
           <div class="tag-picker-tags" id="cust-m-tags"></div>
           <div class="tag-picker-input-row">
             <select class="finp" id="cust-m-svc-sel" onchange="Customers.onCustSvcSelChange()">
-              <option value="">— Pick a service to add —</option>
+              <option value="">- Pick a service to add -</option>
               <option>Software Development</option><option>Web Development</option><option>Mobile Development</option>
               <option>Cloud Infrastructure</option><option>Billing Management</option><option>Consulting</option>
               <option>UI / UX Design</option><option>DevOps</option><option>QA &amp; Testing</option>
@@ -204,14 +204,14 @@
       <!-- Currency + Financials -->
       <div class="fg"><label class="fl" for="cust-m-currency">Currency</label>
         <select class="finp" id="cust-m-currency">
-          <option value="USD">USD — US Dollar</option><option value="EUR">EUR — Euro</option>
-          <option value="GBP">GBP — British Pound</option><option value="AED">AED — UAE Dirham</option>
-          <option value="SAR">SAR — Saudi Riyal</option><option value="SGD">SGD — Singapore Dollar</option>
-          <option value="AUD">AUD — Australian Dollar</option><option value="CAD">CAD — Canadian Dollar</option>
-          <option value="JPY">JPY — Japanese Yen</option><option value="CNY">CNY — Chinese Yuan</option>
-          <option value="NPR">NPR — Nepali Rupee</option><option value="INR">INR — Indian Rupee</option>
-          <option value="PKR">PKR — Pakistani Rupee</option><option value="BDT">BDT — Bangladeshi Taka</option>
-          <option value="QAR">QAR — Qatari Riyal</option>
+          <option value="USD">USD - US Dollar</option><option value="EUR">EUR - Euro</option>
+          <option value="GBP">GBP - British Pound</option><option value="AED">AED - UAE Dirham</option>
+          <option value="SAR">SAR - Saudi Riyal</option><option value="SGD">SGD - Singapore Dollar</option>
+          <option value="AUD">AUD - Australian Dollar</option><option value="CAD">CAD - Canadian Dollar</option>
+          <option value="JPY">JPY - Japanese Yen</option><option value="CNY">CNY - Chinese Yuan</option>
+          <option value="NPR">NPR - Nepali Rupee</option><option value="INR">INR - Indian Rupee</option>
+          <option value="PKR">PKR - Pakistani Rupee</option><option value="BDT">BDT - Bangladeshi Taka</option>
+          <option value="QAR">QAR - Qatari Riyal</option>
         </select>
       </div>
       <div class="fg"><label class="fl" for="cust-m-contract-v">Contract Value</label><input class="finp" id="cust-m-contract-v" type="number" min="0" step="0.01" placeholder="0.00"/></div>
@@ -261,19 +261,19 @@
     </div>
     <!-- ── Step 1: Deploy role stack ── -->
     <div style="background:var(--s2);border-radius:8px;padding:14px 16px;margin-bottom:16px">
-      <div style="font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;margin-bottom:10px">Step 1 — Deploy IAM Role Stack in Your AWS Account</div>
+      <div style="font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;margin-bottom:10px">Step 1 - Deploy IAM Role Stack in Your AWS Account</div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
         <label class="fl" for="modal-cf-region" style="font-size:13px;white-space:nowrap">AWS Region</label>
         <select id="modal-cf-region" class="finp" style="flex:1;padding:6px 10px;font-size:13px">
-          <option value="ap-south-1" selected>Asia Pacific (Mumbai) — ap-south-1</option>
-          <option value="ap-southeast-1">Asia Pacific (Singapore) — ap-southeast-1</option>
-          <option value="ap-southeast-2">Asia Pacific (Sydney) — ap-southeast-2</option>
-          <option value="ap-northeast-1">Asia Pacific (Tokyo) — ap-northeast-1</option>
-          <option value="us-east-1">US East (N. Virginia) — us-east-1</option>
-          <option value="us-east-2">US East (Ohio) — us-east-2</option>
-          <option value="us-west-2">US West (Oregon) — us-west-2</option>
-          <option value="eu-west-1">Europe (Ireland) — eu-west-1</option>
-          <option value="eu-central-1">Europe (Frankfurt) — eu-central-1</option>
+          <option value="ap-south-1" selected>Asia Pacific (Mumbai) - ap-south-1</option>
+          <option value="ap-southeast-1">Asia Pacific (Singapore) - ap-southeast-1</option>
+          <option value="ap-southeast-2">Asia Pacific (Sydney) - ap-southeast-2</option>
+          <option value="ap-northeast-1">Asia Pacific (Tokyo) - ap-northeast-1</option>
+          <option value="us-east-1">US East (N. Virginia) - us-east-1</option>
+          <option value="us-east-2">US East (Ohio) - us-east-2</option>
+          <option value="us-west-2">US West (Oregon) - us-west-2</option>
+          <option value="eu-west-1">Europe (Ireland) - eu-west-1</option>
+          <option value="eu-central-1">Europe (Frankfurt) - eu-central-1</option>
         </select>
       </div>
       <button type="button" class="btn btn-blue" style="width:100%;justify-content:center;margin-bottom:12px" onclick="Accounts.openDeployConsole()">
@@ -288,7 +288,7 @@
       </div>
     </div>
     <!-- ── Step 2 divider ── -->
-    <div style="font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;margin-bottom:12px">Step 2 — Enter Account Details</div>
+    <div style="font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;margin-bottom:12px">Step 2 - Enter Account Details</div>
     <div class="fg">
       <label class="fl" for="modal-acct-id">AWS Account ID</label>
       <input class="finp" id="modal-acct-id" type="text" placeholder="123456789012" maxlength="12" autocomplete="off" inputmode="numeric"/>
@@ -307,7 +307,7 @@
     <div class="fg" style="margin-top:10px">
       <label class="fl" for="modal-acct-console-role">Console Login Role ARN <span style="font-size:11px;color:var(--ink3);font-weight:400">(optional)</span></label>
       <input class="finp" id="modal-acct-console-role" type="text" placeholder="arn:aws:iam::123456789012:role/EC2ControlConsoleRole-production" style="font-family:var(--mono);font-size:12px"/>
-      <div class="fhint">From the <strong>ConsoleRoleArn</strong> output of member-role-stack.yaml — enables role-based console access</div>
+      <div class="fhint">From the <strong>ConsoleRoleArn</strong> output of member-role-stack.yaml - enables role-based console access</div>
     </div>
     <div class="merr" id="modal-err"></div>
     <div class="modal-actions">
@@ -343,8 +343,8 @@
     <div class="fg">
       <label class="fl" for="grant-level-select">Access Level</label>
       <select class="finp" id="grant-level-select">
-        <option value="operator">Operator — can start/stop instances</option>
-        <option value="viewer">Viewer — read-only (list &amp; status only)</option>
+        <option value="operator">Operator - can start/stop instances</option>
+        <option value="viewer">Viewer - read-only (list &amp; status only)</option>
       </select>
     </div>
     <div class="merr" id="grant-modal-err"></div>
@@ -409,13 +409,13 @@
       <div class="auth-logorow">
         <img id="brand-logo-img" src="oculogo.png" alt="One Cloud Utopia" class="auth-logo-img">
         <div>
-          <div class="auth-logo-name">EC2 Control</div>
-          <div class="auth-logo-by">by One Cloud Utopia</div>
+          <div class="auth-logo-name">One Cloud Utopia</div>
+          <div class="auth-logo-by">EC2 Management Portal</div>
         </div>
       </div>
 
       <!-- Headline -->
-      <h1 class="auth-headline">Multi-Account EC2<br>Management,<br>Simplified.</h1>
+      <h1 class="auth-headline">Your Cloud.<br>Unified.<br>Simplified.</h1>
       <p class="auth-lead">Start, stop, and monitor EC2 instances across every AWS account from a single, unified dashboard.</p>
 
       <!-- Features -->
@@ -635,15 +635,10 @@
 
     <div class="sb-logo">
       <div class="logo-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="2" width="20" height="8" rx="2"/>
-          <rect x="2" y="14" width="20" height="8" rx="2"/>
-          <line x1="6" y1="6" x2="6.01" y2="6"/>
-          <line x1="6" y1="18" x2="6.01" y2="18"/>
-        </svg>
+        <img src="oculogo.png" alt="One Cloud Utopia" class="logo-mark-img"/>
       </div>
       <div>
-        <div class="logo-name">EC2 Control</div>
+        <div class="logo-name">One Cloud Utopia</div>
         <div class="logo-tag">Multi-Account Portal</div>
       </div>
       <button class="sb-close-btn" onclick="App.closeSidebar()">
@@ -654,7 +649,7 @@
     <div class="sb-fleet" id="sb-fleet">
       <span class="fleet-dot"></span>
       <span class="fleet-label">Fleet</span>
-      <span class="fleet-val" id="sb-fleet-txt">—</span>
+      <span class="fleet-val" id="sb-fleet-txt">-</span>
     </div>
 
     <nav class="sb-nav">
@@ -713,7 +708,7 @@
         Alerts
         <span class="nbadge" id="n-notif" style="display:none">0</span>
       </a>
-      <a class="nitem" id="nav-finsettings" onclick="App.go('finsettings')">
+      <a class="nitem hidden" id="nav-finsettings" onclick="App.go('finsettings')">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
         Fin Settings
       </a>
@@ -759,7 +754,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <div class="tb-brand">
-        <span class="tb-logo-text">EC2 Control</span>
+        <span class="tb-logo-text">One Cloud Utopia</span>
         <span class="tb-sep">/</span>
         <span class="tb-page" id="tb-page">Dashboard</span>
       </div>
@@ -799,7 +794,7 @@
 
       <!-- Extension install banner (hidden until extension-check fires) -->
       <div id="ext-install-banner" class="ext-banner hidden">
-        <span>&#9889; Install the EC2 Control Firefox Extension to enable one-click AWS Console login</span>
+        <span>&#9889; Install the One Cloud Utopia Firefox Extension to enable one-click AWS Console login</span>
         <a id="ext-install-link" href="https://addons.mozilla.org/firefox/addon/2993196/" target="_blank" rel="noopener noreferrer">Install Extension</a>
         <button onclick="document.getElementById('ext-install-banner').classList.add('hidden')" title="Dismiss">&#x2715;</button>
       </div>
@@ -824,7 +819,7 @@
             <div class="scard-top">
               <div class="scard-ico blue"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg></div>
             </div>
-            <div class="scard-val" id="st-total">—</div>
+            <div class="scard-val" id="st-total">-</div>
             <div class="scard-lbl">Total Instances</div>
             <div class="scard-sub" id="st-accts">across all accounts</div>
             <div class="scard-bar"><div class="scard-fill" id="sb-total" style="width:100%"></div></div>
@@ -833,25 +828,25 @@
             <div class="scard-top">
               <div class="scard-ico green"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
             </div>
-            <div class="scard-val green" id="st-run">—</div>
+            <div class="scard-val green" id="st-run">-</div>
             <div class="scard-lbl">Running Now</div>
-            <div class="scard-sub" id="st-run-pct">— % of fleet active</div>
+            <div class="scard-sub" id="st-run-pct">- % of fleet active</div>
             <div class="scard-bar"><div class="scard-fill green" id="sb-run" style="width:0%"></div></div>
           </div>
           <div class="scard red">
             <div class="scard-top">
               <div class="scard-ico red"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>
             </div>
-            <div class="scard-val red" id="st-stp">—</div>
+            <div class="scard-val red" id="st-stp">-</div>
             <div class="scard-lbl">Stopped</div>
-            <div class="scard-sub">idle — no cost accruing</div>
+            <div class="scard-sub">idle - no cost accruing</div>
             <div class="scard-bar"><div class="scard-fill red" id="sb-stp" style="width:0%"></div></div>
           </div>
           <div class="scard amber">
             <div class="scard-top">
               <div class="scard-ico amber"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
             </div>
-            <div class="scard-val amber" id="st-cost">—</div>
+            <div class="scard-val amber" id="st-cost">-</div>
             <div class="scard-lbl">Est. Monthly Cost</div>
             <div class="scard-sub">running fleet projection</div>
             <div class="scard-bar"><div class="scard-fill amber" id="sb-cost" style="width:75%"></div></div>
@@ -861,7 +856,7 @@
         <div class="dash-grid">
           <div class="card">
             <div class="card-hd">
-              <div class="card-title"><span class="cdot blue"></span>Fleet — Quick Control</div>
+              <div class="card-title"><span class="cdot blue"></span>Fleet - Quick Control</div>
               <span class="card-hint" id="inst-hint">Loading…</span>
             </div>
             <div class="dash-list-wrap" id="dash-list">
@@ -916,7 +911,7 @@
                 <div class="dq-sub">Usage &amp; fleet health</div>
               </button>
             </div>
-            <!-- Hidden log target — app.js App.log() still works -->
+            <!-- Hidden log target - app.js App.log() still works -->
             <ul class="log-ul" id="log-ul" style="display:none"></ul>
           </div>
         </div>
@@ -927,7 +922,7 @@
         <div class="ph">
           <div class="ph-l">
             <h1 class="ph-title">Instances</h1>
-            <p class="ph-sub">Servers grouped by account — click any row to inspect and control</p>
+            <p class="ph-sub">Servers grouped by account - click any row to inspect and control</p>
           </div>
           <div class="ph-r">
             <button class="btn btn-out btn-sm" onclick="Instances.refresh()">
@@ -946,19 +941,19 @@
             <div class="dp-stripe"></div>
             <div class="dp-banner">
               <div class="dp-left">
-                <div class="dp-name" id="dp-name">—</div>
-                <div class="dp-id" id="dp-id">—</div>
+                <div class="dp-name" id="dp-name">-</div>
+                <div class="dp-id" id="dp-id">-</div>
               </div>
               <div class="dp-badge stopped" id="dp-bdg"><span class="dp-sdot"></span><span id="dp-st">STOPPED</span></div>
             </div>
             <div class="dp-metrics">
-              <div class="dp-m"><div class="dp-ml">Account</div><div class="dp-mv blue" id="dp-acct">—</div></div>
-              <div class="dp-m"><div class="dp-ml">Region</div><div class="dp-mv blue" id="dp-reg">—</div></div>
-              <div class="dp-m"><div class="dp-ml">Instance Type</div><div class="dp-mv" id="dp-type">—</div></div>
-              <div class="dp-m"><div class="dp-ml">Platform</div><div class="dp-mv violet" id="dp-plat">—</div></div>
-              <div class="dp-m"><div class="dp-ml">Public IP</div><div class="dp-mv mono-sm" id="dp-pub">—</div></div>
-              <div class="dp-m"><div class="dp-ml">Storage</div><div class="dp-mv" id="dp-storage">—</div></div>
-              <div class="dp-m"><div class="dp-ml">Elastic IP</div><div class="dp-mv mono-sm amber" id="dp-eip">—</div></div>
+              <div class="dp-m"><div class="dp-ml">Account</div><div class="dp-mv blue" id="dp-acct">-</div></div>
+              <div class="dp-m"><div class="dp-ml">Region</div><div class="dp-mv blue" id="dp-reg">-</div></div>
+              <div class="dp-m"><div class="dp-ml">Instance Type</div><div class="dp-mv" id="dp-type">-</div></div>
+              <div class="dp-m"><div class="dp-ml">Platform</div><div class="dp-mv violet" id="dp-plat">-</div></div>
+              <div class="dp-m"><div class="dp-ml">Public IP</div><div class="dp-mv mono-sm" id="dp-pub">-</div></div>
+              <div class="dp-m"><div class="dp-ml">Storage</div><div class="dp-mv" id="dp-storage">-</div></div>
+              <div class="dp-m"><div class="dp-ml">Elastic IP</div><div class="dp-mv mono-sm amber" id="dp-eip">-</div></div>
             </div>
             <div class="dp-ctrl">
               <span class="dp-ctrl-lbl">Controls</span>
@@ -1020,7 +1015,7 @@
           <div class="audit-filters daily-filter-bar" style="padding:12px 16px 0">
             <div class="daily-inst-wrap">
               <select class="audit-select daily-inst-select" id="daily-instance-select">
-                <option value="">— Pick an instance —</option>
+                <option value="">- Pick an instance -</option>
               </select>
               <span class="daily-inst-or">or</span>
               <input class="audit-input audit-input-wide" type="text" id="daily-instance-id" placeholder="Paste Instance ID (e.g. i-0abc12345)"/>
@@ -1046,7 +1041,7 @@
         <!-- Today's running instances session estimate -->
         <div class="card" style="margin-bottom:16px">
           <div class="card-hd">
-            <div class="card-title"><span class="cdot green"></span>Today's Running Instances — Session Estimate</div>
+            <div class="card-title"><span class="cdot green"></span>Today's Running Instances - Session Estimate</div>
             <span class="card-hint">Live on-demand pricing via AWS Price List API (region-specific)</span>
           </div>
           <div id="today-sessions-wrap">
@@ -1074,25 +1069,25 @@
         <div class="stat-grid">
           <div class="scard blue">
             <div class="scard-ico blue"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-            <div class="scard-val blue" id="an-total">—</div>
+            <div class="scard-val blue" id="an-total">-</div>
             <div class="scard-lbl">Total Actions (30d)</div>
             <div class="scard-sub">all logged events</div>
           </div>
           <div class="scard green">
             <div class="scard-ico green"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
-            <div class="scard-val green" id="an-starts">—</div>
+            <div class="scard-val green" id="an-starts">-</div>
             <div class="scard-lbl">Server Starts</div>
             <div class="scard-sub">power-on events</div>
           </div>
           <div class="scard red">
             <div class="scard-ico red"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>
-            <div class="scard-val red" id="an-stops">—</div>
+            <div class="scard-val red" id="an-stops">-</div>
             <div class="scard-lbl">Server Stops</div>
             <div class="scard-sub">shutdown events</div>
           </div>
           <div class="scard amber">
             <div class="scard-ico amber"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-            <div class="scard-val amber" id="an-proj">—</div>
+            <div class="scard-val amber" id="an-proj">-</div>
             <div class="scard-lbl">Monthly Projection</div>
             <div class="scard-sub">running fleet estimate</div>
           </div>
@@ -1102,7 +1097,7 @@
           <div class="card">
             <div class="card-hd">
               <div class="card-title"><span class="cdot blue"></span>Fleet Health</div>
-              <span class="card-hint" id="fleet-upd">—</span>
+              <span class="card-hint" id="fleet-upd">-</span>
             </div>
             <div id="fleet-ring"></div>
           </div>
@@ -1128,7 +1123,7 @@
 
         <div class="card" style="margin-bottom:16px">
           <div class="card-hd">
-            <div class="card-title"><span class="cdot green"></span>Running Cost Projection — Per Instance</div>
+            <div class="card-title"><span class="cdot green"></span>Running Cost Projection - Per Instance</div>
             <span class="card-hint">Uptime × on-demand hourly rate</span>
           </div>
           <div id="an-cost-proj">
@@ -1163,7 +1158,7 @@
         <div class="ph">
           <div class="ph-l">
             <h1 class="ph-title">Audit Log</h1>
-            <p class="ph-sub">Complete history — every action, every user, every server — filterable by any dimension</p>
+            <p class="ph-sub">Complete history - every action, every user, every server - filterable by any dimension</p>
           </div>
           <div class="ph-r">
             <button class="btn btn-blue btn-sm" onclick="Audit.search()">
@@ -1224,7 +1219,7 @@
         <div class="ph">
           <div class="ph-l">
             <h1 class="ph-title">Accounts</h1>
-            <p class="ph-sub">AWS accounts managed by this portal — each with cross-account IAM role</p>
+            <p class="ph-sub">AWS accounts managed by this portal - each with cross-account IAM role</p>
           </div>
           <div class="ph-r">
             <button class="btn btn-out btn-sm" onclick="Accounts.load()">
@@ -1246,8 +1241,8 @@
             <div class="rbac-info-title">Access Control</div>
             <div class="rbac-info-text">
               Admin users see this Accounts page and can add/remove linked AWS accounts.
-              <span class="rbac-tag">Admin</span> Full control — link/remove accounts, start/stop any instance.
-              <span class="rbac-tag">Member</span> View and control instances, analytics, audit — cannot manage accounts.
+              <span class="rbac-tag">Admin</span> Full control - link/remove accounts, start/stop any instance.
+              <span class="rbac-tag">Member</span> View and control instances, analytics, audit - cannot manage accounts.
             </div>
           </div>
         </div>
@@ -1281,7 +1276,7 @@
           <div class="ph">
             <div class="ph-l">
               <h1 class="ph-title">Backups</h1>
-              <p class="ph-sub">AWS Backup — on-demand snapshots, schedules, and restore</p>
+              <p class="ph-sub">AWS Backup - on-demand snapshots, schedules, and restore</p>
             </div>
             <div class="ph-r">
               <button class="btn btn-out btn-sm" onclick="Backup.refresh()">
@@ -1299,7 +1294,7 @@
             <div class="bk-selector-body">
               <label class="bk-label" for="bk-instance-select">Select EC2 Instance</label>
               <select id="bk-instance-select" class="bk-select">
-                <option value="">— Choose an instance to manage backups —</option>
+                <option value="">- Choose an instance to manage backups -</option>
               </select>
             </div>
           </div>
@@ -1322,7 +1317,7 @@
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </div>
                 <div>
-                  <div class="bk-stat-val" id="bk-stat-count">—</div>
+                  <div class="bk-stat-val" id="bk-stat-count">-</div>
                   <div class="bk-stat-lbl">Recovery Points</div>
                 </div>
               </div>
@@ -1380,7 +1375,7 @@
                 </div>
               </div>
 
-              <!-- Inline restore form — expands within this panel when Restore is clicked -->
+              <!-- Inline restore form - expands within this panel when Restore is clicked -->
               <div id="bk-restore-inline" class="bk-inline-form" style="display:none">
                 <div class="bk-inline-form-header">
                   <div class="bk-inline-form-title">
@@ -1444,7 +1439,7 @@
                 </div>
               </div>
 
-              <!-- Inline schedule form — expands within this panel when Add/Edit Schedule is clicked -->
+              <!-- Inline schedule form - expands within this panel when Add/Edit Schedule is clicked -->
               <div id="bk-sched-inline" class="bk-inline-form" style="display:none">
                 <div class="bk-inline-form-header">
                   <div class="bk-inline-form-title">
@@ -1470,7 +1465,7 @@
                       <label class="bk-label">Backup Time (UTC)</label>
                       <div class="bk-time-row">
                         <select id="bk-sched-hour" class="bk-time-select" onchange="Backup.onTimeChange()">
-                          <!-- Populated by Backup.init() — 00:00 to 23:00 -->
+                          <!-- Populated by Backup.init() - 00:00 to 23:00 -->
                         </select>
                         <span class="bk-time-sep">:</span>
                         <select id="bk-sched-minute" class="bk-time-select" onchange="Backup.onTimeChange()">
@@ -1483,7 +1478,7 @@
                       </div>
                     </div>
                   </div>
-                  <!-- Hidden cron value — always updated by JS; shown as editable text only for custom preset -->
+                  <!-- Hidden cron value - always updated by JS; shown as editable text only for custom preset -->
                   <input id="bk-sched-cron" type="hidden" value="cron(0 2 * * ? *)">
                   <div id="bk-sched-custom-row" class="form-group" style="display:none">
                     <label class="bk-label">Cron Expression</label>
@@ -1535,7 +1530,7 @@
             <div class="ph">
               <div class="ph-l">
                 <h1 class="ph-title">My Servers</h1>
-                <p class="ph-sub">Provision and manage your dedicated cloud servers — ready when you are</p>
+                <p class="ph-sub">Provision and manage your dedicated cloud servers - ready when you are</p>
               </div>
               <div class="ph-r">
                 <button class="btn btn-out btn-sm" id="lbs-btn-refresh" onclick="Labs.refresh()" title="Refresh">
@@ -1589,25 +1584,25 @@
         <div class="stat-grid">
           <div class="scard blue">
             <div class="scard-top"><div class="scard-ico blue"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div></div>
-            <div class="scard-val" id="vnd-stat-monthly">—</div>
+            <div class="scard-val" id="vnd-stat-monthly">-</div>
             <div class="scard-lbl">Monthly Payables</div>
             <div class="scard-sub">recurring vendors only</div>
           </div>
           <div class="scard green">
             <div class="scard-top"><div class="scard-ico green"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div></div>
-            <div class="scard-val green" id="vnd-stat-active">—</div>
+            <div class="scard-val green" id="vnd-stat-active">-</div>
             <div class="scard-lbl">Active Vendors</div>
             <div class="scard-sub">including expiring soon</div>
           </div>
           <div class="scard amber">
             <div class="scard-top"><div class="scard-ico amber"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div></div>
-            <div class="scard-val amber" id="vnd-stat-expiring">—</div>
+            <div class="scard-val amber" id="vnd-stat-expiring">-</div>
             <div class="scard-lbl">Expiring / Expired</div>
             <div class="scard-sub">needs attention</div>
           </div>
           <div class="scard red">
             <div class="scard-top"><div class="scard-ico red"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div></div>
-            <div class="scard-val" id="vnd-stat-irregular">—</div>
+            <div class="scard-val" id="vnd-stat-irregular">-</div>
             <div class="scard-lbl">Irregular Vendors</div>
             <div class="scard-sub">variable / unscheduled</div>
           </div>
@@ -1666,7 +1661,7 @@
         <div class="ph">
           <div class="ph-l">
             <h1 class="ph-title">Customers</h1>
-            <p class="ph-sub">Clients who pay us — contracts, milestones, invoices</p>
+            <p class="ph-sub">Clients who pay us - contracts, milestones, invoices</p>
           </div>
           <div class="ph-r">
             <button class="btn btn-blue btn-sm" onclick="Customers.openAddModal()">
@@ -1678,25 +1673,25 @@
         <div class="stat-grid">
           <div class="scard blue">
             <div class="scard-top"><div class="scard-ico blue"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div></div>
-            <div class="scard-val" id="cust-stat-receivable">—</div>
+            <div class="scard-val" id="cust-stat-receivable">-</div>
             <div class="scard-lbl">Total Receivables</div>
             <div class="scard-sub">all contracts combined</div>
           </div>
           <div class="scard amber">
             <div class="scard-top"><div class="scard-ico amber"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div></div>
-            <div class="scard-val amber" id="cust-stat-outstanding">—</div>
+            <div class="scard-val amber" id="cust-stat-outstanding">-</div>
             <div class="scard-lbl">Outstanding / Due</div>
             <div class="scard-sub">unpaid balance</div>
           </div>
           <div class="scard red">
             <div class="scard-top"><div class="scard-ico red"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div></div>
-            <div class="scard-val red" id="cust-stat-overdue">—</div>
+            <div class="scard-val red" id="cust-stat-overdue">-</div>
             <div class="scard-lbl">Overdue</div>
-            <div class="scard-sub">past due date — critical</div>
+            <div class="scard-sub">past due date - critical</div>
           </div>
           <div class="scard green">
             <div class="scard-top"><div class="scard-ico green"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div></div>
-            <div class="scard-val green" id="cust-stat-active">—</div>
+            <div class="scard-val green" id="cust-stat-active">-</div>
             <div class="scard-lbl">Active Customers</div>
             <div class="scard-sub">with outstanding balance</div>
           </div>
@@ -1796,9 +1791,11 @@
         <div class="ph">
           <div class="ph-l">
             <h1 class="ph-title">Finance Settings</h1>
-            <p class="ph-sub">Exchange rates, alert thresholds, defaults</p>
+            <p class="ph-sub">Exchange rates, tax management, and finance alert defaults</p>
           </div>
         </div>
+
+        <!-- Exchange Rates & Basic Settings -->
         <div class="card fset-card">
           <p class="fset-section-title">Exchange Rates</p>
           <div class="fset-grid">
@@ -1828,9 +1825,9 @@
             <div class="fg">
               <label class="fl" for="fset-default-currency">Default currency</label>
               <select class="finp" id="fset-default-currency">
-                <option value="USD">USD — US Dollar</option>
-                <option value="NPR">NPR — Nepali Rupee</option>
-                <option value="INR">INR — Indian Rupee</option>
+                <option value="USD">USD - US Dollar</option>
+                <option value="NPR">NPR - Nepali Rupee</option>
+                <option value="INR">INR - Indian Rupee</option>
               </select>
             </div>
           </div>
@@ -1839,6 +1836,10 @@
             <button class="btn btn-blue" onclick="FinSettings.saveFromForm()">Save Settings</button>
           </div>
         </div>
+
+        <!-- Tax per Account (admin only - rendered by JS) -->
+        <div class="card fset-card fset-card--admin" id="fset-tax-accounts"></div>
+
       </div><!-- /#pv-finsettings -->
 
     </main><!-- /content -->
@@ -1854,7 +1855,7 @@
   const CONFIG = { /*__INJECT__*/ };
 </script>
 
-<!-- Cognito SDK — version-pinned CDN with local fallback -->
+<!-- Cognito SDK - version-pinned CDN with local fallback -->
 <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js"></script>
 <script>window.AmazonCognitoIdentity || document.write('<script src="js\/vendor\/amazon-cognito-identity.min.js"><\/script>')</script>
 
@@ -1870,6 +1871,7 @@
 <script defer src="js/analytics.js"></script>
 <script defer src="js/users.js"></script>
 <script defer src="js/backup.js"></script>
+<script defer src="js/server-billing.js"></script>
 <script defer src="js/labs.js"></script>
 <script defer src="js/fin-settings.js"></script>
 <script defer src="js/vendors.js"></script>
@@ -1895,8 +1897,8 @@
 
 <!-- Privacy Policy (linked from Firefox AMO extension listing) -->
 <section id="privacy" style="display:none">
-  <h2>EC2 Control &mdash; Console Login Extension: Privacy Policy</h2>
-  <p>The EC2 Control Firefox Extension does not collect, transmit, or share any personal data.</p>
+  <h2>One Cloud Utopia &mdash; Console Login Extension: Privacy Policy</h2>
+  <p>The One Cloud Utopia Firefox Extension does not collect, transmit, or share any personal data.</p>
   <ul>
     <li>It stores a mapping of AWS account IDs to Firefox container IDs in <code>browser.storage.local</code> (on-device only, never transmitted to any server).</li>
     <li>It opens URLs provided by the solobil.com portal in Firefox container tabs on your behalf.</li>

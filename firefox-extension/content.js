@@ -1,5 +1,5 @@
 /**
- * content.js — EC2 Control Console Login Extension
+ * content.js - EC2 Control Console Login Extension
  *
  * Injected into solobil.com at document_start.
  * Signals to the portal that the extension is installed and bridges

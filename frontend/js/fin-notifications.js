@@ -1,97 +1,35 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════
-   Finance Notifications — vendor/customer alert engine
+   Finance Notifications - vendor/customer alert engine
    IIFE → FinNotifications global
    ═══════════════════════════════════════════════════ */
 
 const FinNotifications = (function () {
 
-  var STORAGE_KEY = 'ec2ctrl_fin_notifs';
   var _notifs = [];
-  var _loaded = false;
-
-  // ─── Persistence ──────────────────────────────────────────────────────
-
-  function _load() {
-    if (_loaded) return;
-    try { _notifs = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch (e) { _notifs = []; }
-    _loaded = true;
-  }
-
-  function _persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(_notifs)); }
-
-  function _uuid() { return 'n-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
-
-  function _days(dateStr) { return Math.ceil((new Date(dateStr) - new Date()) / 86400000); }
+  var _readIds = new Set();
 
   // ─── Engine ───────────────────────────────────────────────────────────
 
-  function refresh() {
-    _load();
-    var s   = FinSettings.get();
-    var exp = s.expiryWarningDays;
-    var pay = s.paymentWarningDays;
-    var fresh = [];
+  async function refresh() {
+    try {
+      var res = await API.getFinanceAlerts();
+      var data = await res.json();
+      var fresh = data.alerts || [];
 
-    // ── Vendor alerts ──
-    Vendors.getAll().forEach(function (v) {
-      if (!v.agreementEnd) return;
-      var d = _days(v.agreementEnd);
-      if (d < 0) {
-        fresh.push(_make('vendor_expired',   'critical', 'vendor', v.id, v.name, 'Contract expired ' + Math.abs(d) + 'd ago', 'vendors'));
-      } else if (d <= exp) {
-        fresh.push(_make('vendor_expiring',  d <= 7 ? 'critical' : 'warning', 'vendor', v.id, v.name, 'Contract expires in ' + d + 'd', 'vendors'));
-      }
-    });
-
-    // ── Customer alerts ──
-    Customers.getAll().forEach(function (c) {
-      var status = c.paymentStatus;
-      if (status === 'overdue') {
-        var od = c.nextDueDate ? Math.abs(_days(c.nextDueDate)) : 0;
-        fresh.push(_make('payment_overdue', 'critical', 'customer', c.id, c.name, 'Payment overdue' + (od > 0 ? ' by ' + od + 'd' : ''), 'customers'));
-      } else if (status === 'due') {
-        var dl = c.nextDueDate ? Math.max(0, _days(c.nextDueDate)) : 0;
-        fresh.push(_make('payment_due', 'warning', 'customer', c.id, c.name, 'Payment due in ' + dl + 'd', 'customers'));
-      } else if (status === 'upfront_pending') {
-        fresh.push(_make('upfront_pending', 'warning', 'customer', c.id, c.name, 'Upfront payment not received', 'customers'));
-      }
-
-      // Milestone alerts
-      (c.milestones || []).forEach(function (m) {
-        if (m.paid || !m.dueDate) return;
-        var md = _days(m.dueDate);
-        if (md < 0) {
-          fresh.push(_make('milestone_overdue', 'critical', 'customer', c.id, c.name, 'Milestone "' + m.name + '" overdue by ' + Math.abs(md) + 'd', 'customers'));
-        } else if (md <= pay) {
-          fresh.push(_make('milestone_due', 'warning', 'customer', c.id, c.name, 'Milestone "' + m.name + '" due in ' + md + 'd', 'customers'));
-        }
+      // Preserve in-session read state by matching on entityId + type
+      fresh.forEach(function (n) {
+        if (_readIds.has(n.type + '|' + n.entityId)) n.read = true;
       });
 
-      // Contract expiry
-      if (c.agreementEnd) {
-        var cd = _days(c.agreementEnd);
-        if (cd >= 0 && cd <= exp) {
-          fresh.push(_make('contract_expiring', cd <= 7 ? 'critical' : 'warning', 'customer', c.id, c.name, 'Customer contract expires in ' + cd + 'd', 'customers'));
-        }
-      }
-    });
-
-    // Preserve read state from previous run by matching on entityId + type
-    var readMap = {};
-    _notifs.forEach(function (n) { if (n.read) readMap[n.type + '|' + n.entityId] = true; });
-    fresh.forEach(function (n) { if (readMap[n.type + '|' + n.entityId]) n.read = true; });
-
-    _notifs = fresh;
-    _persist();
+      _notifs = fresh;
+    } catch (e) {
+      console.error('Failed to load alerts', e);
+      _notifs = [];
+    }
     _updateBadge();
     _renderDropdownIfOpen();
-  }
-
-  function _make(type, severity, entityType, entityId, entityName, message, link) {
-    return { id: _uuid(), type, severity, entityType, entityId, entityName, message, link,
-      timestamp: new Date().toISOString(), read: false };
   }
 
   // ─── Badge ────────────────────────────────────────────────────────────
@@ -167,22 +105,29 @@ const FinNotifications = (function () {
 
   function markRead(id) {
     var n = _notifs.find(function (x) { return x.id === id; });
-    if (n && !n.read) { n.read = true; _persist(); _updateBadge(); _renderDropdownIfOpen(); _renderPageIfOpen(); }
+    if (n && !n.read) {
+      n.read = true;
+      _readIds.add(n.type + '|' + n.entityId);
+      _updateBadge(); _renderDropdownIfOpen(); _renderPageIfOpen();
+    }
   }
 
   function markAllRead() {
-    _notifs.forEach(function (n) { n.read = true; });
-    _persist(); _updateBadge(); _renderDropdown(); _renderPageIfOpen();
+    _notifs.forEach(function (n) {
+      n.read = true;
+      _readIds.add(n.type + '|' + n.entityId);
+    });
+    _updateBadge(); _renderDropdown(); _renderPageIfOpen();
   }
 
   function dismiss(id) {
     _notifs = _notifs.filter(function (n) { return n.id !== id; });
-    _persist(); _updateBadge(); _renderDropdownIfOpen(); _renderPageIfOpen();
+    _updateBadge(); _renderDropdownIfOpen(); _renderPageIfOpen();
   }
 
   function dismissAll() {
     _notifs = [];
-    _persist(); _updateBadge(); _renderDropdown(); _renderPageIfOpen();
+    _updateBadge(); _renderDropdown(); _renderPageIfOpen();
   }
 
   // ─── Full page ────────────────────────────────────────────────────────
@@ -249,7 +194,6 @@ const FinNotifications = (function () {
   // ─── Init ─────────────────────────────────────────────────────────────
 
   function init() {
-    _load();
     // Close dropdown on outside click
     document.addEventListener('click', function (e) {
       if (!e.target.closest('#notif-bell-wrap')) {

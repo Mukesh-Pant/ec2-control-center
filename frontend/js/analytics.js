@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   Analytics Module — Fleet health, cost, activity
+   Analytics Module - Fleet health, cost, activity
    ═══════════════════════════════════════════════ */
 
 const Analytics = (function () {
@@ -36,7 +36,7 @@ const Analytics = (function () {
     var hourly  = running.reduce(function (s, i) { return s + (prices[i.instanceType] || 0.05); }, 0);
     var monthly = (hourly * 24 * 30).toFixed(2);
 
-    App.setText('an-proj',    monthly > 0 ? '$' + monthly : '—');
+    App.setText('an-proj',    monthly > 0 ? '$' + monthly : '-');
     App.setText('fleet-upd',  running.length + ' / ' + instances.length + ' running');
 
     var items  = auditItems || [];
@@ -206,7 +206,7 @@ const Analytics = (function () {
       return (
         '<div class="cproj-row">' +
           '<div class="cproj-name">' + App.esc(i.name || i.instanceId) + '</div>' +
-          '<div class="cproj-type">' + App.esc(i.instanceType || '—') + '</div>' +
+          '<div class="cproj-type">' + App.esc(i.instanceType || '-') + '</div>' +
           '<div class="cproj-type">' + App.esc(i.accountName || i.accountId) + '</div>' +
           '<div class="cproj-cost">$' + month + '/mo</div>' +
         '</div>'

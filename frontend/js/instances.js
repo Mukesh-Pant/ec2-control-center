@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   Instances Module — List, account groups, detail panel, start/stop
+   Instances Module - List, account groups, detail panel, start/stop
    ═══════════════════════════════════════════════ */
 
 const Instances = (function () {
@@ -114,10 +114,10 @@ const Instances = (function () {
                 return '<tr id="irow-' + App.esc(i.instanceId) + '" class="inst-row" onclick="Instances.openDP(\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\')">' +
                   '<td class="inst-name">' + App.esc(i.name || i.instanceId) + '</td>' +
                   '<td class="mono">' + App.esc(i.instanceId) + '</td>' +
-                  '<td class="mono">' + App.esc(i.instanceType || '—') + '</td>' +
+                  '<td class="mono">' + App.esc(i.instanceType || '-') + '</td>' +
                   '<td>' + _stateBadge(i.state) + '</td>' +
                   '<td class="mono">' + App.esc(i.region) + '</td>' +
-                  '<td class="mono">' + App.esc(i.publicIp || '—') + '</td>' +
+                  '<td class="mono">' + App.esc(i.publicIp || '-') + '</td>' +
                 '</tr>';
               }).join('') +
               '</tbody>' +
@@ -155,7 +155,7 @@ const Instances = (function () {
       var isRunning = i.state === 'running';
       var isStopped = i.state === 'stopped';
       var dotCls = isRunning ? 'running' : (isStopped ? 'stopped' : 'pending');
-      var meta = App.esc(i.accountName || i.accountId) + ' · ' + App.esc(i.region) + ' · ' + App.esc(i.instanceType || '—');
+      var meta = App.esc(i.accountName || i.accountId) + ' · ' + App.esc(i.region) + ' · ' + App.esc(i.instanceType || '-');
       var ctrlBtns = canMutate
         ? '<div class="dl-btns">' +
             '<button class="btn btn-green btn-xs dl-start-btn" onclick="event.stopPropagation();Instances._qCtrl(event,\'start\',\'' + App.esc(i.instanceId) + '\',\'' + App.esc(i.accountId) + '\',\'' + App.esc(i.region) + '\',\'' + App.esc(i.name||i.instanceId) + '\',\'' + App.esc(i.instanceType||'') + '\')"' + (isStopped ? '' : ' disabled') + '>' +
@@ -173,7 +173,7 @@ const Instances = (function () {
             '<div class="dl-name">' + App.esc(i.name || i.instanceId) + '</div>' +
             '<div class="dl-meta">' + meta + '</div>' +
           '</div>' +
-          '<span class="dl-sep">—</span>' +
+          '<span class="dl-sep">-</span>' +
           _stateBadge(i.state) +
           ctrlBtns +
         '</div>'
@@ -237,19 +237,19 @@ const Instances = (function () {
           '<div class="dp-stripe"></div>' +
           '<div class="dp-banner">' +
             '<div class="dp-left">' +
-              '<div class="dp-name" id="dp-name">—</div>' +
-              '<div class="dp-id" id="dp-id">—</div>' +
+              '<div class="dp-name" id="dp-name">-</div>' +
+              '<div class="dp-id" id="dp-id">-</div>' +
             '</div>' +
             '<div class="dp-badge stopped" id="dp-bdg"><span class="dp-sdot"></span><span id="dp-st">STOPPED</span></div>' +
           '</div>' +
           '<div class="dp-metrics">' +
-            '<div class="dp-m"><div class="dp-ml">Account</div><div class="dp-mv blue" id="dp-acct">—</div></div>' +
-            '<div class="dp-m"><div class="dp-ml">Region</div><div class="dp-mv blue" id="dp-reg">—</div></div>' +
-            '<div class="dp-m"><div class="dp-ml">Instance Type</div><div class="dp-mv" id="dp-type">—</div></div>' +
-            '<div class="dp-m"><div class="dp-ml">Platform</div><div class="dp-mv violet" id="dp-plat">—</div></div>' +
-            '<div class="dp-m"><div class="dp-ml">Public IP</div><div class="dp-mv mono-sm" id="dp-pub">—</div></div>' +
-            '<div class="dp-m"><div class="dp-ml">Storage</div><div class="dp-mv" id="dp-storage">—</div></div>' +
-            '<div class="dp-m"><div class="dp-ml">Elastic IP</div><div class="dp-mv mono-sm amber" id="dp-eip">—</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Account</div><div class="dp-mv blue" id="dp-acct">-</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Region</div><div class="dp-mv blue" id="dp-reg">-</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Instance Type</div><div class="dp-mv" id="dp-type">-</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Platform</div><div class="dp-mv violet" id="dp-plat">-</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Public IP</div><div class="dp-mv mono-sm" id="dp-pub">-</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Storage</div><div class="dp-mv" id="dp-storage">-</div></div>' +
+            '<div class="dp-m"><div class="dp-ml">Elastic IP</div><div class="dp-mv mono-sm amber" id="dp-eip">-</div></div>' +
           '</div>' +
           (canMutate
             ? '<div class="dp-ctrl">' +
@@ -276,7 +276,7 @@ const Instances = (function () {
                 '</button>' +
               '</div>'
             : '<div class="dp-ctrl">' +
-                '<span class="dp-ctrl-lbl" style="color:var(--ink3)">View only — no start/stop access</span>' +
+                '<span class="dp-ctrl-lbl" style="color:var(--ink3)">View only - no start/stop access</span>' +
                 '<button class="btn btn-out btn-sm" onclick="Instances.refreshDP()">' +
                   '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Refresh' +
                 '</button>' +
@@ -319,11 +319,11 @@ const Instances = (function () {
     App.setText('dp-id',   inst.instanceId + ' · ' + inst.region);
     App.setText('dp-acct', inst.accountName || inst.accountId);
     App.setText('dp-reg',  inst.region);
-    App.setText('dp-type', inst.instanceType || '—');
+    App.setText('dp-type', inst.instanceType || '-');
     App.setText('dp-plat', inst.platform || 'Linux');
-    App.setText('dp-pub',  inst.publicIp || '—');
-    App.setText('dp-storage', inst.storageGb ? inst.storageGb + ' GB' : '—');
-    App.setText('dp-eip',  inst.elasticIp || '—');
+    App.setText('dp-pub',  inst.publicIp || '-');
+    App.setText('dp-storage', inst.storageGb ? inst.storageGb + ' GB' : '-');
+    App.setText('dp-eip',  inst.elasticIp || '-');
 
     // Show terminate button for admins only
     var termBtn = document.getElementById('dp-terminate');
@@ -352,7 +352,7 @@ const Instances = (function () {
       if (res.ok) {
         _setDPStatus(data.state);
         if (data.instanceType) App.setText('dp-type', data.instanceType);
-        App.setText('dp-pub', data.publicIp || '—');
+        App.setText('dp-pub', data.publicIp || '-');
         var stable = ['running','stopped','terminated'].indexOf(data.state) !== -1;
         pollTimer = setTimeout(_pollDP, stable ? 15000 : 3000);
       }
@@ -437,7 +437,7 @@ const Instances = (function () {
       var data = await res.json();
       if (!res.ok) throw new Error(data.message || 'HTTP ' + res.status);
 
-      App.log(action + ' accepted — ' + selInst.instanceId, 'ok');
+      App.log(action + ' accepted - ' + selInst.instanceId, 'ok');
       App.showToast((selInst.name || selInst.instanceId) + ' ' + action + ' accepted', 'ok');
       _setDPStatus(action === 'start' ? 'pending' : 'stopping');
       pollTimer = setTimeout(_pollDP, 3000);
@@ -458,7 +458,7 @@ const Instances = (function () {
 
   function _stateBadge(state) {
     var cls = ['running','stopped','pending','stopping','starting'].indexOf(state) !== -1 ? state : 'pending';
-    return '<span class="sbadge ' + cls + '"><span class="sbadge-dot"></span>' + App.esc(state || '—') + '</span>';
+    return '<span class="sbadge ' + cls + '"><span class="sbadge-dot"></span>' + App.esc(state || '-') + '</span>';
   }
 
   // ─── Public ────────────────────────────────────────────────────────────────

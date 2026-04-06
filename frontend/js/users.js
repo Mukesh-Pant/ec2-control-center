@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════════
-   Users Module — User & Role Management (M8)
+   Users Module - User & Role Management (M8)
    Admin-only: list users, assign roles, grant/revoke account access
    ═══════════════════════════════════════════════ */
 
 const Users = (function () {
 
-  var allAccounts = [];   // Cached from /accounts — used to populate grant modal
+  var allAccounts = [];   // Cached from /accounts - used to populate grant modal
   var grantEmail  = '';   // Email of user for whom grant modal is open
 
   // ─── Role helpers ──────────────────────────────────────────────────────────
@@ -249,7 +249,7 @@ const Users = (function () {
   // ─── Tab Activation ────────────────────────────────────────────────────────
 
   function onTabActivated() {
-    load(); // always re-fetch — user/role changes must be reflected immediately
+    load(); // always re-fetch - user/role changes must be reflected immediately
   }
 
   // ─── Init ──────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════
-   Vendors — services / tools we pay for
+   Vendors - services / tools we pay for
    IIFE → Vendors global
    ═══════════════════════════════════════════════════ */
 
@@ -10,21 +10,21 @@ const Vendors = (function () {
   // ─── Constants ────────────────────────────────────────────────────────
 
   var CURRENCIES = [
-    { code:'USD', label:'USD — US Dollar' },
-    { code:'EUR', label:'EUR — Euro' },
-    { code:'GBP', label:'GBP — British Pound' },
-    { code:'AED', label:'AED — UAE Dirham' },
-    { code:'SAR', label:'SAR — Saudi Riyal' },
-    { code:'SGD', label:'SGD — Singapore Dollar' },
-    { code:'AUD', label:'AUD — Australian Dollar' },
-    { code:'CAD', label:'CAD — Canadian Dollar' },
-    { code:'JPY', label:'JPY — Japanese Yen' },
-    { code:'CNY', label:'CNY — Chinese Yuan' },
-    { code:'NPR', label:'NPR — Nepali Rupee' },
-    { code:'INR', label:'INR — Indian Rupee' },
-    { code:'PKR', label:'PKR — Pakistani Rupee' },
-    { code:'BDT', label:'BDT — Bangladeshi Taka' },
-    { code:'QAR', label:'QAR — Qatari Riyal' },
+    { code:'USD', label:'USD - US Dollar' },
+    { code:'EUR', label:'EUR - Euro' },
+    { code:'GBP', label:'GBP - British Pound' },
+    { code:'AED', label:'AED - UAE Dirham' },
+    { code:'SAR', label:'SAR - Saudi Riyal' },
+    { code:'SGD', label:'SGD - Singapore Dollar' },
+    { code:'AUD', label:'AUD - Australian Dollar' },
+    { code:'CAD', label:'CAD - Canadian Dollar' },
+    { code:'JPY', label:'JPY - Japanese Yen' },
+    { code:'CNY', label:'CNY - Chinese Yuan' },
+    { code:'NPR', label:'NPR - Nepali Rupee' },
+    { code:'INR', label:'INR - Indian Rupee' },
+    { code:'PKR', label:'PKR - Pakistani Rupee' },
+    { code:'BDT', label:'BDT - Bangladeshi Taka' },
+    { code:'QAR', label:'QAR - Qatari Riyal' },
   ];
 
   var PAYMENT_METHODS = [
@@ -55,7 +55,7 @@ const Vendors = (function () {
     { id:'v2', name:'AWS', category:'Cloud Infrastructure', currency:'USD', amount:500,
       billingType:'irregular', recurringFrequency:null, paymentForm:'Credit Card',
       agreementStart:'2024-01-01', agreementEnd:'2027-01-01', manualStatus:null,
-      notes:'Main AWS account — SaaS prod',
+      notes:'Main AWS account - SaaS prod',
       services:['Cloud Compute','Cloud Storage','CDN','Serverless','Database'],
       contactName:'AWS Support', contactEmail:'', contactPhone:'+1-800-555-0199',
       invoices:[] },
@@ -87,15 +87,20 @@ const Vendors = (function () {
   ];
 
   // ─── Data layer ───────────────────────────────────────────────────────
-  var STORAGE_KEY = 'ec2ctrl_vendors';
   var _data = null;
 
-  function _loadData() {
+  async function _loadData() {
     if (_data) return;
-    try { var raw = localStorage.getItem(STORAGE_KEY); _data = raw ? JSON.parse(raw) : null; }
-    catch (e) { _data = null; }
-    if (!Array.isArray(_data) || !_data.length) { _data = JSON.parse(JSON.stringify(SEED)); _persist(); }
+    try {
+      var res = await API.getFinanceVendors();
+      var json = await res.json();
+      _data = json.items || [];
+    } catch (e) {
+      console.error('Failed to load vendors', e);
+      _data = [];
+    }
     _data.forEach(function (v) {
+      if (v.entityId && !v.id) v.id = v.entityId;
       if (!v.invoices)     v.invoices = [];
       if (!v.services)     v.services = [];
       if (!v.contactName)  v.contactName = '';
@@ -104,50 +109,67 @@ const Vendors = (function () {
     });
   }
 
-  function _persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(_data)); }
-  function _uuid()    { return 'v-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
-
   // ─── CRUD ────────────────────────────────────────────────────────────
   function getAll() {
-    _loadData();
+    if (!_data) return [];
     return _data.map(function (v) { return Object.assign({}, v, { status: _computeStatus(v) }); });
   }
 
   function getById(id) {
-    _loadData();
+    if (!_data) return null;
     var v = _data.find(function (x) { return x.id === id; });
     return v ? Object.assign({}, v, { status: _computeStatus(v) }) : null;
   }
 
-  function _add(fields)    { var v = Object.assign({ id: _uuid(), manualStatus: null, invoices: [], services: [] }, fields); _data.push(v); _persist(); return v; }
-  function _update(id, f)  { var i = _data.findIndex(function (x) { return x.id === id; }); if (i < 0) return null; _data[i] = Object.assign({}, _data[i], f); _persist(); return _data[i]; }
-  function _remove(id)     { _data = _data.filter(function (x) { return x.id !== id; }); _persist(); }
-
-  // ─── Invoice CRUD ─────────────────────────────────────────────────────
-  function _addInvoice(vendorId, fields) {
-    var idx = _data.findIndex(function (x) { return x.id === vendorId; });
-    if (idx < 0) return;
-    var inv = Object.assign({ id: 'inv-' + Date.now(), status: 'unpaid', paidDate: null, proofData: null, proofName: null, proofType: null }, fields);
-    if (!_data[idx].invoices) _data[idx].invoices = [];
-    _data[idx].invoices.push(inv);
-    _persist();
+  async function _add(fields) {
+    var vendorData = Object.assign({ manualStatus: null, invoices: [], services: [] }, fields);
+    var res = await API.postFinanceVendors({ action: 'create', vendor: vendorData });
+    var json = await res.json();
+    vendorData.entityId = json.vendorId;
+    vendorData.entityType = 'VENDOR';
+    vendorData.id = json.vendorId;
+    _data.push(vendorData);
+    return vendorData;
   }
 
-  function _updateInvoiceStatus(vendorId, invoiceId, newStatus) {
+  async function _update(id, f) {
+    var i = _data.findIndex(function (x) { return x.id === id; });
+    if (i < 0) return null;
+    _data[i] = Object.assign({}, _data[i], f);
+    await API.postFinanceVendors({ action: 'update', vendor: _data[i] });
+    return _data[i];
+  }
+
+  async function _remove(id) {
+    await API.postFinanceVendors({ action: 'delete', vendorId: id });
+    _data = _data.filter(function (x) { return x.id !== id; });
+  }
+
+  // ─── Invoice CRUD ─────────────────────────────────────────────────────
+  async function _addInvoice(vendorId, fields) {
+    var idx = _data.findIndex(function (x) { return x.id === vendorId; });
+    if (idx < 0) return;
+    var inv = Object.assign({ id: 'inv-' + Date.now(), status: 'unpaid', paidDate: null, proofKey: null }, fields);
+    if (!_data[idx].invoices) _data[idx].invoices = [];
+    _data[idx].invoices.push(inv);
+    await API.postFinanceVendors({ action: 'update', vendor: _data[idx] });
+  }
+
+  async function _updateInvoiceStatus(vendorId, invoiceId, newStatus) {
     var idx = _data.findIndex(function (x) { return x.id === vendorId; });
     if (idx < 0) return;
     var inv = (_data[idx].invoices || []).find(function (i) { return i.id === invoiceId; });
     if (!inv) return;
     inv.status = newStatus;
     if (newStatus === 'paid') inv.paidDate = new Date().toISOString().slice(0, 10);
-    _persist();
+    await API.postFinanceVendors({ action: 'update', vendor: _data[idx] });
   }
 
-  function _deleteInvoice(vendorId, invoiceId) {
+  async function _deleteInvoice(vendorId, invoiceId) {
     var idx = _data.findIndex(function (x) { return x.id === vendorId; });
     if (idx < 0) return;
     _data[idx].invoices = (_data[idx].invoices || []).filter(function (i) { return i.id !== invoiceId; });
-    _persist();
+    await API.postFinanceVendors({ action: 'update', vendor: _data[idx] });
   }
 
   // ─── Status computation ───────────────────────────────────────────────
@@ -201,13 +223,13 @@ const Vendors = (function () {
       return '<option value="' + _esc(m) + '"' + (m === selected ? ' selected' : '') + '>' + _esc(m) + '</option>';
     }).join('');
     var customSel = (selected && PAYMENT_METHODS.indexOf(selected) < 0) ? ' selected' : '';
-    return '<option value="">— Select —</option>' + opts +
+    return '<option value="">- Select -</option>' + opts +
       '<option value="__custom__"' + customSel + '>Other (type below)…</option>';
   }
 
   // ─── Init / Tab ───────────────────────────────────────────────────────
-  function init() { _loadData(); }
-  function onTabActivated() { _render(); }
+  async function init() { await _loadData(); }
+  async function onTabActivated() { await _loadData(); _render(); }
 
   // ─── Render ───────────────────────────────────────────────────────────
   function _render() { _renderStats(); _renderCards(); }
@@ -415,7 +437,7 @@ const Vendors = (function () {
         '<div class="fg" style="padding:0"><label class="fl">Due Date</label><input class="finp" id="vnd-inv-due" type="date"/></div>' +
         '<div class="fg" style="padding:0"><label class="fl">Description</label><input class="finp" id="vnd-inv-notes" placeholder="e.g. Monthly API charge"/></div>' +
         '<div class="fg inv-proof-row" style="padding:0">' +
-          '<label class="fl">Payment Proof <span style="color:var(--ink4);font-weight:400">(Photo / PDF — max 2 MB)</span></label>' +
+          '<label class="fl">Payment Proof <span style="color:var(--ink4);font-weight:400">(Photo / PDF - max 2 MB)</span></label>' +
           '<label class="inv-proof-label" for="vnd-inv-proof-file">' +
             '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>' +
             'Choose file…' +
@@ -444,7 +466,7 @@ const Vendors = (function () {
         '</div>' +
         '<div class="fin-dr-inv-amt">' + FinSettings.fmtAmt(inv.amount, v.currency) + '</div>' +
         '<div style="display:flex;align-items:center;gap:4px">' +
-          (inv.proofData ? '<span class="inv-proof-link" onclick="Vendors._viewProof(\'' + _esc(inv.id) + '\',\'' + _esc(v.id) + '\')" title="View proof"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>' : '') +
+          (inv.proofKey ? '<span class="inv-proof-link" onclick="Vendors._viewProof(\'' + _esc(inv.id) + '\',\'' + _esc(v.id) + '\')" title="View proof"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>' : '') +
         '</div>' +
         '<div class="fin-dr-inv-actions">' +
           (inv.status === 'unpaid' ? '<button class="btn btn-xs btn-out" onclick="Vendors.setInvStatus(\'' + _esc(v.id) + '\',\'' + _esc(inv.id) + '\',\'paid\')">Mark Paid</button>' : '') +
@@ -467,53 +489,57 @@ const Vendors = (function () {
     var file = input.files[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) { App.showToast('File exceeds 2 MB limit', 'err'); input.value = ''; return; }
-    var reader = new FileReader();
-    reader.onload = function (e) {
-      _pendingProof = { data: e.target.result, name: file.name, type: file.type };
-      var nameEl = document.getElementById('vnd-inv-proof-name');
-      if (nameEl) nameEl.textContent = '\u2713 ' + file.name;
-    };
-    reader.readAsDataURL(file);
+    _pendingProof = { file: file, name: file.name, type: file.type };
+    var nameEl = document.getElementById('vnd-inv-proof-name');
+    if (nameEl) nameEl.textContent = '\u2713 ' + file.name;
   }
 
-  function submitInvoice() {
+  async function submitInvoice() {
     var date = _getVal('vnd-inv-date');
     var amt  = parseFloat(_getVal('vnd-inv-amount'));
     var due  = _getVal('vnd-inv-due');
     var note = _getVal('vnd-inv-notes');
     if (isNaN(amt) || amt <= 0) { App.showToast('Enter a valid amount', 'err'); return; }
-    var fields = { issueDate: date, amount: amt, dueDate: due || null, notes: note };
-    if (_pendingProof) { fields.proofData = _pendingProof.data; fields.proofName = _pendingProof.name; fields.proofType = _pendingProof.type; }
-    _addInvoice(_drawerVendorId, fields);
+    var invId = 'inv-' + Date.now();
+    var fields = { id: invId, issueDate: date, amount: amt, dueDate: due || null, notes: note };
+    if (_pendingProof) {
+      try {
+        var upRes = await API.getFinanceInvoiceProofUploadUrl({ vendorId: _drawerVendorId, invoiceId: invId, filename: _pendingProof.name });
+        var upJson = await upRes.json();
+        await fetch(upJson.uploadUrl, { method: 'PUT', body: _pendingProof.file });
+        fields.proofKey = upJson.key;
+      } catch (e) {
+        App.showToast('Proof upload failed', 'err');
+      }
+    }
+    await _addInvoice(_drawerVendorId, fields);
     _pendingProof = null;
     App.showToast('Invoice saved', 'ok');
     _drawerAddInvOpen = false;
     _refreshDrawer();
   }
 
-  function setInvStatus(vendorId, invoiceId, status) {
-    _updateInvoiceStatus(vendorId, invoiceId, status);
+  async function setInvStatus(vendorId, invoiceId, status) {
+    await _updateInvoiceStatus(vendorId, invoiceId, status);
     App.showToast('Invoice ' + status, 'ok');
     _refreshDrawer();
   }
 
-  function deleteInvoice(vendorId, invoiceId) {
+  async function deleteInvoice(vendorId, invoiceId) {
     if (!window.confirm('Delete this invoice? This cannot be undone.')) return;
-    _deleteInvoice(vendorId, invoiceId);
+    await _deleteInvoice(vendorId, invoiceId);
     App.showToast('Invoice deleted', 'ok');
     _refreshDrawer();
   }
 
-  function _viewProof(invoiceId, vendorId) {
-    var idx = _data.findIndex(function (x) { return x.id === vendorId; });
-    if (idx < 0) return;
-    var inv = (_data[idx].invoices || []).find(function (i) { return i.id === invoiceId; });
-    if (!inv || !inv.proofData) return;
-    var win = window.open('', '_blank');
-    if (!win) return;
-    if (inv.proofType && inv.proofType.startsWith('image/')) {
-      win.document.write('<!DOCTYPE html><html><body style="margin:0;background:#111;display:flex;justify-content:center"><img src="' + inv.proofData + '" style="max-width:100%"/></body></html>');
-    } else { win.location = inv.proofData; }
+  async function _viewProof(invoiceId, vendorId) {
+    try {
+      var res = await API.getFinanceInvoiceProofDownloadUrl(vendorId, invoiceId);
+      var json = await res.json();
+      if (json.downloadUrl) window.open(json.downloadUrl, '_blank');
+    } catch (e) {
+      App.showToast('Could not load proof', 'err');
+    }
   }
 
   // ─── Tag picker (modal services) ──────────────────────────────────────
@@ -638,7 +664,7 @@ const Vendors = (function () {
     if (row) row.style.display = bt === 'recurring' ? '' : 'none';
   }
 
-  function confirmSave() {
+  async function confirmSave() {
     var errEl = document.getElementById('vnd-modal-err');
     if (errEl) errEl.textContent = '';
     var name     = _getVal('vnd-m-name');
@@ -672,18 +698,18 @@ const Vendors = (function () {
       contactName: contact, contactEmail: email, contactPhone: phone,
     };
 
-    if (_editId) { _update(_editId, fields); App.showToast('Vendor updated', 'ok'); }
-    else         { _add(fields);             App.showToast('Vendor added', 'ok'); }
+    if (_editId) { await _update(_editId, fields); App.showToast('Vendor updated', 'ok'); }
+    else         { await _add(fields);             App.showToast('Vendor added', 'ok'); }
     closeModal();
     _render();
     if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();
   }
 
-  function confirmDelete(id) {
+  async function confirmDelete(id) {
     var v = getById(id);
     if (!v) return;
     if (!window.confirm('Delete vendor "' + v.name + '"? This cannot be undone.')) return;
-    _remove(id);
+    await _remove(id);
     App.showToast('Vendor removed', 'ok');
     _render();
     if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();
