@@ -1,7 +1,7 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════
-   Vendors — services / tools we pay for
+   Vendors - services / tools we pay for
    IIFE → Vendors global
    ═══════════════════════════════════════════════════ */
 
@@ -10,21 +10,21 @@ const Vendors = (function () {
   // ─── Constants ────────────────────────────────────────────────────────
 
   var CURRENCIES = [
-    { code:'USD', label:'USD — US Dollar' },
-    { code:'EUR', label:'EUR — Euro' },
-    { code:'GBP', label:'GBP — British Pound' },
-    { code:'AED', label:'AED — UAE Dirham' },
-    { code:'SAR', label:'SAR — Saudi Riyal' },
-    { code:'SGD', label:'SGD — Singapore Dollar' },
-    { code:'AUD', label:'AUD — Australian Dollar' },
-    { code:'CAD', label:'CAD — Canadian Dollar' },
-    { code:'JPY', label:'JPY — Japanese Yen' },
-    { code:'CNY', label:'CNY — Chinese Yuan' },
-    { code:'NPR', label:'NPR — Nepali Rupee' },
-    { code:'INR', label:'INR — Indian Rupee' },
-    { code:'PKR', label:'PKR — Pakistani Rupee' },
-    { code:'BDT', label:'BDT — Bangladeshi Taka' },
-    { code:'QAR', label:'QAR — Qatari Riyal' },
+    { code:'USD', label:'USD - US Dollar' },
+    { code:'EUR', label:'EUR - Euro' },
+    { code:'GBP', label:'GBP - British Pound' },
+    { code:'AED', label:'AED - UAE Dirham' },
+    { code:'SAR', label:'SAR - Saudi Riyal' },
+    { code:'SGD', label:'SGD - Singapore Dollar' },
+    { code:'AUD', label:'AUD - Australian Dollar' },
+    { code:'CAD', label:'CAD - Canadian Dollar' },
+    { code:'JPY', label:'JPY - Japanese Yen' },
+    { code:'CNY', label:'CNY - Chinese Yuan' },
+    { code:'NPR', label:'NPR - Nepali Rupee' },
+    { code:'INR', label:'INR - Indian Rupee' },
+    { code:'PKR', label:'PKR - Pakistani Rupee' },
+    { code:'BDT', label:'BDT - Bangladeshi Taka' },
+    { code:'QAR', label:'QAR - Qatari Riyal' },
   ];
 
   var PAYMENT_METHODS = [
@@ -55,7 +55,7 @@ const Vendors = (function () {
     { id:'v2', name:'AWS', category:'Cloud Infrastructure', currency:'USD', amount:500,
       billingType:'irregular', recurringFrequency:null, paymentForm:'Credit Card',
       agreementStart:'2024-01-01', agreementEnd:'2027-01-01', manualStatus:null,
-      notes:'Main AWS account — SaaS prod',
+      notes:'Main AWS account - SaaS prod',
       services:['Cloud Compute','Cloud Storage','CDN','Serverless','Database'],
       contactName:'AWS Support', contactEmail:'', contactPhone:'+1-800-555-0199',
       invoices:[] },
@@ -223,7 +223,7 @@ const Vendors = (function () {
       return '<option value="' + _esc(m) + '"' + (m === selected ? ' selected' : '') + '>' + _esc(m) + '</option>';
     }).join('');
     var customSel = (selected && PAYMENT_METHODS.indexOf(selected) < 0) ? ' selected' : '';
-    return '<option value="">— Select —</option>' + opts +
+    return '<option value="">- Select -</option>' + opts +
       '<option value="__custom__"' + customSel + '>Other (type below)…</option>';
   }
 
@@ -437,7 +437,7 @@ const Vendors = (function () {
         '<div class="fg" style="padding:0"><label class="fl">Due Date</label><input class="finp" id="vnd-inv-due" type="date"/></div>' +
         '<div class="fg" style="padding:0"><label class="fl">Description</label><input class="finp" id="vnd-inv-notes" placeholder="e.g. Monthly API charge"/></div>' +
         '<div class="fg inv-proof-row" style="padding:0">' +
-          '<label class="fl">Payment Proof <span style="color:var(--ink4);font-weight:400">(Photo / PDF — max 2 MB)</span></label>' +
+          '<label class="fl">Payment Proof <span style="color:var(--ink4);font-weight:400">(Photo / PDF - max 2 MB)</span></label>' +
           '<label class="inv-proof-label" for="vnd-inv-proof-file">' +
             '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>' +
             'Choose file…' +

@@ -39,6 +39,16 @@ MIME_TYPES = {
 }
 
 
+def _safe_event_summary(event):
+    """Return a minimal CloudFormation event summary for logs."""
+    return {
+        'RequestType': event.get('RequestType'),
+        'LogicalResourceId': event.get('LogicalResourceId'),
+        'StackId': event.get('StackId'),
+        'ResourceType': event.get('ResourceType'),
+    }
+
+
 def send_response(event, status, reason='OK', data={}):
     body = json.dumps({
         'Status': status,
@@ -62,6 +72,15 @@ def send_response(event, status, reason='OK', data={}):
 def get_mime_type(filename):
     ext = os.path.splitext(filename)[1].lower()
     return MIME_TYPES.get(ext, 'application/octet-stream')
+
+
+def _parse_redirect_uris(raw_value):
+    values = []
+    for part in str(raw_value or '').replace('\n', ',').split(','):
+        item = part.strip()
+        if item:
+            values.append(item)
+    return values
 
 
 def _empty_bucket(bucket_name):
@@ -88,7 +107,7 @@ def _empty_bucket(bucket_name):
 
 
 def handler(event, context):
-    logger.info("Event: %s", json.dumps(event))
+    logger.info("Event summary: %s", json.dumps(_safe_event_summary(event)))
 
     try:
         if event['RequestType'] == 'Delete':
@@ -118,11 +137,16 @@ def handler(event, context):
         member_role_tmpl_url = props['MemberRoleTemplateUrl']
 
         # Build CONFIG object to inject
+        redirect_uris = _parse_redirect_uris(props.get('RedirectUri'))
+        if not redirect_uris:
+            raise ValueError('RedirectUri must contain at least one URL')
+        primary_redirect_uri = redirect_uris[0]
+
         config_js = (
             f"const CONFIG = {{\n"
             f"  COGNITO_DOMAIN: '{props['CognitoDomain']}',\n"
             f"  CLIENT_ID: '{props['ClientId']}',\n"
-            f"  REDIRECT_URI: '{props['RedirectUri']}',\n"
+            f"  REDIRECT_URI: '{primary_redirect_uri}',\n"
             f"  API_URL: '{props['ApiUrl']}',\n"
             f"  USER_POOL_ID: '{props['UserPoolId']}',\n"
             f"  CENTRAL_ACCOUNT_ID: '{central_account_id}',\n"
@@ -198,7 +222,7 @@ def handler(event, context):
         # Update Cognito App Client with real CloudFront URL
         # (CallbackURLs was set to placeholder 'https://localhost' in CF template
         #  to avoid EarlyValidation cross-reference errors)
-        real_url = props['RedirectUri']  # e.g. https://d1234.cloudfront.net/index.html
+        real_urls = redirect_uris
         user_pool_id = props['UserPoolId']
         client_id = props['ClientId']
 
@@ -221,11 +245,11 @@ def handler(event, context):
             AllowedOAuthScopes=current.get('AllowedOAuthScopes', ['email', 'openid']),
             AllowedOAuthFlowsUserPoolClient=True,
             SupportedIdentityProviders=current.get('SupportedIdentityProviders', ['COGNITO']),
-            CallbackURLs=[real_url],
-            LogoutURLs=[real_url],
+            CallbackURLs=real_urls,
+            LogoutURLs=real_urls,
             PreventUserExistenceErrors='ENABLED',
         )
-        logger.info("Updated Cognito App Client %s with callback URL: %s", client_id, real_url)
+        logger.info("Updated Cognito App Client %s with callback URLs: %s", client_id, ', '.join(real_urls))
 
         send_response(event, 'SUCCESS', 'Frontend deployed', {'FilesUploaded': str(file_count)})
 

@@ -16,6 +16,8 @@ Routes:
   GET  /labs/keypair        — get pre-signed .pem download URL
   GET  /labs/windows-password — decrypt Windows RDP password
   GET  /labs/pricing        — cost breakdown from AWS Price List API
+  GET  /labs/templates      — list quick-launch templates
+  POST /labs/templates      — replace quick-launch templates (admin only)
   GET  /labs/network-options  — VPCs, subnets, security groups for account
 """
 
@@ -43,6 +45,20 @@ _ddb_resource   = None
 _cognito_client = None
 
 
+def _log_request_summary(event):
+    """Log only a small, non-sensitive request summary."""
+    try:
+        claims = ((event.get('requestContext') or {}).get('authorizer') or {}).get('claims') or {}
+        logger.info(
+            "Request method=%s path=%s caller=%s",
+            event.get('httpMethod', 'POST'),
+            event.get('path', '/ec2'),
+            claims.get('email', claims.get('cognito:username', 'unknown')),
+        )
+    except Exception:
+        logger.info("Request received")
+
+
 def _get_ddb():
     global _ddb_resource
     if _ddb_resource is None:
@@ -58,7 +74,7 @@ def _get_cognito():
 
 
 def lambda_handler(event, context):
-    logger.info("Event: %s", json.dumps(event))
+    _log_request_summary(event)
 
     method = event.get('httpMethod', 'POST')
     path   = event.get('path', '/ec2')
@@ -105,6 +121,10 @@ def lambda_handler(event, context):
         return labs.handle_labs_pricing_settings_get(event)
     elif path == '/labs/pricing-settings' and method == 'POST':
         return labs.handle_labs_pricing_settings_update(event)
+    elif path == '/labs/templates' and method == 'GET':
+        return labs.handle_labs_templates_get(event)
+    elif path == '/labs/templates' and method == 'POST':
+        return labs.handle_labs_templates_update(event)
     elif path == '/labs/network-options' and method == 'GET':
         return labs.handle_labs_network_options(event)
     elif path == '/finance/vendors' and method == 'GET':

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   App — Navigation, Dashboard, Session, Toast
+   App - Navigation, Dashboard, Session, Toast
    ═══════════════════════════════════════════════ */
 
 const App = (function () {
@@ -187,7 +187,7 @@ const App = (function () {
     setText('st-accts', accts + ' account' + (accts !== 1 ? 's' : ''));
     setText('st-run-pct', total
       ? Math.round(running / total * 100) + ' % of fleet active'
-      : '— % of fleet active');
+      : '- % of fleet active');
 
     setWidth('sb-run', total ? running / total * 100 : 0);
     setWidth('sb-stp', total ? stopped / total * 100 : 0);
@@ -201,7 +201,7 @@ const App = (function () {
       .filter(function (i) { return i.state === 'running'; })
       .reduce(function (s, i) { return s + (_PRICES[i.instanceType] || 0.05); }, 0);
     var monthly = hourlyRunning * 24 * 30;
-    setText('st-cost', monthly > 0 ? '$' + monthly.toFixed(2) : '—');
+    setText('st-cost', monthly > 0 ? '$' + monthly.toFixed(2) : '-');
 
     var pill    = document.getElementById('tb-cost');
     var pillVal = document.getElementById('tb-cost-val');
@@ -265,7 +265,7 @@ const App = (function () {
       if (banner) banner.classList.add('hidden');
     });
 
-    // Show banner after a short delay if extension is still absent — Firefox only
+    // Show banner after a short delay if extension is still absent - Firefox only
     // (Non-Firefox users cannot install a Firefox extension, so the banner is irrelevant)
     var isFirefox = /Firefox\//.test(navigator.userAgent);
     setTimeout(function () {
@@ -283,7 +283,7 @@ const App = (function () {
   // ─── Live NPR exchange rate ────────────────────────────────────────────────
 
   function _fetchNprRate() {
-    // Use open.er-api.com free tier — no key needed, rate is USD base
+    // Use open.er-api.com free tier - no key needed, rate is USD base
     fetch('https://open.er-api.com/v6/latest/USD')
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
@@ -413,7 +413,7 @@ const App = (function () {
     FinNotifications.init();
     startClock();
 
-    // Show dashboard shell immediately — don't wait for instance data
+    // Show dashboard shell immediately - don't wait for instance data
     go('dashboard');
     log('Portal ready', 'sys');
 
