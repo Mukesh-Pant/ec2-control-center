@@ -3394,12 +3394,12 @@ code {
 .msv2-tpl-launch {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%; padding: 10px 16px; border-radius: var(--r);
-  background: var(--blue2); color: #fff; border: none;
+  background: var(--blue); color: #fff; border: none;
   font-size: 13px; font-weight: 700; cursor: pointer;
-  transition: background .15s, transform .12s, box-shadow .15s;
-  box-shadow: 0 3px 12px rgba(37,99,235,.3);
+  transition: background .15s, transform .12s;
+  box-shadow: none;
 }
-.msv2-tpl-launch:hover { background: #5090ff; transform: translateY(-1px); box-shadow: 0 5px 18px rgba(37,99,235,.45); }
+.msv2-tpl-launch:hover { background: var(--blue2); transform: translateY(-1px); box-shadow: none; }
 
 /* ── AI Advisor widget ────────────────────────────────────────── */
 .msv2-advisor {
