@@ -517,6 +517,25 @@ const Labs = (function () {
       '</tr>';
   }
 
+  function _renderCompactRow(lab, number) {
+    var statusClass = STATUS_CLASSES[lab.status] || 'lbs-badge--gray';
+    var statusLabel = STATUS_LABELS[lab.status] || lab.status;
+    var labIdEsc = _esc(lab.labId);
+    var isExpanded = _expandedLabId === lab.labId;
+    var chevClass = 'lbs-chevron' + (isExpanded ? ' lbs-chevron--open' : '');
+    var rowClass = 'lbs-tbl-row msv2-compact-row' + (isExpanded ? ' lbs-tbl-row--expanded' : '');
+    var platformIcon = lab.platform === 'windows' ? 'Windows' : 'Linux';
+    return '<tr class="' + rowClass + '" id="lbs-row-' + labIdEsc + '" onclick="Labs._toggleRowDetail(\'' + labIdEsc + '\')">' +
+      '<td><span class="' + chevClass + '" id="lbs-chev-' + labIdEsc + '">&#9658;</span></td>' +
+      '<td class="msv2-row-num">' + number + '</td>' +
+      '<td><div class="msv2-row-main"><div class="msv2-row-name">' + _esc(lab.labName || ('server-' + lab.labId.substring(0, 8))) + '</div><div class="msv2-row-sub">' + _esc(platformIcon) + ' · ' + _esc(lab.accountName || lab.accountId || 'Central') + '</div></div></td>' +
+      '<td><span class="lbs-badge ' + statusClass + '">' + _esc(statusLabel) + '</span></td>' +
+      '<td>' + _esc(lab.instanceType || '—') + '</td>' +
+      '<td>' + _esc(_regionLabel(lab.region || 'ap-south-1')) + '</td>' +
+      '<td>' + _renderExpiry(lab) + '</td>' +
+      '</tr>';
+  }
+
   // ─── Render expiry cell (returns HTML string)
 
   function _renderExpiry(lab) {
@@ -630,9 +649,13 @@ const Labs = (function () {
   // ─── Row / card expand / collapse (v2: card-grid aware)
 
   function _toggleRowDetail(labId) {
+    var previousLabId = _expandedLabId;
     if (_expandedLabId === labId) {
       _collapseDetail();
       return;
+    }
+    if (previousLabId) {
+      _collapseDetail();
     }
     _expandedLabId = labId;
     // Card grid path: re-render so detail panel appears below grid
@@ -661,6 +684,7 @@ const Labs = (function () {
 
   function _collapseDetail() {
     if (!_expandedLabId) return;
+    var collapsingLabId = _expandedLabId;
     _expandedLabId = null;
     // Card grid path
     if (document.querySelector('.msv2-grid')) {
@@ -668,13 +692,13 @@ const Labs = (function () {
       return;
     }
     // Legacy table path
-    var row = document.getElementById('lbs-row-' + _expandedLabId);
+    var row = document.getElementById('lbs-row-' + collapsingLabId);
     if (row) {
       row.classList.remove('lbs-tbl-row--expanded');
-      var chev = document.getElementById('lbs-chev-' + _expandedLabId);
+      var chev = document.getElementById('lbs-chev-' + collapsingLabId);
       if (chev) chev.classList.remove('lbs-chevron--open');
     }
-    var detailRow = document.getElementById('lbs-detail-' + _expandedLabId);
+    var detailRow = document.getElementById('lbs-detail-' + collapsingLabId);
     if (detailRow) detailRow.remove();
   }
 
@@ -3028,8 +3052,7 @@ const Labs = (function () {
         _renderHero({ active: 0 }) +
         _renderCreateCta() +
         '<div id="msv2-tpl-anchor"></div>' +
-        _renderQuickLaunch() +
-        _renderAdvisor();
+        _renderQuickLaunch();
 
       // Init canvas
       setTimeout(function () {
@@ -3070,13 +3093,9 @@ const Labs = (function () {
       return 0;
     });
 
-    // Total monthly NPR for running servers
-    var totalNpr = 0;
-    activeLabs.forEach(function (lab) {
-      if (lab.status === 'running' && typeof BillingEngine !== 'undefined') {
-        totalNpr += BillingEngine.compute({ instanceType: lab.instanceType, storageGb: lab.storageGb || 20, hoursPerDay: lab.hoursPerDay || 24, isRunning: true }).finalNpr;
-      }
-    });
+    var totalPages = Math.max(1, Math.ceil(visible.length / LAB_PAGE_SIZE));
+    _labsPage = Math.min(_labsPage, totalPages - 1);
+    var pageItems = visible.slice(_labsPage * LAB_PAGE_SIZE, (_labsPage + 1) * LAB_PAGE_SIZE);
 
     var html =
       _renderHero(counts) +
@@ -3084,21 +3103,35 @@ const Labs = (function () {
       _renderQuickLaunch() +
       _renderSummaryBar(counts) +
       _renderControls(counts) +
-      _renderBulkBar() +
-      _renderCardGrid(visible);
+      _renderBulkBar();
 
-    // Inline detail panel for the expanded card
-    if (_expandedLabId) {
-      var expandedLab = activeLabs.find(function (l) { return l.labId === _expandedLabId; });
-      if (expandedLab) {
-        html += '<div id="msv2-detail-panel" style="margin-top:16px;">' +
-          _renderDetailPanel(expandedLab) +
+    if (visible.length === 0) {
+      html += _renderCardGrid(visible);
+    } else {
+      html += '<table class="lbs-tbl msv2-compact-table">';
+      html += '<thead class="lbs-tbl-head"><tr>';
+      html += '<th></th>';
+      html += '<th>#</th>';
+      html += '<th>Server</th>';
+      html += '<th>Status</th>';
+      html += '<th>Type</th>';
+      html += '<th>Region</th>';
+      html += '<th>Expires</th>';
+      html += '</tr></thead>';
+      html += '<tbody>';
+      pageItems.forEach(function (lab, idx) {
+        html += _renderCompactRow(lab, idx + 1 + (_labsPage * LAB_PAGE_SIZE));
+      });
+      html += '</tbody></table>';
+
+      if (visible.length > LAB_PAGE_SIZE) {
+        html += '<div class="audit-pg-row msv2-pg-row">' +
+          '<button class="btn-pg" onclick="Labs._labsPageNav(-1)"' + (_labsPage === 0 ? ' disabled' : '') + '>← Prev</button>' +
+          '<span class="pg-info">Page ' + (_labsPage + 1) + ' of ' + totalPages + ' · ' + visible.length + ' servers</span>' +
+          '<button class="btn-pg" onclick="Labs._labsPageNav(1)"' + (_labsPage >= totalPages - 1 ? ' disabled' : '') + '>Next →</button>' +
         '</div>';
       }
     }
-
-    html += _renderForecastChart(totalNpr);
-    html += _renderAdvisor();
 
     listEl.innerHTML = html;
 
@@ -3106,7 +3139,7 @@ const Labs = (function () {
     setTimeout(function () {
       var canvas = document.getElementById('msv2-hero-canvas');
       if (canvas) _initHeroCanvas(canvas);
-      _startTickers();
+      if (document.querySelector('.msv2-grid')) _startTickers();
     }, 50);
   }
 
