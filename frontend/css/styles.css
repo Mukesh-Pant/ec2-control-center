@@ -3098,29 +3098,31 @@ code {
 .msv2-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
-  align-items: start;
+  gap: 18px;
+  align-items: stretch;
 }
 .msv2-card {
-  background: var(--white); border: 1.5px solid var(--bd);
-  border-radius: var(--rlg); box-shadow: var(--sh);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  border: 1px solid #d8e3f5;
+  border-radius: 18px; box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
   display: flex; flex-direction: column;
   transition: box-shadow .2s, border-color .2s, transform .2s;
-  cursor: pointer; position: relative; overflow: visible;
+  cursor: pointer; position: relative; overflow: hidden;
   animation: msv2-card-in .25s ease both;
+  min-height: 100%;
 }
 @keyframes msv2-card-in {
   from { opacity:0; transform: translateY(10px); }
   to   { opacity:1; transform: none; }
 }
-.msv2-card:hover { box-shadow: var(--shm); border-color: var(--blue3); transform: translateY(-2px); }
-.msv2-card.selected { border-color: var(--blue2); box-shadow: 0 0 0 3px var(--bdim), var(--shm); }
+.msv2-card:hover { box-shadow: 0 14px 36px rgba(15, 23, 42, .1); border-color: #aac4f8; transform: translateY(-2px); }
+.msv2-card.selected { border-color: var(--blue2); box-shadow: 0 0 0 3px rgba(59,127,255,.12), 0 16px 34px rgba(15, 23, 42, .1); }
 
 /* Card header */
 .msv2-card-hd {
-  padding: 16px 16px 12px;
+  padding: 18px 18px 14px;
   display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 8px; border-bottom: 1px solid var(--bg2);
+  gap: 8px; border-bottom: 1px solid #edf2fb;
   flex-shrink: 0;
 }
 .msv2-card-hd-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -3138,8 +3140,8 @@ code {
   transform: rotate(-45deg) translateY(-1px); display: block;
 }
 .msv2-card-name {
-  font-size: 14px; font-weight: 700; color: var(--ink);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 17px; font-weight: 800; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.02em;
 }
 .msv2-card-region { font-size: 11px; color: var(--ink4); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
 .msv2-card-flag { font-size: 14px; }
@@ -3148,7 +3150,7 @@ code {
 /* Status badge with animated dot */
 .msv2-status {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700;
+  padding: 5px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;
   letter-spacing: .2px;
 }
 .msv2-status.running { background: var(--gdim); color: var(--green); border: 1px solid rgba(5,150,105,.22); }
@@ -3197,17 +3199,18 @@ code {
 
 /* Card body */
 .msv2-card-body {
-  padding: 14px 16px; flex: 1;
-  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 18px 18px; flex: 1;
+  display: flex; flex-direction: column; gap: 14px;
 }
 .msv2-card-meta-row { display: flex; align-items: center; justify-content: space-between; }
 .msv2-card-meta-label { font-size: 11px; color: var(--ink4); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
 .msv2-card-meta-val   { font-size: 13px; color: var(--ink2); font-weight: 500; }
 .msv2-card-cost {
-  font-size: 20px; font-weight: 800; color: var(--ink);
+  font-size: 28px; font-weight: 800; color: var(--ink);
   font-family: var(--mono); line-height: 1;
 }
-.msv2-card-cost-lbl { font-size: 10px; color: var(--ink4); text-transform: uppercase; letter-spacing: .4px; }
+.msv2-card-cost-lbl { font-size: 10px; color: var(--ink4); text-transform: uppercase; letter-spacing: .8px; }
+.msv2-card-cost-note { font-size: 11px; color: #7b869c; margin-top: 6px; }
 
 /* Live cost ticker */
 .msv2-ticker {
@@ -3227,12 +3230,12 @@ code {
 
 /* Card footer (action buttons) */
 .msv2-card-ft {
-  padding: 12px 16px;
-  border-top: 1px solid var(--bg2);
+  padding: 14px 18px 18px;
+  border-top: 1px solid #edf2fb;
   display: flex; gap: 8px; flex-shrink: 0;
 }
 .msv2-card-btn {
-  flex: 1; padding: 7px 10px; border-radius: var(--r);
+  flex: 1; padding: 10px 12px; border-radius: 12px;
   font-size: 12px; font-weight: 700; cursor: pointer;
   border: 1.5px solid transparent; display: flex; align-items: center; justify-content: center;
   gap: 5px; transition: background .15s, border-color .15s, transform .1s;
@@ -3244,6 +3247,8 @@ code {
 .msv2-card-btn.stop:hover  { background: var(--red);   color: #fff; border-color: var(--red); }
 .msv2-card-btn.detail { background: var(--bdim); color: var(--blue2); border-color: rgba(37,99,235,.2); }
 .msv2-card-btn.detail:hover { background: var(--blue2); color: #fff; border-color: var(--blue2); }
+.msv2-card-btn--secondary { flex: 1; }
+.msv2-card-btn--full { flex: 1 1 100%; }
 .msv2-card-btn:disabled { opacity: .4; pointer-events: none; }
 
 /* Skeleton card */
@@ -3899,24 +3904,68 @@ code {
 
 /* ── Server cards — refined pro layout ─────────────────────────── */
 .msv2-card-title-block { display: flex; flex-direction: column; gap: 3px; }
-.msv2-card-subtitle { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ink4); }
+.msv2-card-subtitle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; margin-top: 4px; flex-wrap: wrap; }
 .msv2-card-region-lbl { font-size: 11.5px; }
 .msv2-card-platform-ico { display: flex; align-items: center; }
-.msv2-card-specs { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 14px 0; }
+.msv2-card-specs { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px 0; min-height: 38px; }
 .msv2-card-spec-chip {
   display: inline-flex; align-items: center;
-  padding: 2px 8px; border-radius: 12px;
-  font-size: 11px; font-weight: 600; font-family: var(--mono);
-  background: var(--bg2); color: var(--ink2); border: 1px solid var(--bd);
+  padding: 5px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; font-family: var(--mono);
+  background: #f3f7ff; color: #274690; border: 1px solid #dce7fb;
 }
 .msv2-chip--eip { background: var(--gdim); color: var(--green); border-color: rgba(5,150,105,.2); }
-.msv2-card-info-grid { display: flex; flex-direction: column; gap: 4px; padding: 8px 14px 0; }
-.msv2-card-info-item { display: flex; justify-content: space-between; align-items: center; }
-.msv2-card-info-lbl { font-size: 11px; color: var(--ink4); }
-.msv2-card-info-val  { font-size: 12px; color: var(--ink2); }
+.msv2-card-info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.msv2-card-info-item {
+  display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 4px;
+  min-height: 68px; padding: 10px 12px; border-radius: 12px;
+  background: #f9fbff; border: 1px solid #e8eef8;
+}
+.msv2-card-info-item--muted { background: #fbfcfe; }
+.msv2-card-info-lbl { font-size: 10px; color: #7b869c; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
+.msv2-card-info-val  { font-size: 13px; color: var(--ink); font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .msv2-card-info-mono { font-family: var(--mono); }
-.msv2-card-cost-block { padding: 10px 14px 4px; }
-.msv2-card-cost-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--ink4); margin-bottom: 2px; }
+.msv2-card-cost-block {
+  padding: 14px 16px;
+  border: 1px solid #e6edf9;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+}
+.msv2-card-cost-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--ink4); margin-bottom: 2px; }
+.msv2-card-cost-note { font-size: 11px; color: #7b869c; margin-top: 6px; }
+.msv2-card-trend {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f6f9ff;
+  border: 1px solid #e6edf9;
+  min-height: 92px;
+}
+.msv2-card-trend .msv2-spark-wrap { height: 46px; }
+.msv2-card-trend--empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.msv2-card-trend-empty {
+  font-size: 12px;
+  color: #7b869c;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .msv2-grid { grid-template-columns: 1fr; }
+  .msv2-card-name { font-size: 16px; }
+}
+
+@media (max-width: 520px) {
+  .msv2-card-hd,
+  .msv2-card-body,
+  .msv2-card-ft,
+  .msv2-card-specs { padding-left: 14px; padding-right: 14px; }
+  .msv2-card-info-grid { grid-template-columns: 1fr; }
+  .msv2-card-ft { flex-wrap: wrap; }
+  .msv2-card-btn { flex: 1 1 100%; }
+}
 
 /* ── Template cards v2 — more compelling ───────────────────────── */
 .msv2-tpl-card { position: relative; overflow: hidden; }

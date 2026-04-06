@@ -2707,11 +2707,7 @@ const Labs = (function () {
     var sparkHtml = '';
     if (isRunning) {
       var sparkData = _mockSparkData(lab);
-      sparkHtml =
-        '<div style="margin:6px 0 2px;">' +
-          '<div class="msv2-card-meta-label" style="margin-bottom:4px;">7-day spend trend</div>' +
-          _sparkline(sparkData, 'var(--blue2)') +
-        '</div>';
+      sparkHtml = _sparkline(sparkData, 'var(--blue2)');
     }
 
     // Live cost ticker
@@ -2720,7 +2716,7 @@ const Labs = (function () {
       tickerHtml =
         '<div class="msv2-ticker">' +
           '<span class="msv2-ticker-dot"></span>' +
-          '<span>Live: </span>' +
+          '<span>Live</span>' +
           '<span class="msv2-ticker-val" id="msv2-tick-' + labIdEsc + '">NPR 0.000</span>' +
           '<span style="color:var(--ink4)">/s</span>' +
         '</div>';
@@ -2763,10 +2759,19 @@ const Labs = (function () {
 
     var expiryHtml = lab.expiresAt
       ? '<div class="msv2-card-info-item"><span class="msv2-card-info-lbl">Expires</span><span class="msv2-card-info-val">' + _renderExpiry(lab) + '</span></div>'
-      : '';
+      : '<div class="msv2-card-info-item msv2-card-info-item--muted"><span class="msv2-card-info-lbl">Expires</span><span class="msv2-card-info-val">No expiry set</span></div>';
     var ipHtml = lab.publicIp
       ? '<div class="msv2-card-info-item"><span class="msv2-card-info-lbl">IP Address</span><span class="msv2-card-info-val msv2-card-info-mono">' + _esc(lab.publicIp) + '</span></div>'
-      : '';
+      : '<div class="msv2-card-info-item msv2-card-info-item--muted"><span class="msv2-card-info-lbl">IP Address</span><span class="msv2-card-info-val">Not assigned</span></div>';
+    var accountHtml = '<div class="msv2-card-info-item"><span class="msv2-card-info-lbl">Account</span><span class="msv2-card-info-val">' + _esc(lab.accountName || lab.accountId || 'Central') + '</span></div>';
+    var statusInfoHtml = '<div class="msv2-card-info-item"><span class="msv2-card-info-lbl">State</span><span class="msv2-card-info-val">' + _esc(stateLabel) + '</span></div>';
+    ipHtml += accountHtml;
+    expiryHtml += statusInfoHtml;
+    tickerHtml = '<div class="msv2-card-cost-note">Includes taxes and service charges</div>' + tickerHtml;
+    sparkHtml = isRunning && sparkHtml
+      ? '<div class="msv2-card-trend"><div class="msv2-card-meta-label">7-day spend trend</div>' + sparkHtml + '</div>'
+      : '<div class="msv2-card-trend msv2-card-trend--empty"><div class="msv2-card-meta-label">7-day spend trend</div><div class="msv2-card-trend-empty">Trend appears once the server is running.</div></div>';
+    var detailsBtnClass = (isStopped || isRunning) ? ' detail msv2-card-btn--secondary' : ' detail msv2-card-btn--full';
 
     return (
       '<div class="msv2-card ' + statusStripe + (isSelected ? ' selected' : '') + '" style="animation-delay:' + delay + '" id="msv2-card-' + labIdEsc + '">' +
@@ -2824,7 +2829,7 @@ const Labs = (function () {
                 '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg> Stop' +
               '</button>'
             : '') +
-          '<button class="msv2-card-btn detail" onclick="Labs._toggleRowDetail(\'' + labIdEsc + '\')">' +
+          '<button class="msv2-card-btn' + detailsBtnClass + '" onclick="Labs._toggleRowDetail(\'' + labIdEsc + '\')">' +
             '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7"/></svg> Details' +
           '</button>' +
         '</div>' +

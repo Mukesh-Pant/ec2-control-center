@@ -15,7 +15,7 @@ def get_cors():
     return {
         'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
         'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-        'Access-Control-Allow-Methods': 'POST,GET,OPTIONS',
+        'Access-Control-Allow-Methods': 'POST,GET,DELETE,OPTIONS',
         'Content-Type': 'application/json',
     }
 

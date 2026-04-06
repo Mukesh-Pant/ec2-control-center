@@ -39,6 +39,13 @@ _labs_creds_cache: dict = {}
 _labs_creds_lock = threading.Lock()
 _LABS_CREDS_TTL = 600  # 10 min; creds valid for 15 min
 
+_PAYMENT_EXTENSIONS = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+    'application/pdf': '.pdf',
+}
+
 
 def _get_ddb():
     global _ddb
@@ -76,25 +83,53 @@ def _get_member_creds(account_id):
         return None
 
     now = time.monotonic()
+    should_refresh = False
+    wait_event = None
+
     with _labs_creds_lock:
         entry = _labs_creds_cache.get(account_id)
-        if entry and entry['expires_at'] > now and entry['creds'] is not None:
-            return entry['creds']
-        # Sentinel: prevent concurrent threads from all calling STS simultaneously
-        _labs_creds_cache[account_id] = {'creds': None, 'expires_at': 0}
+        if entry:
+            if entry.get('creds') is not None and entry.get('expires_at', 0) > now:
+                return entry['creds']
+            wait_event = entry.get('event')
+            if wait_event and not wait_event.is_set():
+                should_refresh = False
+            else:
+                wait_event = threading.Event()
+                _labs_creds_cache[account_id] = {'creds': None, 'expires_at': 0, 'event': wait_event}
+                should_refresh = True
+        else:
+            wait_event = threading.Event()
+            _labs_creds_cache[account_id] = {'creds': None, 'expires_at': 0, 'event': wait_event}
+            should_refresh = True
+
+    if not should_refresh:
+        wait_event.wait(timeout=10)
+        with _labs_creds_lock:
+            entry = _labs_creds_cache.get(account_id)
+            if entry and entry.get('creds') is not None and entry.get('expires_at', 0) > time.monotonic():
+                return entry['creds']
+        raise RuntimeError(f'Unable to refresh labs credentials for account {account_id}')
 
     role_arn = f'arn:aws:iam::{account_id}:role/EC2ControlCrossAccountRole-{ENVIRONMENT}'
     logger.info("Refreshing labs STS creds for account %s", account_id)
-    assumed = _get_sts().assume_role(
-        RoleArn=role_arn,
-        RoleSessionName=f'ec2ctrl-labs-{account_id}',
-        ExternalId=f'ec2-control-{CENTRAL_ACCOUNT_ID}',
-        DurationSeconds=900,
-    )
-    creds = assumed['Credentials']
-    with _labs_creds_lock:
-        _labs_creds_cache[account_id] = {'creds': creds, 'expires_at': now + _LABS_CREDS_TTL}
-    return creds
+    try:
+        assumed = _get_sts().assume_role(
+            RoleArn=role_arn,
+            RoleSessionName=f'ec2ctrl-labs-{account_id}',
+            ExternalId=f'ec2-control-{CENTRAL_ACCOUNT_ID}',
+            DurationSeconds=900,
+        )
+        creds = assumed['Credentials']
+        with _labs_creds_lock:
+            _labs_creds_cache[account_id] = {'creds': creds, 'expires_at': now + _LABS_CREDS_TTL, 'event': wait_event}
+            wait_event.set()
+        return creds
+    except Exception:
+        with _labs_creds_lock:
+            _labs_creds_cache.pop(account_id, None)
+            wait_event.set()
+        raise
 
 
 def _boto3_client(service, region, creds=None):
@@ -257,7 +292,7 @@ def handle_labs_payment(event):
         return error_response(400, f'Unsupported file type. Allowed: jpeg, png, webp, pdf')
 
     try:
-        decoded_bytes = base64.b64decode(file_data)
+        decoded_bytes = base64.b64decode(file_data, validate=True)
     except Exception:
         return error_response(400, 'fileData is not valid base64.')
 
@@ -265,7 +300,7 @@ def handle_labs_payment(event):
         return error_response(400, 'File exceeds 5 MB limit.')
 
     file_id = str(uuid.uuid4())
-    s3_key  = f'payments/{file_id}.jpg'
+    s3_key  = f'payments/{file_id}{_PAYMENT_EXTENSIONS[mime_type]}'
 
     try:
         _get_s3().put_object(

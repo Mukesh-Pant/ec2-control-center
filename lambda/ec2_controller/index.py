@@ -42,6 +42,20 @@ _ddb_resource   = None
 _cognito_client = None
 
 
+def _log_request_summary(event):
+    """Log only a small, non-sensitive request summary."""
+    try:
+        claims = ((event.get('requestContext') or {}).get('authorizer') or {}).get('claims') or {}
+        logger.info(
+            "Request method=%s path=%s caller=%s",
+            event.get('httpMethod', 'POST'),
+            event.get('path', '/ec2'),
+            claims.get('email', claims.get('cognito:username', 'unknown')),
+        )
+    except Exception:
+        logger.info("Request received")
+
+
 def _get_ddb():
     global _ddb_resource
     if _ddb_resource is None:
@@ -57,7 +71,7 @@ def _get_cognito():
 
 
 def lambda_handler(event, context):
-    logger.info("Event: %s", json.dumps(event))
+    _log_request_summary(event)
 
     method = event.get('httpMethod', 'POST')
     path   = event.get('path', '/ec2')

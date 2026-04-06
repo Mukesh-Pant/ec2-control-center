@@ -39,6 +39,16 @@ MIME_TYPES = {
 }
 
 
+def _safe_event_summary(event):
+    """Return a minimal CloudFormation event summary for logs."""
+    return {
+        'RequestType': event.get('RequestType'),
+        'LogicalResourceId': event.get('LogicalResourceId'),
+        'StackId': event.get('StackId'),
+        'ResourceType': event.get('ResourceType'),
+    }
+
+
 def send_response(event, status, reason='OK', data={}):
     body = json.dumps({
         'Status': status,
@@ -88,7 +98,7 @@ def _empty_bucket(bucket_name):
 
 
 def handler(event, context):
-    logger.info("Event: %s", json.dumps(event))
+    logger.info("Event summary: %s", json.dumps(_safe_event_summary(event)))
 
     try:
         if event['RequestType'] == 'Delete':
