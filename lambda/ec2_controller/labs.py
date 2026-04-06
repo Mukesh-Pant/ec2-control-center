@@ -533,6 +533,8 @@ def _load_pricing_settings():
             if k in item:
                 if k in bool_fields:
                     settings[k] = bool(item[k])
+                elif isinstance(item[k], Decimal):
+                    settings[k] = float(item[k])
                 elif isinstance(item[k], bool):
                     settings[k] = item[k]
                 elif isinstance(item[k], (int, float)):
@@ -636,8 +638,16 @@ def handle_labs_pricing_settings_update(event):
     existing.update(updates)
     existing['labId'] = PRICING_SETTINGS_ID
 
+    # DynamoDB does not accept native Python floats in put_item payloads.
+    item = {}
+    for key, value in existing.items():
+        if key in numeric_fields and value is not None:
+            item[key] = Decimal(str(value))
+        else:
+            item[key] = value
+
     try:
-        _get_labs_table().put_item(Item=existing)
+        _get_labs_table().put_item(Item=item)
     except Exception as e:
         logger.exception('Failed to save pricing settings')
         return error_response(500, str(e))
