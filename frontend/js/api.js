@@ -228,6 +228,69 @@ const API = (function () {
     return call('/labs/pricing-settings', 'POST', body);
   }
 
+  /**
+   * GET /finance/vendors — list all vendors
+   */
+  function getFinanceVendors() {
+    return call('/finance/vendors', 'GET', null);
+  }
+
+  /**
+   * POST /finance/vendors — vendor mutations (create, update, delete)
+   */
+  function postFinanceVendors(body) {
+    return call('/finance/vendors', 'POST', body);
+  }
+
+  /**
+   * GET /finance/customers — list all customers
+   */
+  function getFinanceCustomers() {
+    return call('/finance/customers', 'GET', null);
+  }
+
+  /**
+   * POST /finance/customers — customer mutations (create, update, delete)
+   */
+  function postFinanceCustomers(body) {
+    return call('/finance/customers', 'POST', body);
+  }
+
+  /**
+   * GET /finance/settings — get finance settings
+   */
+  function getFinanceSettings() {
+    return call('/finance/settings', 'GET', null);
+  }
+
+  /**
+   * POST /finance/settings — save finance settings
+   */
+  function postFinanceSettings(body) {
+    return call('/finance/settings', 'POST', body);
+  }
+
+  /**
+   * GET /finance/alerts — get computed finance alerts
+   */
+  function getFinanceAlerts() {
+    return call('/finance/alerts', 'GET', null);
+  }
+
+  /**
+   * POST /finance/invoice-proof — get presigned S3 upload URL for invoice proof
+   */
+  function getFinanceInvoiceProofUploadUrl(body) {
+    return call('/finance/invoice-proof', 'POST', body);
+  }
+
+  /**
+   * GET /finance/invoice-proof — get presigned S3 download URL for invoice proof
+   */
+  function getFinanceInvoiceProofDownloadUrl(vendorId, invoiceId) {
+    return call('/finance/invoice-proof?vendorId=' + encodeURIComponent(vendorId) + '&invoiceId=' + encodeURIComponent(invoiceId), 'GET', null);
+  }
+
   return {
     call,
     ec2Action,
@@ -252,6 +315,15 @@ const API = (function () {
     getLabPaymentScreenshot,
     getLabPricingSettings,
     updateLabPricingSettings,
+    getFinanceVendors,
+    postFinanceVendors,
+    getFinanceCustomers,
+    postFinanceCustomers,
+    getFinanceSettings,
+    postFinanceSettings,
+    getFinanceAlerts,
+    getFinanceInvoiceProofUploadUrl,
+    getFinanceInvoiceProofDownloadUrl,
   };
 
 })();

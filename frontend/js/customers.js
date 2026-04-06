@@ -134,34 +134,38 @@ const Customers = (function () {
   ];
 
   // ─── Data layer ───────────────────────────────────────────────────────
-  var STORAGE_KEY = 'ec2ctrl_customers';
   var _data = null;
 
-  function _loadData() {
+  async function _loadData() {
     if (_data) return;
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      _data = raw ? JSON.parse(raw) : null;
-    } catch (e) { _data = null; }
-    if (!Array.isArray(_data) || !_data.length) {
-      _data = JSON.parse(JSON.stringify(SEED));
-      _persist();
+      var res = await API.getFinanceCustomers();
+      var json = await res.json();
+      _data = json.items || [];
+    } catch (e) {
+      console.error('Failed to load customers', e);
+      _data = [];
     }
+    _data.forEach(function (c) {
+      if (c.entityId && !c.id) c.id = c.entityId;
+      if (!c.milestones)  c.milestones = [];
+      if (!c.invoices)    c.invoices = [];
+      if (!c.payments)    c.payments = [];
+      if (!c.contracts)   c.contracts = [];
+    });
   }
-
-  function _persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(_data)); }
 
   function _uuid(prefix) { return (prefix || 'x') + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
 
   // ─── CRUD (public) ────────────────────────────────────────────────────
 
   function getAll() {
-    _loadData();
+    if (!_data) return [];
     return _data.map(_hydrate);
   }
 
   function getById(id) {
-    _loadData();
+    if (!_data) return null;
     var c = _data.find(function (x) { return x.id === id; });
     return c ? _hydrate(c) : null;
   }
@@ -175,24 +179,28 @@ const Customers = (function () {
     });
   }
 
-  function _addCustomer(fields) {
-    var c = Object.assign({ id: _uuid('c'), milestones: [], invoices: [], payments: [], contracts: [], createdAt: new Date().toISOString() }, fields);
+  async function _addCustomer(fields) {
+    var c = Object.assign({ milestones: [], invoices: [], payments: [], contracts: [], createdAt: new Date().toISOString() }, fields);
+    var res = await API.postFinanceCustomers({ action: 'create', customer: c });
+    var json = await res.json();
+    c.entityId = json.customerId;
+    c.entityType = 'CUSTOMER';
+    c.id = json.customerId;
     _data.push(c);
-    _persist();
     return c;
   }
 
-  function _updateCustomer(id, fields) {
+  async function _updateCustomer(id, fields) {
     var idx = _data.findIndex(function (x) { return x.id === id; });
     if (idx < 0) return null;
     _data[idx] = Object.assign({}, _data[idx], fields);
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[idx] });
     return _data[idx];
   }
 
-  function _removeCustomer(id) {
+  async function _removeCustomer(id) {
+    await API.postFinanceCustomers({ action: 'delete', customerId: id });
     _data = _data.filter(function (x) { return x.id !== id; });
-    _persist();
   }
 
   // ─── Payment status (public — used by FinNotifications) ───────────────
@@ -210,19 +218,19 @@ const Customers = (function () {
 
   // ─── Payment recording ────────────────────────────────────────────────
 
-  function recordPayment(customerId, amount, date, notes) {
+  async function recordPayment(customerId, amount, date, notes) {
     var idx = _data.findIndex(function (x) { return x.id === customerId; });
     if (idx < 0) return;
     var pay = { id: _uuid('pay'), date: date, amount: amount, notes: notes || '' };
     _data[idx].payments = (_data[idx].payments || []).concat(pay);
     // Recompute amountPaid from payments sum
     _data[idx].amountPaid = _data[idx].payments.reduce(function (s, p) { return s + p.amount; }, 0);
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[idx] });
   }
 
   // ─── Milestone mark-paid ──────────────────────────────────────────────
 
-  function markMilestonePaid(customerId, milestoneId) {
+  async function markMilestonePaid(customerId, milestoneId) {
     var idx = _data.findIndex(function (x) { return x.id === customerId; });
     if (idx < 0) return;
     var ms = (_data[idx].milestones || []).find(function (m) { return m.id === milestoneId; });
@@ -233,28 +241,28 @@ const Customers = (function () {
     var pay = { id: _uuid('pay'), date: ms.paidDate, amount: ms.amount, notes: 'Milestone: ' + ms.name };
     _data[idx].payments = (_data[idx].payments || []).concat(pay);
     _data[idx].amountPaid = _data[idx].payments.reduce(function (s, p) { return s + p.amount; }, 0);
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[idx] });
   }
 
   // ─── Invoice management ───────────────────────────────────────────────
 
-  function addInvoice(customerId, fields) {
+  async function addInvoice(customerId, fields) {
     var idx = _data.findIndex(function (x) { return x.id === customerId; });
     if (idx < 0) return;
     var inv = Object.assign({ id: _uuid('inv'), status: 'draft', paidDate: null, notes: '' }, fields);
     _data[idx].invoices = (_data[idx].invoices || []).concat(inv);
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[idx] });
     return inv;
   }
 
-  function deleteInvoice(customerId, invoiceId) {
+  async function deleteInvoice(customerId, invoiceId) {
     var idx = _data.findIndex(function (x) { return x.id === customerId; });
     if (idx < 0) return;
     _data[idx].invoices = (_data[idx].invoices || []).filter(function (i) { return i.id !== invoiceId; });
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[idx] });
   }
 
-  function updateInvoiceStatus(customerId, invoiceId, newStatus) {
+  async function updateInvoiceStatus(customerId, invoiceId, newStatus) {
     var idx = _data.findIndex(function (x) { return x.id === customerId; });
     if (idx < 0) return;
     var inv = (_data[idx].invoices || []).find(function (i) { return i.id === invoiceId; });
@@ -267,66 +275,72 @@ const Customers = (function () {
       _data[idx].payments = (_data[idx].payments || []).concat(pay);
       _data[idx].amountPaid = _data[idx].payments.reduce(function (s, p) { return s + p.amount; }, 0);
     }
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[idx] });
   }
 
   // ─── Contract management ──────────────────────────────────────────────
 
-  function addContract(customerId, fields) {
+  async function addContract(customerId, fields) {
     var idx = _data.findIndex(function (x) { return x.id === customerId; });
     if (idx < 0) return;
     var ctr = Object.assign({ id: _uuid('ctr'), status: 'active' }, fields);
     _data[idx].contracts = (_data[idx].contracts || []).concat(ctr);
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[idx] });
     return ctr;
   }
 
-  function updateContractStatus(customerId, contractId, newStatus) {
+  async function updateContractStatus(customerId, contractId, newStatus) {
     var idx = _data.findIndex(function (x) { return x.id === customerId; });
     if (idx < 0) return;
     var ctr = (_data[idx].contracts || []).find(function (c) { return c.id === contractId; });
-    if (ctr) { ctr.status = newStatus; _persist(); }
+    if (ctr) {
+      ctr.status = newStatus;
+      await API.postFinanceCustomers({ action: 'update', customer: _data[idx] });
+    }
   }
 
   // ─── Milestone management ─────────────────────────────────────────────
 
-  function addMilestone(customerId, fields) {
+  async function addMilestone(customerId, fields) {
     var idx = _data.findIndex(function (x) { return x.id === customerId; });
     if (idx < 0) return;
     var ms = Object.assign({ id: _uuid('ms'), paid: false, paidDate: null }, fields);
     _data[idx].milestones = (_data[idx].milestones || []).concat(ms);
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[idx] });
     return ms;
   }
 
   // ─── Task CRUD ────────────────────────────────────────────────────────
 
-  function addTask(customerId, contractId, fields) {
+  async function addTask(customerId, contractId, fields) {
     var ci = _data.findIndex(function (x) { return x.id === customerId; });
     if (ci < 0) return;
     var ctr = (_data[ci].contracts || []).find(function (c) { return c.id === contractId; });
     if (!ctr) return;
     if (!ctr.tasks) ctr.tasks = [];
     ctr.tasks.push(Object.assign({ id: _uuid('tsk'), status: 'todo', priority: 'medium' }, fields));
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[ci] });
   }
 
-  function updateTaskStatus(customerId, contractId, taskId, status) {
+  async function updateTaskStatus(customerId, contractId, taskId, status) {
     var ci = _data.findIndex(function (x) { return x.id === customerId; });
     if (ci < 0) return;
     var ctr = (_data[ci].contracts || []).find(function (c) { return c.id === contractId; });
     if (!ctr) return;
     var t = (ctr.tasks || []).find(function (t) { return t.id === taskId; });
-    if (t) { t.status = status; _persist(); }
+    if (t) {
+      t.status = status;
+      await API.postFinanceCustomers({ action: 'update', customer: _data[ci] });
+    }
   }
 
-  function removeTask(customerId, contractId, taskId) {
+  async function removeTask(customerId, contractId, taskId) {
     var ci = _data.findIndex(function (x) { return x.id === customerId; });
     if (ci < 0) return;
     var ctr = (_data[ci].contracts || []).find(function (c) { return c.id === contractId; });
     if (!ctr) return;
     ctr.tasks = (ctr.tasks || []).filter(function (t) { return t.id !== taskId; });
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[ci] });
   }
 
   // ─── Constants ────────────────────────────────────────────────────────
@@ -395,9 +409,9 @@ const Customers = (function () {
 
   // ─── Init / Tab ───────────────────────────────────────────────────────
 
-  function init() { _loadData(); }
+  async function init() { await _loadData(); }
 
-  function onTabActivated() { _render(); }
+  async function onTabActivated() { await _loadData(); _render(); }
 
   // ─── Render ───────────────────────────────────────────────────────────
 
@@ -755,13 +769,13 @@ const Customers = (function () {
     }).join('');
   }
 
-  function deletePayment(custId, payId) {
+  async function deletePayment(custId, payId) {
     if (!window.confirm('Delete this payment record?')) return;
     var idx = _data.findIndex(function (x) { return x.id === custId; });
     if (idx < 0) return;
     _data[idx].payments = (_data[idx].payments || []).filter(function (p) { return p.id !== payId; });
     _data[idx].amountPaid = _data[idx].payments.reduce(function (s, p) { return s + p.amount; }, 0);
-    _persist();
+    await API.postFinanceCustomers({ action: 'update', customer: _data[idx] });
     App.showToast('Payment deleted', 'ok');
     _refreshDrawer();
     _render();
@@ -776,7 +790,7 @@ const Customers = (function () {
         '<div class="cust-inv-meta" style="flex-direction:column;align-items:flex-start;gap:3px">' +
           '<span class="cust-inv-date">' + _fmtDate(inv.issueDate) + '</span>' +
           '<span class="fm-badge ' + (ST[inv.status] || 'fm-badge--gray') + '">' + inv.status + (inv.paidDate ? ' \u00b7 ' + _fmtDate(inv.paidDate) : '') + '</span>' +
-          (inv.proofData ? '<span class="inv-proof-link" onclick="Customers._viewInvProof(\'' + _esc(c.id) + '\',\'' + _esc(inv.id) + '\')">' +
+          (inv.proofKey ? '<span class="inv-proof-link" onclick="Customers._viewInvProof(\'' + _esc(c.id) + '\',\'' + _esc(inv.id) + '\')">' +
             '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
             ' View Proof</span>' : '') +
         '</div>' +
@@ -791,17 +805,13 @@ const Customers = (function () {
     }).join('') + '</div>';
   }
 
-  function _viewInvProof(custId, invoiceId) {
-    var c = _data.find(function (x) { return x.id === custId; });
-    if (!c) return;
-    var inv = (c.invoices || []).find(function (i) { return i.id === invoiceId; });
-    if (!inv || !inv.proofData) return;
-    var win = window.open('', '_blank');
-    if (!win) return;
-    if (inv.proofType && inv.proofType.startsWith('image/')) {
-      win.document.write('<!DOCTYPE html><html><body style="margin:0;background:#111;display:flex;justify-content:center"><img src="' + inv.proofData + '" style="max-width:100%"/></body></html>');
-    } else {
-      win.location = inv.proofData;
+  async function _viewInvProof(custId, invoiceId) {
+    try {
+      var res = await API.getFinanceInvoiceProofDownloadUrl(custId, invoiceId);
+      var json = await res.json();
+      if (json.downloadUrl) window.open(json.downloadUrl, '_blank');
+    } catch (e) {
+      App.showToast('Could not load proof', 'err');
     }
   }
 
@@ -912,38 +922,38 @@ const Customers = (function () {
     if (el) el.style.display = _drawerTaskFormOpen[contractId] ? '' : 'none';
   }
 
-  function submitTask(custId, contractId) {
+  async function submitTask(custId, contractId) {
     var name     = _getVal('dr-task-name-'     + contractId);
     var assignee = _getVal('dr-task-assignee-' + contractId);
     var due      = _getVal('dr-task-due-'      + contractId);
     var priority = _getVal('dr-task-pri-'      + contractId);
     if (!name) { App.showToast('Enter a task name', 'err'); return; }
-    addTask(custId, contractId, { name: name, assignee: assignee, dueDate: due, priority: priority });
+    await addTask(custId, contractId, { name: name, assignee: assignee, dueDate: due, priority: priority });
     App.showToast('Task added', 'ok');
     _drawerTaskFormOpen[contractId] = false;
     _refreshDrawer();
   }
 
-  function setTaskStatus(custId, contractId, taskId, status) {
-    updateTaskStatus(custId, contractId, taskId, status);
+  async function setTaskStatus(custId, contractId, taskId, status) {
+    await updateTaskStatus(custId, contractId, taskId, status);
     _refreshDrawer();
   }
 
-  function deleteTask(custId, contractId, taskId) {
-    removeTask(custId, contractId, taskId);
+  async function deleteTask(custId, contractId, taskId) {
+    await removeTask(custId, contractId, taskId);
     App.showToast('Task removed', 'ok');
     _refreshDrawer();
   }
 
   // ─── Drawer submit actions ────────────────────────────────────────────
 
-  function submitPayment() {
+  async function submitPayment() {
     var amt  = parseFloat(_getVal('dr-pay-amount'));
     var date = _getVal('dr-pay-date');
     var note = _getVal('dr-pay-notes');
     if (isNaN(amt) || amt <= 0) { App.showToast('Enter a valid amount', 'err'); return; }
     if (!date) { App.showToast('Enter a date', 'err'); return; }
-    recordPayment(_drawerCustId, amt, date, note);
+    await recordPayment(_drawerCustId, amt, date, note);
     App.showToast('Payment recorded', 'ok');
     _drawerAddPayOpen = false;
     _refreshDrawer();
@@ -955,84 +965,86 @@ const Customers = (function () {
     var file = input.files[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) { App.showToast('File exceeds 2 MB limit', 'err'); input.value = ''; return; }
-    var reader = new FileReader();
-    reader.onload = function (e) {
-      _pendingInvProof = { data: e.target.result, name: file.name, type: file.type };
-      var nameEl = document.getElementById('dr-inv-proof-name');
-      if (nameEl) nameEl.textContent = '\u2713 ' + file.name;
-    };
-    reader.readAsDataURL(file);
+    _pendingInvProof = { file: file, name: file.name, type: file.type };
+    var nameEl = document.getElementById('dr-inv-proof-name');
+    if (nameEl) nameEl.textContent = '\u2713 ' + file.name;
   }
 
-  function submitInvoice() {
+  async function submitInvoice() {
     var date = _getVal('dr-inv-date');
     var amt  = parseFloat(_getVal('dr-inv-amount'));
     var note = _getVal('dr-inv-notes');
     if (isNaN(amt) || amt <= 0) { App.showToast('Enter a valid amount', 'err'); return; }
+    var invId = _uuid('inv');
     var fields = { issueDate: date, amount: amt, notes: note };
     if (_pendingInvProof) {
-      fields.proofData = _pendingInvProof.data;
-      fields.proofName = _pendingInvProof.name;
-      fields.proofType = _pendingInvProof.type;
+      try {
+        var upRes = await API.getFinanceInvoiceProofUploadUrl({ vendorId: _drawerCustId, invoiceId: invId, filename: _pendingInvProof.name });
+        var upJson = await upRes.json();
+        await fetch(upJson.uploadUrl, { method: 'PUT', body: _pendingInvProof.file });
+        fields.proofKey = upJson.key;
+      } catch (e) {
+        App.showToast('Proof upload failed', 'err');
+      }
     }
-    addInvoice(_drawerCustId, fields);
+    await addInvoice(_drawerCustId, fields);
     _pendingInvProof = null;
     App.showToast('Invoice issued', 'ok');
     _drawerAddInvOpen = false;
     _refreshDrawer();
   }
 
-  function submitMilestone() {
+  async function submitMilestone() {
     var name = _getVal('dr-ms-name');
     var amt  = parseFloat(_getVal('dr-ms-amount'));
     var due  = _getVal('dr-ms-due');
     if (!name) { App.showToast('Enter a milestone name', 'err'); return; }
     if (isNaN(amt) || amt <= 0) { App.showToast('Enter a valid amount', 'err'); return; }
-    addMilestone(_drawerCustId, { name, amount: amt, dueDate: due });
+    await addMilestone(_drawerCustId, { name, amount: amt, dueDate: due });
     App.showToast('Milestone added', 'ok');
     _drawerAddMsOpen = false;
     _refreshDrawer();
     if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();
   }
 
-  function submitContract() {
+  async function submitContract() {
     var name  = _getVal('dr-ctr-name');
     var desc  = _getVal('dr-ctr-desc');
     var start = _getVal('dr-ctr-start');
     var end   = _getVal('dr-ctr-end');
     var val   = parseFloat(_getVal('dr-ctr-value'));
     if (!name) { App.showToast('Enter a contract name', 'err'); return; }
-    addContract(_drawerCustId, { name, description: desc, startDate: start, endDate: end, value: isNaN(val) ? 0 : val });
+    await addContract(_drawerCustId, { name, description: desc, startDate: start, endDate: end, value: isNaN(val) ? 0 : val });
     App.showToast('Contract added', 'ok');
     _drawerAddCtrOpen = false;
     _refreshDrawer();
   }
 
-  function payMilestone(custId, msId) {
-    markMilestonePaid(custId, msId);
+  async function payMilestone(custId, msId) {
+    await markMilestonePaid(custId, msId);
     App.showToast('Milestone marked paid', 'ok');
     _refreshDrawer();
     _render();
     if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();
   }
 
-  function setInvStatus(custId, invId, status) {
-    updateInvoiceStatus(custId, invId, status);
+  async function setInvStatus(custId, invId, status) {
+    await updateInvoiceStatus(custId, invId, status);
     App.showToast('Invoice ' + status, 'ok');
     if (status === 'paid') _render();
     _refreshDrawer();
     if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();
   }
 
-  function confirmDeleteInvoice(custId, invId) {
+  async function confirmDeleteInvoice(custId, invId) {
     if (!window.confirm('Delete this invoice? This cannot be undone.')) return;
-    deleteInvoice(custId, invId);
+    await deleteInvoice(custId, invId);
     App.showToast('Invoice deleted', 'ok');
     _refreshDrawer();
   }
 
-  function completeContract(custId, ctrId) {
-    updateContractStatus(custId, ctrId, 'completed');
+  async function completeContract(custId, ctrId) {
+    await updateContractStatus(custId, ctrId, 'completed');
     App.showToast('Contract marked complete', 'ok');
     _refreshDrawer();
   }
@@ -1166,7 +1178,7 @@ const Customers = (function () {
     if (row) row.style.display = (bt === 'recurring' || bt === 'retainer') ? '' : 'none';
   }
 
-  function confirmCustSave() {
+  async function confirmCustSave() {
     var errEl = document.getElementById('cust-modal-err');
     if (errEl) errEl.textContent = '';
     function err(msg) { if (errEl) errEl.textContent = msg; }
@@ -1204,19 +1216,19 @@ const Customers = (function () {
       notes:         _getVal('cust-m-notes'),
     };
 
-    if (_editId) { _updateCustomer(_editId, fields); App.showToast('Customer updated', 'ok'); }
-    else         { _addCustomer(fields);              App.showToast('Customer added', 'ok'); }
+    if (_editId) { await _updateCustomer(_editId, fields); App.showToast('Customer updated', 'ok'); }
+    else         { await _addCustomer(fields);              App.showToast('Customer added', 'ok'); }
 
     closeCustModal();
     _render();
     if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();
   }
 
-  function confirmDelete(id) {
+  async function confirmDelete(id) {
     var c = getById(id);
     if (!c) return;
     if (!window.confirm('Delete customer "' + c.name + '"? This cannot be undone.')) return;
-    _removeCustomer(id);
+    await _removeCustomer(id);
     App.showToast('Customer removed', 'ok');
     _render();
     if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();

@@ -101,6 +101,10 @@ def handler(event, context):
             if templates_bucket:
                 logger.info("Delete — emptying templates bucket: %s", templates_bucket)
                 _empty_bucket(templates_bucket)
+            finance_bucket = props.get('FinanceBucket', '')
+            if finance_bucket:
+                logger.info("Delete — emptying finance bucket: %s", finance_bucket)
+                _empty_bucket(finance_bucket)
             send_response(event, 'SUCCESS')
             return
 

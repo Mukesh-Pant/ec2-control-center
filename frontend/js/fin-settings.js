@@ -8,9 +8,6 @@
 
 const FinSettings = (function () {
 
-  var STORAGE_KEY         = 'ec2ctrl_fin_settings';
-  var TAX_ACCOUNTS_KEY    = 'ec2ctrl_tax_accounts';
-
   var DEFAULTS = {
     usdToNpr: 135,
     inrToNpr: 1.62,
@@ -24,53 +21,53 @@ const FinSettings = (function () {
   var _s              = null;
   var _taxAccounts    = null;  // { accountId: { rebate: 0, customWht: null, customVat: null, customMargin: null } }
 
-  // ─── Persistence ──────────────────────────────────────────────────────
+  // ─── Load from API ────────────────────────────────────────────────────
 
-  function _load() {
+  async function _loadSettings() {
     if (_s) return;
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      _s = raw ? Object.assign({}, DEFAULTS, JSON.parse(raw)) : Object.assign({}, DEFAULTS);
+      var res = await API.getFinanceSettings();
+      var data = await res.json();
+      _s = Object.assign({}, DEFAULTS, data);
+      _taxAccounts = _s.taxAccounts || {};
     } catch (e) {
+      console.error('Failed to load finance settings', e);
       _s = Object.assign({}, DEFAULTS);
-    }
-  }
-
-  function _loadTaxAccounts() {
-    if (_taxAccounts) return;
-    try {
-      var raw = localStorage.getItem(TAX_ACCOUNTS_KEY);
-      _taxAccounts = raw ? JSON.parse(raw) : {};
-    } catch (e) {
       _taxAccounts = {};
     }
   }
 
-  function _persist() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(_s));
+  // Synchronous fallback used by rendering helpers that can't be async
+  function _loadSync() {
+    if (_s) return;
+    _s = Object.assign({}, DEFAULTS);
+    _taxAccounts = {};
+    // Kick off async load for next access
+    _loadSettings();
   }
 
-  function _persistTaxAccounts() {
-    localStorage.setItem(TAX_ACCOUNTS_KEY, JSON.stringify(_taxAccounts));
+  function _loadTaxAccounts() {
+    if (_taxAccounts !== null) return;
+    _taxAccounts = {};
   }
 
   // ─── Public getters ───────────────────────────────────────────────────
 
   function get() {
-    if (!_s) _load();
+    if (!_s) _loadSync();
     return Object.assign({}, _s);
   }
 
   // Returns tax overrides for a specific account (null = use global defaults)
   function getTaxForAccount(accountId) {
-    _loadTaxAccounts();
+    if (!_taxAccounts) _loadTaxAccounts();
     return _taxAccounts[accountId] || null;
   }
 
   // ─── Currency helpers ─────────────────────────────────────────────────
 
   function toNpr(amount, currency) {
-    if (!_s) _load();
+    if (!_s) _loadSync();
     if (currency === 'NPR') return amount;
     if (currency === 'USD') {
       var rate = (window.NPR_RATE && window.NPR_RATE > 0) ? window.NPR_RATE : _s.usdToNpr;
@@ -102,7 +99,7 @@ const FinSettings = (function () {
   }
 
   function _renderForm() {
-    _load();
+    _loadSync();
     _setVal('fset-usd-npr',          _s.usdToNpr);
     _setVal('fset-inr-npr',          _s.inrToNpr);
     _setVal('fset-expiry-days',      _s.expiryWarningDays);
@@ -298,7 +295,9 @@ const FinSettings = (function () {
       customMargin: margin !== null ? margin / 100 : null,
       rebate:       rebate !== null ? rebate / 100 : 0,
     };
-    _persistTaxAccounts();
+    if (!_s) _loadSync();
+    _s.taxAccounts = _taxAccounts;
+    Api.postFinanceSettings(_s).catch(function (e) { console.error('Failed to save tax account', e); });
     App.showToast('Tax settings saved for account ' + accountId.substring(0, 8) + '\u2026', 'ok');
   }
 
@@ -357,17 +356,23 @@ const FinSettings = (function () {
     if (isNaN(expDays) || expDays < 1) { showErr('Expiry warning must be \u22651 day'); return; }
     if (isNaN(payDays) || payDays < 1) { showErr('Payment warning must be \u22651 day'); return; }
 
-    if (!_s) _load();
+    if (!_s) _loadSync();
     _s.usdToNpr           = usdNpr;
     _s.inrToNpr           = inrNpr;
     _s.expiryWarningDays  = expDays;
     _s.paymentWarningDays = payDays;
     _s.defaultCurrency    = defCur;
-    _persist();
-
-    window.NPR_RATE = usdNpr;
-    App.showToast('Settings saved', 'ok');
-    if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();
+    _s.taxAccounts        = _taxAccounts || {};
+    Api.postFinanceSettings(_s)
+      .then(function () {
+        window.NPR_RATE = usdNpr;
+        App.showToast('Settings saved', 'ok');
+        if (typeof FinNotifications !== 'undefined') FinNotifications.refresh();
+      })
+      .catch(function (e) {
+        console.error('Failed to save settings', e);
+        App.showToast('Failed to save settings', 'error');
+      });
   }
 
   // ─── DOM helpers ──────────────────────────────────────────────────────

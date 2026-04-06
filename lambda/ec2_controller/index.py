@@ -32,6 +32,7 @@ import audit
 import pricing
 import backup
 import labs
+import finance
 from console_login import handle_console_login
 
 logger = logging.getLogger()
@@ -106,6 +107,24 @@ def lambda_handler(event, context):
         return labs.handle_labs_pricing_settings_update(event)
     elif path == '/labs/network-options' and method == 'GET':
         return labs.handle_labs_network_options(event)
+    elif path == '/finance/vendors' and method == 'GET':
+        return finance.handle_finance_vendors_list(event)
+    elif path == '/finance/vendors' and method == 'POST':
+        return finance.handle_finance_vendors_mutation(event)
+    elif path == '/finance/customers' and method == 'GET':
+        return finance.handle_finance_customers_list(event)
+    elif path == '/finance/customers' and method == 'POST':
+        return finance.handle_finance_customers_mutation(event)
+    elif path == '/finance/settings' and method == 'GET':
+        return finance.handle_finance_settings_get(event)
+    elif path == '/finance/settings' and method == 'POST':
+        return finance.handle_finance_settings_save(event)
+    elif path == '/finance/alerts' and method == 'GET':
+        return finance.handle_finance_alerts(event)
+    elif path == '/finance/invoice-proof' and method == 'POST':
+        return finance.handle_finance_invoice_proof_upload(event)
+    elif path == '/finance/invoice-proof' and method == 'GET':
+        return finance.handle_finance_invoice_proof_download(event)
     else:
         return error_response(404, 'Not found')
 
