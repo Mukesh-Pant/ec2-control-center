@@ -989,7 +989,8 @@ const Labs = (function () {
     }).join('');
 
     var storagVal  = wizardConfig.storageGb || (currentPlatform === 'windows' ? 35 : 20);
-    var eipChecked = wizardConfig.elasticIp ? ' checked' : '';
+    // Default EIP to true (checked) unless explicitly set to false
+    var eipChecked = (wizardConfig.elasticIp === false) ? '' : ' checked';
 
     var _html = [
       '<div class="lbs-wizard-wrap">',
@@ -1090,7 +1091,6 @@ const Labs = (function () {
       '      <select id="lbs-s1-sg" class="lbs-select"><option value="">— Select VPC above —</option></select>',
       '    </div>',
       '  </div>',
-      '  <div id="lbs-live-bill" class="lbs-live-bill" style="display:none;"></div>',
       '  <div class="lbs-wizard-footer">',
       '    <button class="btn btn-outline" onclick="Labs._exitWizard()">Cancel</button>',
       '    <button class="btn btn-blue" onclick="Labs.nextStep()">Next: Pricing Review</button>',
@@ -2310,8 +2310,10 @@ const Labs = (function () {
       storageGb:       tpl.storageGb,
       detailedMonitor: tpl.detailedMonitor,
       labName:         tpl.name + ' Server',
-      platform:        'ubuntu',
+      platform:        tpl.platform || 'ubuntu',
       region:          'ap-south-1',
+      hoursPerDay:     8,   // cards display 8 hrs/day price — keep it consistent
+      elasticIp:       true,
     });
   }
 
