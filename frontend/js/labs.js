@@ -3256,7 +3256,6 @@ const Labs = (function () {
     });
 
     // Auto-fallback
-    if (_activeFilter === 'active' && counts.active === 0) _activeFilter = 'all';
 
     // ── Empty-state: full onboarding with hero
     if (activeLabs.length === 0) {
