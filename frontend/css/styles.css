@@ -3900,9 +3900,9 @@ code {
 /* ── Template cards v2 — more compelling ───────────────────────── */
 .msv2-tpl-card { position: relative; overflow: hidden; }
 .msv2-tpl-ribbon {
-  position: absolute; top: 14px; right: -24px;
-  transform: rotate(35deg);
-  padding: 3px 28px; font-size: 9.5px; font-weight: 800;
+  position: absolute; top: 14px; left: -26px;
+  transform: rotate(-35deg);
+  padding: 3px 32px; font-size: 9.5px; font-weight: 800;
   text-transform: uppercase; letter-spacing: .5px;
   pointer-events: none; z-index: 2;
 }
