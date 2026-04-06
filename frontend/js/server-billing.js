@@ -217,7 +217,9 @@ const BillingEngine = (function () {
       vcpu:        2,
       ram:         '1 GB',
       storageGb:   20,
-      detailedMonitor: false,
+      platform:    'ubuntu',
+      detailedMonitor: true,
+      elasticIp:   true,
       useCases:    ['WordPress', 'Ghost', 'Static sites'],
     },
     {
@@ -231,7 +233,9 @@ const BillingEngine = (function () {
       vcpu:        2,
       ram:         '4 GB',
       storageGb:   30,
-      detailedMonitor: false,
+      platform:    'ubuntu',
+      detailedMonitor: true,
+      elasticIp:   true,
       useCases:    ['Node.js', 'Python', 'Docker'],
     },
     {
@@ -245,7 +249,9 @@ const BillingEngine = (function () {
       vcpu:        2,
       ram:         '8 GB',
       storageGb:   50,
+      platform:    'ubuntu',
       detailedMonitor: true,
+      elasticIp:   true,
       useCases:    ['WooCommerce', 'Magento', 'Shopify self-hosted'],
     },
     {
@@ -259,7 +265,9 @@ const BillingEngine = (function () {
       vcpu:        2,
       ram:         '8 GB',
       storageGb:   100,
+      platform:    'ubuntu',
       detailedMonitor: true,
+      elasticIp:   true,
       useCases:    ['Jupyter', 'Pandas', 'Spark'],
     },
     {
@@ -273,7 +281,9 @@ const BillingEngine = (function () {
       vcpu:        4,
       ram:         '8 GB',
       storageGb:   80,
+      platform:    'ubuntu',
       detailedMonitor: true,
+      elasticIp:   true,
       useCases:    ['Minecraft', 'CS2', 'Valheim'],
     },
     {
@@ -287,22 +297,53 @@ const BillingEngine = (function () {
       vcpu:        4,
       ram:         '16 GB',
       storageGb:   200,
+      platform:    'ubuntu',
       detailedMonitor: true,
+      elasticIp:   true,
       useCases:    ['REST APIs', 'GraphQL', 'gRPC'],
     },
   ];
 
+  // Custom admin-added templates stored in localStorage
+  var CUSTOM_TEMPLATES_KEY = 'ec2ctrl_custom_templates';
+
+  function _loadCustomTemplates() {
+    try {
+      var raw = localStorage.getItem(CUSTOM_TEMPLATES_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) { return []; }
+  }
+
+  function saveCustomTemplate(tpl) {
+    var customs = _loadCustomTemplates();
+    var idx = customs.findIndex(function (t) { return t.id === tpl.id; });
+    if (idx >= 0) customs[idx] = tpl; else customs.push(tpl);
+    localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(customs));
+  }
+
+  function deleteCustomTemplate(tplId) {
+    var customs = _loadCustomTemplates().filter(function (t) { return t.id !== tplId; });
+    localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(customs));
+  }
+
+  function getAllTemplates() {
+    return TEMPLATES.concat(_loadCustomTemplates());
+  }
+
   function getTemplates() { return TEMPLATES; }
 
-  // ─── Compute billing for each template (with current config) ─────────────
+  // ─── Compute billing for each template at 8 hrs/day (business hours) ─────
+  // Cards show 8-hr price as the "from" price (lower = more attractive).
+  // Wizard step 2 always shows the exact price for the customer's chosen uptime.
   function templatePrices() {
-    return TEMPLATES.map(function (t) {
+    return getAllTemplates().map(function (t) {
       var b = compute({
         instanceType:    t.instanceType,
-        hoursPerDay:     24,
+        hoursPerDay:     8,          // display price at business hours
         storageGb:       t.storageGb,
         isRunning:       true,
         detailedMonitor: t.detailedMonitor,
+        elasticIp:       t.elasticIp,
       });
       return Object.assign({}, t, { billing: b });
     });

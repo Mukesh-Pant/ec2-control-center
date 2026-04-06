@@ -265,6 +265,7 @@ const Auth = (function () {
     document.getElementById('auth-page').style.display = 'none';
     document.getElementById('app').style.display = '';
     document.body.classList.add('ready');
+    if (window.LandingPage) LandingPage.hideLanding();
 
     App.setUserInfo(email, role);
     App.setAdmin(role === 'admin');
@@ -273,7 +274,14 @@ const Auth = (function () {
   }
 
   function _showAuthPage() {
-    document.getElementById('auth-page').style.display = '';
+    // Show landing page for unauthenticated visitors (hides auth until they click "Get started")
+    var lp = document.getElementById('landing-page');
+    var ap = document.getElementById('auth-page');
+    if (lp && !lp.classList.contains('lp-hidden')) {
+      ap.style.display = 'none';
+    } else {
+      ap.style.display = '';
+    }
     document.getElementById('app').style.display = 'none';
     document.body.classList.add('ready');
   }
