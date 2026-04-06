@@ -3326,7 +3326,7 @@ code {
   font-size: 15px; font-weight: 800; color: var(--ink); letter-spacing: -.2px;
   display: flex; align-items: center; gap: 8px;
 }
-.msv2-ql-sub { font-size: 12px; color: var(--ink4); font-weight: 500; }
+.msv2-ql-sub { font-size: 12.5px; color: var(--ink3); font-weight: 500; line-height: 1.55; margin-top: 6px; max-width: 620px; }
 
 .msv2-tpl-grid {
   display: grid;
@@ -3375,15 +3375,15 @@ code {
 }
 .msv2-tpl-uses { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 14px; }
 .msv2-tpl-use  {
-  font-size: 10px; color: var(--ink3); background: var(--bg2);
-  padding: 2px 7px; border-radius: 4px; border: 1px solid var(--bd);
+  font-size: 10.5px; color: var(--ink2); background: #f5f8ff;
+  padding: 5px 9px; border-radius: 999px; border: 1px solid #dfe8fb;
 }
 .msv2-tpl-price-row {
   display: flex; flex-direction: column; gap: 10px;
   margin-top: auto; padding-top: 12px; border-top: 1px solid var(--bg2);
 }
 .msv2-tpl-price-main { font-size: 16px; font-weight: 800; color: var(--ink); font-family: var(--mono); }
-.msv2-tpl-price-sub  { font-size: 10px; color: var(--ink4); margin-top: 2px; }
+.msv2-tpl-price-sub  { font-size: 11px; color: var(--ink3); margin-top: 4px; line-height: 1.45; max-width: 220px; }
 .msv2-tpl-launch {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%; padding: 10px 16px; border-radius: var(--r);
@@ -3499,10 +3499,25 @@ code {
 }
 .billing-cfg-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--bdim); }
 .billing-cfg-toggle {
-  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  display: flex; align-items: center; gap: 12px; margin-top: 12px;
   font-size: 13px; color: var(--ink2);
 }
 .billing-cfg-toggle input[type="checkbox"] { accent-color: var(--blue); width: 15px; height: 15px; }
+.billing-cfg-check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.billing-cfg-check input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.billing-cfg-check span {
+  display: inline-block;
+  color: var(--ink2);
+}
 .billing-cfg-save {
   margin-top: 16px; padding: 8px 18px; border-radius: var(--r);
   background: var(--blue); color: #fff; border: none;
@@ -3513,18 +3528,20 @@ code {
 .tpl-admin-list { display: grid; gap: 14px; }
 .tpl-admin-card {
   border: 1px solid var(--bd);
-  border-radius: var(--rmd);
+  border-radius: var(--rlg);
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  padding: 16px;
+  padding: 18px;
+  box-shadow: var(--sh);
 }
 .tpl-admin-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .tpl-admin-title { font-size: 13px; font-weight: 800; color: var(--ink); }
+.tpl-admin-subtitle { font-size: 12px; color: var(--ink4); margin-top: 4px; line-height: 1.5; max-width: 560px; }
 .tpl-admin-remove {
   border: 1px solid rgba(220,38,38,.18);
   background: rgba(220,38,38,.06);
@@ -3537,8 +3554,14 @@ code {
 }
 .tpl-admin-grid { margin-bottom: 10px; }
 .tpl-admin-wide { grid-column: span 2; }
-.tpl-admin-toggles { display: flex; gap: 18px; flex-wrap: wrap; }
-.tpl-admin-toggles label { display: inline-flex; align-items: center; gap: 8px; }
+.tpl-admin-toggles { display: flex; gap: 14px; flex-wrap: wrap; }
+.tpl-admin-toggles label {
+  min-width: 200px;
+  padding: 10px 12px;
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  background: #fbfcff;
+}
 .tpl-admin-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .tpl-admin-secondary {
   background: var(--white);
@@ -3951,6 +3974,7 @@ code {
   color: #fff; letter-spacing: -.2px; line-height: 1; margin-bottom: 10px;
 }
 .lbs-price-summary-meta { font-size: 12px; color: rgba(255,255,255,.55); margin-bottom: 6px; }
+.lbs-price-summary-meta strong { color: #fff; font-weight: 700; }
 .lbs-price-incl-note {
   display: inline-block; font-size: 11px;
   background: rgba(16,185,129,.18); border: 1px solid rgba(16,185,129,.3);
@@ -3962,13 +3986,24 @@ code {
   background: rgba(251,191,36,.18); border: 1px solid rgba(251,191,36,.35);
   border-radius: 20px; padding: 3px 12px; color: #fcd34d;
 }
-.lbs-price-table--breakdown { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px; }
+.lbs-price-table--breakdown {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  margin: 14px 0 8px;
+  overflow: hidden;
+  border: 1px solid var(--bd);
+  border-radius: 14px;
+  background: #fff;
+}
 .lbs-price-table--breakdown th {
-  text-align: left; padding: 8px 12px;
+  text-align: left; padding: 10px 14px;
   font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
   color: var(--ink3); border-bottom: 1px solid var(--bd);
+  background: #f8fbff;
 }
-.lbs-price-table--breakdown td { padding: 8px 12px; border-bottom: 1px solid var(--bg2); color: var(--ink2); }
+.lbs-price-table--breakdown td { padding: 10px 14px; border-bottom: 1px solid var(--bg2); color: var(--ink2); }
 .lbs-price-table--breakdown td:last-child { text-align: right; font-family: var(--mono); }
 .lbs-price-discount td { color: var(--green); font-weight: 700; }
 
@@ -4018,6 +4053,21 @@ code {
 }
 .msv2-card-cost-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--ink4); margin-bottom: 2px; }
 .msv2-card-cost-note { font-size: 11px; color: #7b869c; margin-top: 6px; }
+.msv2-ticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f6fbff 0%, #eef6ff 100%);
+  border: 1px solid #dbe8fb;
+  color: var(--ink2);
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-top: 10px;
+}
+.msv2-ticker-dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; animation: pulse-dot 1s infinite; }
+.msv2-ticker-val { transition: color .3s; font-family: var(--mono); color: var(--ink); }
 .msv2-card-trend {
   padding: 12px 14px;
   border-radius: 14px;
@@ -4109,10 +4159,10 @@ code {
 }
 .msv2-create-cta-left { position: relative; z-index: 1; }
 .msv2-create-cta-title {
-  font-size: 15px; font-weight: 800; color: #fff; margin: 0 0 4px;
+  font-size: 17px; font-weight: 800; color: #fff; margin: 0 0 6px;
 }
 .msv2-create-cta-sub {
-  font-size: 12px; color: rgba(255,255,255,.55); margin: 0;
+  font-size: 12.5px; color: rgba(255,255,255,.72); margin: 0; line-height: 1.6; max-width: 640px;
 }
 .msv2-create-cta-actions {
   display: flex; align-items: center; gap: 10px; flex-shrink: 0; position: relative; z-index: 1;
@@ -4155,12 +4205,13 @@ code {
 /* ── Live bill preview panel (step 1) ────────────────────── */
 .lbs-live-bill {
   margin: 0 0 16px;
-  background: var(--bg); border: 1.5px solid var(--bd);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); border: 1.5px solid var(--bd);
   border-radius: var(--rlg); overflow: hidden;
+  box-shadow: var(--sh);
 }
 .lbs-live-bill-hd {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; background: var(--white);
+  padding: 14px 16px; background: transparent;
   border-bottom: 1px solid var(--bd);
 }
 .lbs-live-bill-title {
@@ -4168,14 +4219,14 @@ code {
   text-transform: uppercase; letter-spacing: .5px;
 }
 .lbs-live-bill-total {
-  font-size: 18px; font-weight: 800; color: var(--blue2);
-  font-family: var(--mono);
+  font-size: 20px; font-weight: 800; color: var(--blue2);
+  font-family: var(--sans);
 }
 .lbs-live-bill-table {
-  width: 100%; border-collapse: collapse; font-size: 12px;
+  width: 100%; border-collapse: collapse; font-size: 12.5px;
 }
 .lbs-live-bill-table td {
-  padding: 7px 16px; color: var(--ink2);
+  padding: 9px 16px; color: var(--ink2);
 }
 .lbs-live-bill-table td:last-child {
   text-align: right; font-family: var(--mono); font-weight: 600; color: var(--ink);
@@ -4184,8 +4235,8 @@ code {
 .lbs-live-bill-table .lbs-lb-tax td { color: var(--ink3); }
 .lbs-live-bill-table .lbs-lb-discount td { color: var(--green); font-weight: 600; }
 .lbs-live-bill-note {
-  padding: 8px 16px; font-size: 10px; color: var(--ink4);
-  border-top: 1px solid var(--bg2); background: var(--white);
+  padding: 10px 16px; font-size: 11px; color: var(--ink3);
+  border-top: 1px solid var(--bg2); background: rgba(255,255,255,.74);
 }
 
 /* ── Bill diff banners ───────────────────────────────────── */

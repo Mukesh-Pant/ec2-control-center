@@ -2251,8 +2251,8 @@ const Labs = (function () {
     return (
       '<div class="msv2-create-cta">' +
         '<div class="msv2-create-cta-left">' +
-          '<div class="msv2-create-cta-title">Create Your Server</div>' +
-          '<p class="msv2-create-cta-sub">Launch a dedicated server in minutes. Choose a template or configure manually.</p>' +
+          '<div class="msv2-create-cta-title">Launch a polished cloud server experience</div>' +
+          '<p class="msv2-create-cta-sub">Choose a ready-made stack or configure one manually with clear pricing, secure setup, and a cleaner handoff for your customers.</p>' +
         '</div>' +
         '<div class="msv2-create-cta-actions">' +
           '<button class="msv2-create-cta-btn" onclick="Labs.startWizard()">' +
@@ -2306,7 +2306,7 @@ const Labs = (function () {
             '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>' +
             'Quick Launch' +
           '</div>' +
-          '<div class="msv2-ql-sub" style="margin-top:3px;">Pre-configured templates with real AWS ap-south-1 pricing - ready in one click</div>' +
+          '<div class="msv2-ql-sub">Pre-configured templates with real AWS ap-south-1 pricing, clean monthly totals, and launch-ready defaults.</div>' +
         '</div>' +
       '</div>' +
       '<div class="msv2-tpl-grid">';
@@ -2366,7 +2366,7 @@ const Labs = (function () {
             '<div class="msv2-tpl-price-block">' +
               '<div class="msv2-tpl-price-from">Starting from</div>' +
               '<div class="msv2-tpl-price-main">' + _esc(npr) + '</div>' +
-              '<div class="msv2-tpl-price-sub">/ month &nbsp;&middot;&nbsp; all taxes incl.</div>' +
+              '<div class="msv2-tpl-price-sub">Monthly estimate, taxes and service charges included</div>' +
             '</div>' +
             '<button class="msv2-tpl-launch" onclick="Labs._launchTemplate(\'' + _esc(t.id) + '\')">' +
               '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
@@ -2860,7 +2860,7 @@ const Labs = (function () {
     var statusInfoHtml = '<div class="msv2-card-info-item"><span class="msv2-card-info-lbl">State</span><span class="msv2-card-info-val">' + _esc(stateLabel) + '</span></div>';
     ipHtml += accountHtml;
     expiryHtml += statusInfoHtml;
-    tickerHtml = '<div class="msv2-card-cost-note">Includes taxes and service charges</div>' + tickerHtml;
+    tickerHtml = '<div class="msv2-card-cost-note">Includes taxes, service charges, and the current usage model for this server.</div>' + tickerHtml;
     sparkHtml = isRunning && sparkHtml
       ? '<div class="msv2-card-trend"><div class="msv2-card-meta-label">7-day spend trend</div>' + sparkHtml + '</div>'
       : '<div class="msv2-card-trend msv2-card-trend--empty"><div class="msv2-card-meta-label">7-day spend trend</div><div class="msv2-card-trend-empty">Trend appears once the server is running.</div></div>';
@@ -3064,7 +3064,7 @@ const Labs = (function () {
           'Billing Config' +
           '<span class="msv2-advisor-badge" style="background:var(--bdim);color:var(--blue2);font-size:10px;">Admin Only</span>' +
         '</div>' +
-        '<div class="billing-cfg-sub">Configure production billing defaults used across Labs. Saved values are shared for every admin session.</div>' +
+        '<div class="billing-cfg-sub">Manage the default pricing model used across My Servers. These values shape the customer-facing monthly total, tax view, and template pricing.</div>' +
         '<div class="billing-cfg-grid">' +
           '<div class="billing-cfg-field"><label class="billing-cfg-label">WHT Rate (%)</label><input class="billing-cfg-input" type="number" step="0.1" min="0" max="50" id="bcfg-wht" value="' + ((cfg.wht_rate || 0.18) * 100).toFixed(1) + '"/></div>' +
           '<div class="billing-cfg-field"><label class="billing-cfg-label">Margin Rate (%)</label><input class="billing-cfg-input" type="number" step="0.1" min="0" max="100" id="bcfg-margin" value="' + ((cfg.margin_rate || 0.12) * 100).toFixed(1) + '"/></div>' +
@@ -3073,8 +3073,10 @@ const Labs = (function () {
           '<div class="billing-cfg-field"><label class="billing-cfg-label">USD → INR Rate</label><input class="billing-cfg-input" type="number" step="0.5" min="50" max="200" id="bcfg-inr" value="' + (cfg.usd_to_inr || 84) + '"/></div>' +
         '</div>' +
         '<div class="billing-cfg-toggle">' +
-          '<input type="checkbox" id="bcfg-breakdown"' + (cfg.show_breakdown ? ' checked' : '') + '/>' +
-          '<label for="bcfg-breakdown">Show tax breakdown to customers (collapsed by default)</label>' +
+          '<label class="billing-cfg-check" for="bcfg-breakdown">' +
+            '<input type="checkbox" id="bcfg-breakdown"' + (cfg.show_breakdown ? ' checked' : '') + '/>' +
+            '<span>Show tax breakdown to customers by default</span>' +
+          '</label>' +
         '</div>' +
         '<button class="billing-cfg-save" onclick="Labs._saveBillingConfig()">Save Billing Config</button>' +
       '</div>'
@@ -3092,7 +3094,7 @@ const Labs = (function () {
           'Quick Launch Templates' +
           '<span class="msv2-advisor-badge" style="background:var(--bdim);color:var(--blue2);font-size:10px;">Admin Only</span>' +
         '</div>' +
-        '<div class="billing-cfg-sub">Add or edit the preconfigured templates shown to admins and operators in Quick Launch.</div>' +
+        '<div class="billing-cfg-sub">Refine the curated templates shown in Quick Launch. Keep each option easy to compare, clearly positioned, and attractive for customers at a glance.</div>' +
         '<div class="tpl-admin-list">' +
           templates.map(function (tpl, index) {
             return _renderTemplateEditor(tpl, index);
@@ -3113,7 +3115,10 @@ const Labs = (function () {
     return (
       '<div class="tpl-admin-card" data-index="' + index + '">' +
         '<div class="tpl-admin-head">' +
-          '<div class="tpl-admin-title">Template ' + (index + 1) + '</div>' +
+          '<div>' +
+            '<div class="tpl-admin-title">Template ' + (index + 1) + '</div>' +
+            '<div class="tpl-admin-subtitle">This card appears in Quick Launch and should stay clear, concise, and easy to sell.</div>' +
+          '</div>' +
           '<button class="tpl-admin-remove" onclick="Labs._removeTemplateDraft(' + index + ')">Remove</button>' +
         '</div>' +
         '<div class="billing-cfg-grid tpl-admin-grid">' +
@@ -3129,8 +3134,8 @@ const Labs = (function () {
           '<div class="billing-cfg-field tpl-admin-wide"><label class="billing-cfg-label">Use Cases</label><input class="billing-cfg-input" id="tpl-usecases-' + index + '" value="' + _esc(useCases) + '" placeholder="Comma-separated examples"/></div>' +
         '</div>' +
         '<div class="billing-cfg-toggle tpl-admin-toggles">' +
-          '<label><input type="checkbox" id="tpl-monitor-' + index + '"' + (tpl.detailedMonitor !== false ? ' checked' : '') + '/> Detailed monitoring</label>' +
-          '<label><input type="checkbox" id="tpl-eip-' + index + '"' + (tpl.elasticIp !== false ? ' checked' : '') + '/> Elastic IP</label>' +
+          '<label class="billing-cfg-check" for="tpl-monitor-' + index + '"><input type="checkbox" id="tpl-monitor-' + index + '"' + (tpl.detailedMonitor !== false ? ' checked' : '') + '/><span>Detailed monitoring</span></label>' +
+          '<label class="billing-cfg-check" for="tpl-eip-' + index + '"><input type="checkbox" id="tpl-eip-' + index + '"' + (tpl.elasticIp !== false ? ' checked' : '') + '/><span>Elastic IP</span></label>' +
         '</div>' +
       '</div>'
     );

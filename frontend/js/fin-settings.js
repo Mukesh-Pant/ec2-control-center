@@ -97,7 +97,6 @@ const FinSettings = (function () {
 
   function onTabActivated() {
     _renderForm();
-    _renderBillingEngineSection();
     _renderTaxAccountsSection();
   }
 
