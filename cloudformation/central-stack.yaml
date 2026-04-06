@@ -1054,6 +1054,13 @@ Resources:
       ParentId: !Ref ResourceLabs
       PathPart: pricing-settings
 
+  ResourceLabsTemplates:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResourceLabs
+      PathPart: templates
+
   # =============================================
   # REST API - CORS Gateway Responses
   # Adds CORS headers to 4xx/5xx error responses
@@ -1792,6 +1799,61 @@ Resources:
             method.response.header.Access-Control-Allow-Origin: true
 
   # =============================================
+  # REST API - /labs/templates (M12 templates)
+  # =============================================
+  MethodGetLabsTemplates:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsTemplates
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodPostLabsTemplates:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsTemplates
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref RestApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MainLambda.Arn}/invocations'
+
+  MethodOptionsLabsTemplates:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceLabsTemplates
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # =============================================
   # REST API - Deployment + Stage
   # =============================================
   RestApiDeployment:
@@ -1834,9 +1896,12 @@ Resources:
       - MethodGetLabsPricingSettings
       - MethodPostLabsPricingSettings
       - MethodOptionsLabsPricingSettings
+      - MethodGetLabsTemplates
+      - MethodPostLabsTemplates
+      - MethodOptionsLabsTemplates
     Properties:
       RestApiId: !Ref RestApi
-      Description: !Sub 'Deployment ${LambdaCodeVersion}-billing-settings'
+      Description: !Sub 'Deployment ${LambdaCodeVersion}-labs-templates'
 
   RestApiStage:
     Type: AWS::ApiGateway::Stage

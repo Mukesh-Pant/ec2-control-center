@@ -2585,6 +2585,13 @@ const Labs = (function () {
     _renderLabsList();
   }
 
+  function _setFilter(filter) {
+    _activeFilter = filter || 'all';
+    _expandedLabId = null;
+    _labsPage = 0;
+    _renderLabsList();
+  }
+
   // ─── Bulk selection bar ───────────────────────────────────────
 
   function _renderBulkBar() {
@@ -3406,6 +3413,7 @@ const Labs = (function () {
     // v2 additions
     _startLab:           _startLab,
     _stopLab:            _stopLab,
+    _setFilter:          _setFilter,
     _handleSearch:       _handleSearch,
     _setSort:            _setSort,
     _toggleSelect:       _toggleSelect,
