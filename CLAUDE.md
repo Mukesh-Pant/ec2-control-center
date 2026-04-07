@@ -8,7 +8,7 @@ see all EC2 instances grouped by account and region, Start / Stop / check Status
 get idle auto-stop alerts, see billing insights, and manage member AWS accounts.
 Fully serverless, zero infrastructure to manage.
 
-**Live URL:** `https://solobil.com` (primary) | `www.solobil.com` redirects to it via CloudFront Function
+**Live URL:** `https://app.onecloudutopia.com`
 **Owner:** Mukesh | **Admin email:** pantm8877@gmail.com | **Region:** ap-south-1
 
 ---
@@ -23,12 +23,12 @@ Fully serverless, zero infrastructure to manage.
 | M4 | Idle auto-stop — CloudWatch CPU check every 15 min, SNS email alert | ✅ LIVE |
 | M5 | Multi-account — Add/enable/disable/test/remove accounts from portal UI | ✅ LIVE |
 | M6 | SaaS deployment — custom domain, ACM cert, Route 53 A ALIAS | ✅ LIVE |
-| M7 | Custom auth page + self-signup + domain migration to solobil.com | ✅ LIVE |
+| M7 | Custom auth page + self-signup + custom domain setup | ✅ LIVE |
 | M8 | RBAC — Cognito groups, user-account assignments, /users admin panel | ✅ LIVE |
 | M9 | Backup — AWS Backup service, on-demand + scheduled backups, restore, /backup endpoint | ✅ LIVE |
 | M10 | Console Login — one-click AWS Console via STS federation + Firefox container tabs extension | ✅ LIVE |
-| M11 | Labs — self-service EC2 lab provisioning, payment upload, pending-approval workflow, admin controls | 🚧 IN DEV |
-| M12 | Quick-Add Account — CloudFormation Quick-Create button in Add Account modal; public S3 template hosting; pre-filled params | 🚧 IN DEV |
+| M11 | Labs — self-service EC2 lab provisioning, payment upload, pending-approval workflow, admin controls | ✅ LIVE |
+| M12 | Quick-Add Account — CloudFormation Quick-Create button in Add Account modal; public S3 template hosting; pre-filled params | ✅ LIVE |
 | Perf | Performance — STS cred caching, boto3 singletons, script defer, skeleton loading, Lambda 512MB, CloudFront PriceClass_200 | ✅ LIVE |
 
 **API:** REST API v1 (migrated from HTTP API v2) with COGNITO_USER_POOLS authorizer.
@@ -39,10 +39,10 @@ Fully serverless, zero infrastructure to manage.
 
 ### SaaS / Production — `976792586566` (primary)
 - **Stack:** `ec2-control-production` (ap-south-1)
-- **Portal URL:** `https://solobil.com`
-- **Domains:** `solobil.com` (primary) + `www.solobil.com` (301 redirect)
-- **Hosted Zone:** `Z03300705IH6KUBEMK92`
-- **ACM Cert (us-east-1):** Deploy `acm-cert-stack.yaml` with `DomainName=solobil.com ApexDomain=www.solobil.com`
+- **Portal URL:** `https://app.onecloudutopia.com`
+- **Domain:** `app.onecloudutopia.com` (subdomain of `onecloudutopia.com`)
+- **Hosted Zone (onecloudutopia.com):** `Z09322302BWL3NDKZIX2J`
+- **ACM Cert (us-east-1):** Stack `ec2-control-acm-onecloudutopia` | `DomainName=app.onecloudutopia.com HostedZoneId=Z09322302BWL3NDKZIX2J`
 - **Cognito Domain Prefix:** `solobil-ec2-ctrl-prod`
 - **Code S3 Bucket:** `ec2-control-code-976792586566-ap-south-1`
 - **AWS CLI Profile:** `solobil-prod`
@@ -94,7 +94,7 @@ EC2-control-center/
 │   └── idle_checker/
 │       └── index.py            ← CPU check, auto-stop, SNS alert
 ├── firefox-extension/
-│   ├── manifest.json           ← MV3; matches solobil.com + www.solobil.com; permissions: contextualIdentities, cookies, tabs, storage
+│   ├── manifest.json           ← MV3; matches app.onecloudutopia.com; permissions: contextualIdentities, cookies, tabs, storage
 │   ├── background.js           ← Container tab manager: one named Firefox container per AWS account
 │   ├── content.js              ← Sets window.wrappedJSObject.EC2CTRL_EXTENSION=true; bridges postMessage → background
 │   └── icons/                  ← icon-48.png + icon-96.png
@@ -151,8 +151,7 @@ Console Login flow (M10):
     → content.js bridges to background.js
     → Firefox container tab opened (one named container per AWS account)
 
-Domain: solobil.com (primary) → CloudFront
-        www.solobil.com → CloudFront Function → 301 → solobil.com
+Domain: app.onecloudutopia.com → CloudFront
 
 EventBridge (every 15 min) → idle_checker Lambda → CloudWatch → auto-stop + SNS
 ```
@@ -361,7 +360,7 @@ The `?` after `#/stacks/create/review` is the SPA fragment query separator — t
 - Returns: `{ loginUrl, accountId, accountName }`
 
 ### Firefox Extension (firefox-extension/)
-- **manifest.json** (MV3): matches `https://solobil.com/*` AND `https://www.solobil.com/*` (portal serves on www subdomain without redirect)
+- **manifest.json** (MV3): matches `https://app.onecloudutopia.com/*`
 - **content.js**: uses `window.wrappedJSObject.EC2CTRL_EXTENSION = true` — Firefox XRay isolation requires `wrappedJSObject` to write to the underlying page window (direct `window.X = true` is invisible to page scripts)
 - **background.js**: one named Firefox container per AWS account (`EC2Ctrl — <accountName>`); if account tab is already open → focus it; containerId persisted across restarts; tabId cleared on tab close
 - Extension detection: page checks `window.EC2CTRL_EXTENSION`; content.js also dispatches `EC2CTRL_EXTENSION_READY` CustomEvent; install banner shown after 800ms if absent
@@ -531,7 +530,7 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 | Auth | Custom SRP via amazon-cognito-identity-js SDK | Full design control; password never leaves browser; no Hosted UI redirect |
 | Auth UI | Built-in login page in index.html | Enterprise branding; 6 form states; no external redirect |
 | Self-signup | Open to all (Cognito rate-limited) | SaaS product — anyone can create an account |
-| Domain | `solobil.com` (apex) as primary | Modern convention; `www.solobil.com` redirects via CloudFront Function |
+| Domain | `app.onecloudutopia.com` (subdomain of company domain) | Hosted under One Cloud Utopia's official domain; no apex redirect needed for a subdomain |
 | Lambda code | Versioned S3 zip key | Forces code update on every CF deploy |
 | Config injection | Custom Resource Lambda | Zero manual copy-paste of CF outputs |
 | Multi-account | STS AssumeRole + DynamoDB | Central creds; cross-account via role |
@@ -625,19 +624,19 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 ./deploy.sh
 ```
 
-**New custom domain setup (one-time):**
+**New custom domain setup (one-time per domain):**
 ```bash
-# 1. Deploy ACM cert to us-east-1
+# 1. Deploy ACM cert to us-east-1 (subdomain — no ApexDomain needed)
 aws cloudformation deploy \
   --template-file cloudformation/acm-cert-stack.yaml \
-  --stack-name ec2-control-acm-solobil --region us-east-1 --profile solobil-prod \
-  --parameter-overrides DomainName=solobil.com ApexDomain=www.solobil.com HostedZoneId=Z03300705IH6KUBEMK92
+  --stack-name ec2-control-acm-onecloudutopia --region us-east-1 --profile solobil-prod \
+  --parameter-overrides DomainName=app.onecloudutopia.com HostedZoneId=Z09322302BWL3NDKZIX2J
 
 # 2. Get cert ARN
-aws cloudformation describe-stacks --stack-name ec2-control-acm-solobil \
+aws cloudformation describe-stacks --stack-name ec2-control-acm-onecloudutopia \
   --region us-east-1 --profile solobil-prod --query 'Stacks[0].Outputs'
 
-# 3. Set CUSTOM_DOMAIN, APEX_DOMAIN, ACM_CERT_ARN, HOSTED_ZONE_ID in deploy-config.env, then run ./deploy.sh
+# 3. Set CUSTOM_DOMAIN=app.onecloudutopia.com, APEX_DOMAIN=, ACM_CERT_ARN, HOSTED_ZONE_ID in deploy-config.env, then run ./deploy.sh
 ```
 
 **deploy-config.env fields:** `ADMIN_EMAIL`, `COGNITO_DOMAIN_PREFIX`, `ENVIRONMENT`, `AWS_REGION` (required) | `AWS_PROFILE`, `NOTIFICATION_EMAIL`, `CUSTOM_DOMAIN`, `APEX_DOMAIN`, `ACM_CERT_ARN`, `HOSTED_ZONE_ID` (optional)

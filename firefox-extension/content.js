@@ -1,7 +1,7 @@
 /**
  * content.js - EC2 Control Console Login Extension
  *
- * Injected into solobil.com at document_start.
+ * Injected into app.onecloudutopia.com at document_start.
  * Signals to the portal that the extension is installed and bridges
  * window.postMessage calls from the page to the extension background.
  */
