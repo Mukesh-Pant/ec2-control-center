@@ -2,7 +2,7 @@
 
 A **production SaaS web portal** for managing EC2 instances across multiple AWS accounts — with custom authentication, audit logging, idle auto-stop, billing insights, backup & restore, and direct AWS Console access. Built by **One Cloud Utopia**.
 
-**Live Portal:** [https://solobil.com](https://solobil.com)
+**Live Portal:** [https://app.onecloudutopia.com](https://app.onecloudutopia.com)
 
 ---
 
@@ -60,7 +60,7 @@ Console Login flow:
     → Firefox Extension bridges URL to background.js
     → Opens AWS Console in isolated Firefox container tab (one container per account)
 
-Domain: solobil.com (primary) ← www.solobil.com redirects via CloudFront Function
+Domain: app.onecloudutopia.com → CloudFront
 
 EventBridge (every 15 min) → idle_checker Lambda → CloudWatch → auto-stop + SNS
 ```
@@ -109,7 +109,7 @@ EC2-control-center/
 │       └── vendor/
 │           └── amazon-cognito-identity.min.js  ← Cognito SDK v6.3.12 (CDN fallback)
 ├── firefox-extension/
-│   ├── manifest.json             ← MV3 extension manifest (solobil.com + www.solobil.com)
+│   ├── manifest.json             ← MV3 extension manifest (app.onecloudutopia.com)
 │   ├── background.js             ← Container tab manager: one named container per AWS account
 │   ├── content.js                ← Signals extension presence to portal; bridges postMessage to background
 │   └── icons/
@@ -185,7 +185,7 @@ This project uses a GitFlow-Lite workflow with two isolated AWS environments:
 | Branch | Environment | Deploy | Who can merge |
 |--------|-------------|--------|---------------|
 | `develop` | Dev (ocu_dev account) | Auto via GitHub Actions | 1 approval — any team member |
-| `main` | Production (solobil.com) | Auto via GitHub Actions | Mukesh approval required |
+| `main` | Production (app.onecloudutopia.com) | Auto via GitHub Actions | Mukesh approval required |
 
 **Workflow:**
 1. Create a feature branch from `develop`
