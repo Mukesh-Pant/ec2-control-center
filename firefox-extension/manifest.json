@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "EC2 Control — Console Login",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Opens AWS Console sessions in isolated Firefox containers for the EC2 Control portal (app.onecloudutopia.com).",
   "browser_specific_settings": {
     "gecko": {
@@ -13,15 +13,8 @@
       }
     }
   },
-  "permissions": [
-    "contextualIdentities",
-    "cookies",
-    "tabs",
-    "storage"
-  ],
-  "host_permissions": [
-    "https://app.onecloudutopia.com/*"
-  ],
+  "permissions": ["contextualIdentities", "cookies", "tabs", "storage"],
+  "host_permissions": ["https://app.onecloudutopia.com/*"],
   "content_scripts": [
     {
       "matches": ["https://app.onecloudutopia.com/*"],
