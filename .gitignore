@@ -28,6 +28,17 @@ Thumbs.db
 # Claude session files (keep .claude/ project memory out of repo)
 .claude/
 docs/superpowers/
+.kiro/
 
 # Git worktrees
 .worktrees/
+
+# Node / Vite (frontend rewrite)
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/stats.html
+*.tsbuildinfo
+
+# Legacy vanilla frontend (kept locally during React rewrite for reference, not deployed)
+legacy-frontend/

@@ -1,0 +1,111 @@
+/* ═══════════════════════════════════════════════
+   One Cloud Utopia — Design Tokens
+   Single source of truth. Ported verbatim from
+   design-reference/redesign/styles.css :root block.
+   Theme/density/font swap at runtime via [data-*] on <html>.
+   ═══════════════════════════════════════════════ */
+
+:root {
+  /* Brand — restored from onecloudutopia.com */
+  --navy:        #0a1733;
+  --navy-2:      #0f1e3a;
+  --navy-3:      #122c53;
+  --navy-4:      #1a3a6e;
+  --navy-glass:  rgba(18, 44, 83, .72);
+
+  --blue:        #2460e0;
+  --blue-2:      #3b7fff;
+  --blue-3:      #6ea3ff;
+  --blue-glow:   rgba(59, 127, 255, .45);
+  --blue-wash:   rgba(37, 96, 224, .10);
+  --blue-line:   rgba(59, 127, 255, .28);
+
+  /* Light surfaces */
+  --bg:          #f1f5fb;
+  --bg-2:        #e8edf8;
+  --surface:     #ffffff;
+  --surface-2:   #f6f8ff;
+  --line:        #dde4f2;
+  --line-2:      #c8d3e9;
+
+  /* Ink */
+  --ink:         #0d1b3e;
+  --ink-2:       #2d4070;
+  --ink-3:       #4e6cb3;
+  --ink-4:       #8fa5cc;
+  --ink-5:       #c8d3e9;
+
+  /* State */
+  --green:       #059669;
+  --green-2:     #10b981;
+  --green-wash:  rgba(5, 150, 105, .10);
+  --red:         #dc2626;
+  --red-2:       #ef4444;
+  --red-wash:    rgba(220, 38, 38, .08);
+  --amber:       #d97706;
+  --amber-2:     #f59e0b;
+  --amber-wash:  rgba(217, 119, 6, .10);
+
+  /* Typography */
+  --f-display: 'Syne', 'Inter', sans-serif;
+  --f-sans:    'Inter', -apple-system, sans-serif;
+  --f-mono:    'JetBrains Mono', monospace;
+
+  /* Density (overridden by [data-density="..."] below) */
+  --gap:   24px;
+  --pad:   28px;
+  --row-h: 48px;
+  --r-sm:  6px;
+  --r:     10px;
+  --r-lg:  14px;
+  --r-xl:  20px;
+
+  --sidebar-w: 248px;
+  --topbar-h:  68px;
+
+  /* Depth shadows — layered, premium */
+  --sh-1:    0 1px 2px rgba(13, 27, 62, .04), 0 1px 3px rgba(13, 27, 62, .05);
+  --sh-2:    0 4px 12px rgba(13, 27, 62, .06), 0 2px 4px rgba(13, 27, 62, .04);
+  --sh-3:    0 12px 32px rgba(13, 27, 62, .10), 0 4px 8px rgba(13, 27, 62, .06);
+  --sh-4:    0 24px 56px rgba(13, 27, 62, .14), 0 8px 16px rgba(13, 27, 62, .08);
+  --sh-blue: 0 8px 28px rgba(37, 96, 224, .28);
+  --sh-glow: 0 0 0 1px rgba(59, 127, 255, .18), 0 8px 32px rgba(59, 127, 255, .18);
+
+  /* Semantic accent (referenced by component ports) */
+  --accent: var(--blue);
+}
+
+[data-theme="dark"] {
+  --bg:          #050b1a;
+  --bg-2:        #08122a;
+  --surface:     #0c1934;
+  --surface-2:   #122247;
+  --line:        rgba(110, 163, 255, .10);
+  --line-2:      rgba(110, 163, 255, .18);
+  --ink:         #e8eeff;
+  --ink-2:       #b8c5e8;
+  --ink-3:       #8da2cc;
+  --ink-4:       #5a6e9e;
+  --ink-5:       #344266;
+  --sh-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --sh-2: 0 6px 18px rgba(0, 0, 0, .45);
+  --sh-3: 0 16px 40px rgba(0, 0, 0, .55);
+  --sh-4: 0 28px 64px rgba(0, 0, 0, .6);
+}
+
+[data-density="airy"]     { --gap: 32px; --pad: 36px; --row-h: 56px; }
+[data-density="balanced"] { --gap: 24px; --pad: 28px; --row-h: 48px; }
+[data-density="compact"]  { --gap: 16px; --pad: 20px; --row-h: 40px; }
+
+[data-font="inter"] {
+  --f-display: 'Syne', 'Inter', sans-serif;
+  --f-sans:    'Inter', -apple-system, sans-serif;
+}
+[data-font="manrope"] {
+  --f-display: 'Manrope', 'Inter', sans-serif;
+  --f-sans:    'Manrope', -apple-system, sans-serif;
+}
+[data-font="plex"] {
+  --f-display: 'IBM Plex Sans', 'Inter', sans-serif;
+  --f-sans:    'IBM Plex Sans', -apple-system, sans-serif;
+}

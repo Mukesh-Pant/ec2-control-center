@@ -75,9 +75,35 @@ echo "    Zipping labs_expiry_checker..."
 echo "    Zipping config_injector..."
 (cd "$SCRIPT_DIR/lambda/config_injector" && zip -qr "$TEMP_DIR/config-injector.zip" .)
 
-# ─── Step 3: Package frontend ───
-echo "    Zipping frontend..."
-(cd "$SCRIPT_DIR/frontend" && zip -qr "$TEMP_DIR/frontend.zip" .)
+# ─── Step 3: Build & package frontend ───
+# The frontend is now a Vite + React + TypeScript app. We build it to
+# frontend/dist/ then zip the dist contents (not the raw source).
+# The config_injector Lambda still runs after this and replaces the
+# `const CONFIG = { /*__INJECT__*/ };` placeholder in dist/index.html.
+echo ""
+echo "==> Building frontend (Vite/React/TS)..."
+if ! command -v npm >/dev/null 2>&1; then
+  echo "ERROR: npm not found. Install Node.js 20+ to build the frontend."
+  exit 1
+fi
+
+(
+  cd "$SCRIPT_DIR/frontend"
+  if [ -f package-lock.json ]; then
+    npm ci --no-audit --no-fund
+  else
+    npm install --no-audit --no-fund
+  fi
+  npm run build
+)
+
+if [ ! -f "$SCRIPT_DIR/frontend/dist/index.html" ]; then
+  echo "ERROR: frontend build did not produce dist/index.html"
+  exit 1
+fi
+
+echo "    Zipping frontend dist/..."
+(cd "$SCRIPT_DIR/frontend/dist" && zip -qr "$TEMP_DIR/frontend.zip" .)
 
 # ─── Step 4: Upload to S3 ───
 echo ""

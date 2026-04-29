@@ -1,0 +1,84 @@
+/* ═══════════════════════════════════════════════
+   CSS entry point.
+
+   Order is intentional:
+   1. Tailwind v4 (preflight + utilities)
+   2. Tokens (defines --bg, --ink, --blue, etc. + theme/density/font selectors)
+   3. Globals (base reset, body, keyframes — uses tokens)
+   4. @theme bridge (maps tokens → Tailwind utility names)
+
+   The @theme block must live in the same module graph as `@import 'tailwindcss'`
+   so the v4 engine picks it up at build time.
+   ═══════════════════════════════════════════════ */
+
+@import 'tailwindcss';
+@import './tokens.css';
+@import './globals.css';
+
+/* ─────────────────────────────────────────────────
+   Tailwind v4 @theme — semantic utility bridge
+   Each token maps to a Tailwind utility name:
+     --color-bg → bg-bg, --color-ink → text-ink, etc.
+   At runtime, utilities resolve to the underlying CSS
+   variables (var(--bg), var(--ink)) which auto-swap
+   when [data-theme="dark"] flips on <html>.
+   ───────────────────────────────────────────────── */
+@theme {
+  /* Brand */
+  --color-navy:       var(--navy);
+  --color-navy-2:     var(--navy-2);
+  --color-navy-3:     var(--navy-3);
+  --color-navy-4:     var(--navy-4);
+  --color-blue:       var(--blue);
+  --color-blue-2:     var(--blue-2);
+  --color-blue-3:     var(--blue-3);
+
+  /* Surfaces */
+  --color-bg:         var(--bg);
+  --color-bg-2:       var(--bg-2);
+  --color-surface:    var(--surface);
+  --color-surface-2:  var(--surface-2);
+  --color-line:       var(--line);
+  --color-line-2:     var(--line-2);
+
+  /* Ink */
+  --color-ink:        var(--ink);
+  --color-ink-2:      var(--ink-2);
+  --color-ink-3:      var(--ink-3);
+  --color-ink-4:      var(--ink-4);
+  --color-ink-5:      var(--ink-5);
+
+  /* State */
+  --color-green:      var(--green);
+  --color-green-2:    var(--green-2);
+  --color-red:        var(--red);
+  --color-red-2:      var(--red-2);
+  --color-amber:      var(--amber);
+  --color-amber-2:    var(--amber-2);
+
+  --color-accent:     var(--blue);
+
+  /* Typography (drives font-display, font-sans, font-mono utilities) */
+  --font-display:     var(--f-display);
+  --font-sans:        var(--f-sans);
+  --font-mono:        var(--f-mono);
+
+  /* Radii (drives rounded-sm, rounded, rounded-lg, rounded-xl) */
+  --radius-sm:        var(--r-sm);
+  --radius:           var(--r);
+  --radius-lg:        var(--r-lg);
+  --radius-xl:        var(--r-xl);
+
+  /* Custom shadows (drives shadow-1..4, shadow-blue, shadow-glow) */
+  --shadow-1:         var(--sh-1);
+  --shadow-2:         var(--sh-2);
+  --shadow-3:         var(--sh-3);
+  --shadow-4:         var(--sh-4);
+  --shadow-blue:      var(--sh-blue);
+  --shadow-glow:      var(--sh-glow);
+}
+
+/* dark variant: lets Tailwind utilities respond to data-theme="dark"
+   for cases where a CSS-variable token alone isn't enough
+   (e.g. ring/border opacity modifiers). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
