@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>One Cloud Utopia — Your Cloud. Unified. Simplified.</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='3' y='3' width='18' height='7' rx='1.5' fill='%232460e0'/><rect x='3' y='14' width='18' height='7' rx='1.5' fill='%232460e0'/></svg>" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="redesign/styles.css?v=5" />
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.js"></script>
+  <script>
+    // Lucide-react-like component proxy from the UMD lib
+    window.addEventListener('DOMContentLoaded', () => {
+      if (!window.lucide) return;
+      const L = {};
+      const cache = {};
+      const make = (name) => function LucideIcon({ size = 16, strokeWidth = 1.5, color = 'currentColor', ...rest }) {
+        const data = window.lucide.icons[name] || window.lucide.icons[name.toLowerCase()];
+        if (!data) return null;
+        // Lucide UMD format: ["svg", {attrs}, [[tag, attrs], [tag, attrs], ...]]
+        const children = Array.isArray(data[2]) ? data[2] : [];
+        return React.createElement('svg', {
+          xmlns: 'http://www.w3.org/2000/svg', width: size, height: size, viewBox: '0 0 24 24',
+          fill: 'none', stroke: color, strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round', ...rest
+        }, children.map((d, i) => {
+          if (!Array.isArray(d) || typeof d[0] !== 'string') return null;
+          return React.createElement(d[0], { key: i, ...(d[1] || {}) });
+        }));
+      };
+      // Convert kebab-case lucide keys to PascalCase API
+      Object.keys(window.lucide.icons || {}).forEach(k => {
+        const pascal = k.replace(/(^|-)(\w)/g, (_, __, c) => c.toUpperCase());
+        if (!cache[pascal]) cache[pascal] = make(k);
+        L[pascal] = cache[pascal];
+      });
+      window.Lucide = L;
+      window.dispatchEvent(new Event('lucide-ready'));
+    });
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="env,react" src="redesign/data.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="redesign/ui.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="redesign/shell.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="redesign/screens.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="redesign/landing.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="redesign/login.jsx"></script>
+  <script type="text/babel" data-presets="env,react" src="redesign/app.jsx"></script>
+</body>
+</html>
