@@ -124,5 +124,4 @@ export interface BackupMutationResponse {
   message: string;
   recoveryPointArn?: string;
   planId?: string;
-  loginUrl?: string;
 }
