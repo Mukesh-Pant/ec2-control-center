@@ -27,7 +27,7 @@ Thumbs.db
 
 # Claude session files (keep .claude/ project memory out of repo)
 .claude/
-docs/superpowers/
+docs/superpowers/cache/
 .kiro/
 
 # Git worktrees
