@@ -9,9 +9,9 @@ export default function AnalyticsScreen() {
   const stopped  = inst.filter((i) => i.state === 'stopped').length;
   const types    = Array.from(new Set(inst.map((i) => i.instanceType)));
   const accounts = Array.from(
-    inst.reduce<Map<string, { name: string; count: number }>>(
+    inst.reduce<Map<string, { accountId: string; name: string; count: number }>>(
       (m, i) => {
-        const e = m.get(i.accountId) ?? { name: i.accountName, count: 0 };
+        const e = m.get(i.accountId) ?? { accountId: i.accountId, name: i.accountName, count: 0 };
         e.count++;
         m.set(i.accountId, e);
         return m;
@@ -65,7 +65,7 @@ export default function AnalyticsScreen() {
             {accounts.map((a) => {
               const pct = inst.length === 0 ? 0 : Math.round((a.count / inst.length) * 100);
               return (
-                <div key={a.name} style={{ marginBottom: 16 }}>
+                <div key={a.accountId} style={{ marginBottom: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                     <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{a.name}</span>
                     <span style={{ fontFamily: 'var(--f-mono)', fontSize: 13, color: 'var(--ink)', fontVariantNumeric: 'tabular-nums' }}>

@@ -11,7 +11,7 @@ export default function InstancesScreen() {
 
   const inst = data?.instances ?? [];
   const grouped = inst.reduce<Record<string, Instance[]>>((acc, i) => {
-    const key = i.accountName;
+    const key = i.accountId;
     const list = acc[key] ?? [];
     list.push(i);
     acc[key] = list;
@@ -47,13 +47,13 @@ export default function InstancesScreen() {
         </div>
       )}
 
-      {Object.entries(grouped).map(([acctName, rows]) => {
-        const accountId = rows[0]?.accountId ?? '';
+      {Object.entries(grouped).map(([acctId, rows]) => {
+        const acctName = rows[0]?.accountName ?? acctId;
         return (
           <Card
-            key={acctName}
+            key={acctId}
             title={acctName}
-            subtitle={accountId}
+            subtitle={acctId}
             pad={false}
             className="mb-gap"
           >
