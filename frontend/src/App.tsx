@@ -1,12 +1,27 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { bindTweaksToDocument } from '@/stores/tweaks';
 import { useAuth } from '@/stores/auth';
 import { RequireAuth } from '@/components/RequireAuth';
 import LandingPage from '@/features/landing/LandingPage';
 import LoginPage from '@/features/login/LoginPage';
+import { AppShell } from '@/features/app/AppShell';
 import { PhasePlaceholder } from '@/pages/PhasePlaceholder';
+
+import DashboardScreen from '@/pages/app/DashboardScreen';
+import InstancesScreen from '@/pages/app/InstancesScreen';
+import MyServersScreen from '@/pages/app/MyServersScreen';
+import BackupsScreen from '@/pages/app/BackupsScreen';
+import BillingScreen from '@/pages/app/BillingScreen';
+import AnalyticsScreen from '@/pages/app/AnalyticsScreen';
+import AuditScreen from '@/pages/app/AuditScreen';
+import VendorsScreen from '@/pages/app/VendorsScreen';
+import CustomersScreen from '@/pages/app/CustomersScreen';
+import AlertsScreen from '@/pages/app/AlertsScreen';
+import FinSettingsScreen from '@/pages/app/FinSettingsScreen';
+import AccountsScreen from '@/pages/app/AccountsScreen';
+import UsersScreen from '@/pages/app/UsersScreen';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,18 +49,32 @@ function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
+
           <Route
-            path="/app/*"
+            path="/app"
             element={
               <RequireAuth>
-                <PhasePlaceholder
-                  phase="Phase 4"
-                  title="Dashboard shell coming next"
-                  description="Sidebar + topbar + nested routes for all 13 screens. You're authenticated, so the next push will drop you straight into /app/dashboard."
-                />
+                <AppShell />
               </RequireAuth>
             }
-          />
+          >
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardScreen />} />
+            <Route path="instances" element={<InstancesScreen />} />
+            <Route path="servers" element={<MyServersScreen />} />
+            <Route path="backups" element={<BackupsScreen />} />
+            <Route path="billing" element={<BillingScreen />} />
+            <Route path="analytics" element={<AnalyticsScreen />} />
+            <Route path="audit" element={<AuditScreen />} />
+            <Route path="vendors" element={<VendorsScreen />} />
+            <Route path="customers" element={<CustomersScreen />} />
+            <Route path="alerts" element={<AlertsScreen />} />
+            <Route path="finsettings" element={<FinSettingsScreen />} />
+            <Route path="accounts" element={<AccountsScreen />} />
+            <Route path="users" element={<UsersScreen />} />
+            <Route path="*" element={<Navigate to="dashboard" replace />} />
+          </Route>
+
           <Route
             path="*"
             element={
