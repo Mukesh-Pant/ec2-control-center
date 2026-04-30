@@ -119,8 +119,8 @@ export default function AuditScreen() {
             {!isLoading && items.length === 0 && (
               <tr><td colSpan={7} style={{ padding: 'var(--pad)', color: 'var(--ink-3)', fontSize: 13 }}>No audit entries found.</td></tr>
             )}
-            {items.map((r, idx) => (
-              <tr key={`${r.instanceId}-${idx}`}>
+            {items.map((r) => (
+              <tr key={`${r.instanceId}-${r.timestamp}`}>
                 <td className="mono">{r.timestamp}</td>
                 <td><span className={`action-chip ${r.action}`}>{r.action}</span></td>
                 <td>
