@@ -82,8 +82,13 @@ function AccountCard({ a }: { a: Account }) {
     }
   };
 
-  const doRemove = () => {
-    void mut.mutateAsync({ action: 'remove', accountId: a.accountId });
+  const doRemove = async () => {
+    setMutError('');
+    try {
+      await mut.mutateAsync({ action: 'remove', accountId: a.accountId });
+    } catch (err) {
+      setMutError(err instanceof Error ? err.message : 'Failed to remove account.');
+    }
   };
 
   return (
@@ -125,7 +130,7 @@ function AccountCard({ a }: { a: Account }) {
         <div style={{ padding: '12px var(--pad)', background: 'var(--surface-2)', borderTop: '1px solid var(--line)', fontSize: 13 }}>
           <div style={{ marginBottom: 10, color: 'var(--ink-2)' }}>Remove this account? This cannot be undone.</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant="danger" size="xs" onClick={doRemove} disabled={mut.isPending}>Confirm remove</Button>
+            <Button variant="danger" size="xs" onClick={() => void doRemove()} disabled={mut.isPending}>Confirm remove</Button>
             <Button variant="ghost" size="xs" onClick={() => setConfirmRemove(false)}>Cancel</Button>
           </div>
         </div>
