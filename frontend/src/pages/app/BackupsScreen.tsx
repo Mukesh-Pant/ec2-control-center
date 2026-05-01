@@ -17,10 +17,11 @@ function friendlyCron(expr: string): string {
   const min  = m[1] ?? '0';
   const hour = m[2] ?? '0';
   const dom  = m[3] ?? '*';
+  const dow  = m[5] ?? '?';
   const time = `${hour.padStart(2, '0')}:${min.padStart(2, '0')} UTC`;
   if (dom === '1') return `Monthly (1st) at ${time}`;
-  if (dom === '*' || dom === '?') return `Daily at ${time}`;
-  return `Weekly (Sun) at ${time}`;
+  if (dow !== '?' && dow !== '*') return `Weekly (Sun) at ${time}`;
+  return `Daily at ${time}`;
 }
 
 function buildCron(preset: string, hour: string, minute: string): string {
@@ -64,10 +65,24 @@ interface ScheduleFormProps {
   onCancel: () => void;
   isPending: boolean;
 }
+function parseCron(expr: string): { preset: string; hour: string; minute: string } {
+  const m = expr.match(/cron\((\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)/);
+  if (!m) return { preset: 'daily', hour: '02', minute: '00' };
+  const dom = m[3] ?? '*';
+  const dow = m[5] ?? '?';
+  const preset = dom === '1' ? 'monthly' : (dow !== '?' && dow !== '*') ? 'weekly' : 'daily';
+  return {
+    preset,
+    hour:   (m[2] ?? '2').padStart(2, '0'),
+    minute: (m[1] ?? '0').padStart(2, '0'),
+  };
+}
+
 function ScheduleForm({ plan, onSave, onCancel, isPending }: ScheduleFormProps) {
-  const [preset, setPreset] = useState('daily');
-  const [hour, setHour]     = useState('02');
-  const [minute, setMinute] = useState('00');
+  const init = plan ? parseCron(plan.scheduleExpression) : { preset: 'daily', hour: '02', minute: '00' };
+  const [preset, setPreset] = useState(init.preset);
+  const [hour, setHour]     = useState(init.hour);
+  const [minute, setMinute] = useState(init.minute);
   return (
     <div style={{ padding: 16, background: 'var(--surface-2)', borderTop: '1px solid var(--line)' }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{plan ? 'Edit schedule' : 'Create backup schedule'}</div>
