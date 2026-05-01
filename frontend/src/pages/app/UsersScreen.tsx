@@ -18,23 +18,39 @@ const roleTone: Record<string, 'accent' | 'ok' | 'muted' | 'warn'> = {
 function UserRow({ u, accounts }: { u: UserRecord; accounts: { accountId: string; accountName: string }[] }) {
   const mut = useUserMutation();
   const role = roleFromGroups(u.groups);
-  const [selected, setSelected]         = useState<string>(role);
-  const [grantAcct, setGrantAcct]       = useState('');
+  const [selected, setSelected]           = useState<string>(role);
+  const [grantAcct, setGrantAcct]         = useState('');
   const [confirmRevoke, setConfirmRevoke] = useState('');
+  const [mutError, setMutError]           = useState('');
 
-  const applyRole = () => {
-    void mut.mutateAsync({ action: 'setrole', email: u.email, role: selected });
+  const applyRole = async () => {
+    setMutError('');
+    try {
+      await mut.mutateAsync({ action: 'setrole', email: u.email, role: selected });
+    } catch (err) {
+      setMutError(err instanceof Error ? err.message : 'Failed to update role.');
+    }
   };
 
-  const grantAccount = () => {
+  const grantAccount = async () => {
     if (!grantAcct) return;
-    void mut.mutateAsync({ action: 'grantaccount', email: u.email, accountId: grantAcct, accessLevel: 'operator' })
-      .then(() => setGrantAcct(''));
+    setMutError('');
+    try {
+      await mut.mutateAsync({ action: 'grantaccount', email: u.email, accountId: grantAcct, accessLevel: 'operator' });
+      setGrantAcct('');
+    } catch (err) {
+      setMutError(err instanceof Error ? err.message : 'Failed to grant account.');
+    }
   };
 
-  const revokeAccount = (accountId: string) => {
-    void mut.mutateAsync({ action: 'revokeaccount', email: u.email, accountId })
-      .then(() => setConfirmRevoke(''));
+  const revokeAccount = async (accountId: string) => {
+    setMutError('');
+    try {
+      await mut.mutateAsync({ action: 'revokeaccount', email: u.email, accountId });
+      setConfirmRevoke('');
+    } catch (err) {
+      setMutError(err instanceof Error ? err.message : 'Failed to revoke account.');
+    }
   };
 
   return (
@@ -55,7 +71,7 @@ function UserRow({ u, accounts }: { u: UserRecord; accounts: { accountId: string
             <option value="viewer">Viewer (read-only)</option>
             <option value="none">None (pending)</option>
           </select>
-          <Button size="xs" variant="accent" onClick={applyRole} disabled={mut.isPending || selected === role}>Apply</Button>
+          <Button size="xs" variant="accent" onClick={() => void applyRole()} disabled={mut.isPending || selected === role}>Apply</Button>
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
           <select className="inp" style={{ height: 28, fontSize: 12, width: 180 }} value={grantAcct} onChange={(e) => setGrantAcct(e.target.value)}>
@@ -64,13 +80,13 @@ function UserRow({ u, accounts }: { u: UserRecord; accounts: { accountId: string
               .filter((a) => !u.accounts.find((ua) => ua.accountId === a.accountId))
               .map((a) => <option key={a.accountId} value={a.accountId}>{a.accountName}</option>)}
           </select>
-          <Button size="xs" variant="ghost" icon="Plus" onClick={grantAccount} disabled={!grantAcct || mut.isPending}>Grant</Button>
+          <Button size="xs" variant="ghost" icon="Plus" onClick={() => void grantAccount()} disabled={!grantAcct || mut.isPending}>Grant</Button>
         </div>
         {u.accounts.map((ua) =>
           confirmRevoke === ua.accountId ? (
             <div key={ua.accountId} style={{ display: 'flex', gap: 4, marginTop: 4, alignItems: 'center' }}>
               <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>Revoke {ua.accountId}?</span>
-              <Button size="xs" variant="danger" onClick={() => revokeAccount(ua.accountId)} disabled={mut.isPending}>Yes</Button>
+              <Button size="xs" variant="danger" onClick={() => void revokeAccount(ua.accountId)} disabled={mut.isPending}>Yes</Button>
               <Button size="xs" variant="ghost" onClick={() => setConfirmRevoke('')}>No</Button>
             </div>
           ) : (
@@ -80,6 +96,9 @@ function UserRow({ u, accounts }: { u: UserRecord; accounts: { accountId: string
               </Button>
             </div>
           )
+        )}
+        {mutError && (
+          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--danger)' }}>{mutError}</div>
         )}
       </td>
     </tr>

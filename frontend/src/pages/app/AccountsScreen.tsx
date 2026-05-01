@@ -60,6 +60,7 @@ function AccountCard({ a }: { a: Account }) {
   const mut = useAccountMutation();
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [testResult, setTestResult]       = useState('');
+  const [mutError, setMutError]           = useState('');
 
   const doTest = async () => {
     setTestResult('Testing…');
@@ -72,12 +73,17 @@ function AccountCard({ a }: { a: Account }) {
     setTimeout(() => setTestResult(''), 4000);
   };
 
-  const doToggle = () => {
-    void mut.mutateAsync({ action: a.enabled ? 'disable' : 'enable', accountId: a.accountId });
+  const doToggle = async () => {
+    setMutError('');
+    try {
+      await mut.mutateAsync({ action: a.enabled ? 'disable' : 'enable', accountId: a.accountId });
+    } catch (err) {
+      setMutError(err instanceof Error ? err.message : 'Action failed.');
+    }
   };
 
   const doRemove = () => {
-    void mut.mutateAsync({ action: 'remove', accountId: a.accountId }).then(() => setConfirmRemove(false));
+    void mut.mutateAsync({ action: 'remove', accountId: a.accountId });
   };
 
   return (
@@ -110,6 +116,11 @@ function AccountCard({ a }: { a: Account }) {
           {testResult}
         </div>
       )}
+      {mutError && (
+        <div style={{ padding: '6px var(--pad)', fontSize: 12, color: 'var(--danger)' }}>
+          {mutError}
+        </div>
+      )}
       {confirmRemove && (
         <div style={{ padding: '12px var(--pad)', background: 'var(--surface-2)', borderTop: '1px solid var(--line)', fontSize: 13 }}>
           <div style={{ marginBottom: 10, color: 'var(--ink-2)' }}>Remove this account? This cannot be undone.</div>
@@ -123,7 +134,7 @@ function AccountCard({ a }: { a: Account }) {
         <Button size="xs" variant="ghost" icon="Activity" onClick={() => void doTest()} disabled={mut.isPending}>Test</Button>
         {!a.isCentral && (
           <>
-            <Button size="xs" variant="ghost" icon={a.enabled ? 'PauseCircle' : 'PlayCircle'} onClick={doToggle} disabled={mut.isPending}>
+            <Button size="xs" variant="ghost" icon={a.enabled ? 'PauseCircle' : 'PlayCircle'} onClick={() => void doToggle()} disabled={mut.isPending}>
               {a.enabled ? 'Disable' : 'Enable'}
             </Button>
             <Button size="xs" variant="danger" icon="Trash2" onClick={() => setConfirmRemove(true)}>Remove</Button>
