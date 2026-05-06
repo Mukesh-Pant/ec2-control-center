@@ -2,7 +2,37 @@ import { useState } from 'react';
 import { Badge, Button, Icon, PageHeader } from '@/components/ui';
 import { useAccounts, useAccountMutation, useConsoleLogin } from '@/lib/queries/accounts';
 import { getRole } from '@/lib/auth';
+import { getConfig } from '@/lib/config';
 import type { Account } from '@/types/api';
+
+const CF_REGIONS = [
+  { value: 'ap-south-1',    label: 'Asia Pacific (Mumbai)' },
+  { value: 'us-east-1',     label: 'US East (N. Virginia)' },
+  { value: 'us-east-2',     label: 'US East (Ohio)' },
+  { value: 'us-west-1',     label: 'US West (N. California)' },
+  { value: 'us-west-2',     label: 'US West (Oregon)' },
+  { value: 'eu-west-1',     label: 'Europe (Ireland)' },
+  { value: 'eu-central-1',  label: 'Europe (Frankfurt)' },
+  { value: 'ap-southeast-1', label: 'Asia Pacific (Singapore)' },
+  { value: 'ap-northeast-1', label: 'Asia Pacific (Tokyo)' },
+] as const;
+
+function buildCFUrl(region: string): string | null {
+  const cfg = getConfig();
+  const tpl = cfg.MEMBER_ROLE_TEMPLATE_URL;
+  const central = cfg.CENTRAL_ACCOUNT_ID;
+  const env = cfg.ENVIRONMENT;
+  if (!tpl || !central || !env) return null;
+  return (
+    `https://${region}.console.aws.amazon.com/cloudformation/home` +
+    `?region=${region}` +
+    `#/stacks/create/review` +
+    `?templateURL=${encodeURIComponent(tpl)}` +
+    `&stackName=ec2-control-member-role` +
+    `&param_CentralAccountId=${encodeURIComponent(central)}` +
+    `&param_Environment=${encodeURIComponent(env)}`
+  );
+}
 
 function AddAccountModal({ onClose }: { onClose: () => void }) {
   const mut = useAccountMutation();
@@ -11,6 +41,13 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
   const [roleArn, setRoleArn]         = useState('');
   const [consoleArn, setConsoleArn]   = useState('');
   const [error, setError]             = useState('');
+  const [cfRegion, setCfRegion]       = useState('ap-south-1');
+
+  const openCloudFormation = () => {
+    const url = buildCFUrl(cfRegion);
+    if (!url) { setError('Portal config not yet available. Try again in a moment.'); return; }
+    window.open(url, '_blank');
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +60,15 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const sectionLabelStyle: React.CSSProperties = {
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
+    color: 'var(--ink-3)',
+    marginBottom: 10,
+  };
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: 28, width: 480, maxWidth: '92vw' }}>
@@ -33,6 +79,33 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <form onSubmit={(e) => { void submit(e); }}>
+
+          {/* Step 1 — Deploy cross-account role */}
+          <div style={sectionLabelStyle}>Step 1 — Deploy Cross-Account Role</div>
+          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: 14, marginBottom: 20 }}>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label className="field-label" htmlFor="cf-region">AWS region to deploy into</label>
+              <select
+                id="cf-region"
+                className="inp"
+                value={cfRegion}
+                onChange={(e) => setCfRegion(e.target.value)}
+              >
+                {CF_REGIONS.map((r) => (
+                  <option key={r.value} value={r.value}>{r.value} — {r.label}</option>
+                ))}
+              </select>
+            </div>
+            <Button variant="accent" size="sm" icon="ExternalLink" type="button" onClick={openCloudFormation}>
+              Open CloudFormation in AWS Console
+            </Button>
+            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
+              After the stack reaches <strong>CREATE_COMPLETE</strong>, copy the <strong>RoleArn</strong> and <strong>ConsoleRoleArn</strong> from the Outputs tab into Step 2 below.
+            </div>
+          </div>
+
+          {/* Step 2 — Enter account details */}
+          <div style={sectionLabelStyle}>Step 2 — Enter Account Details</div>
           {[
             { id: 'acct-id',   label: 'Account ID',             val: accountId,   set: setAccountId,   ph: '123456789012' },
             { id: 'acct-name', label: 'Account name',           val: accountName, set: setAccountName, ph: 'My Team Account' },
@@ -44,6 +117,7 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
               <input id={id} className="inp" value={val} onChange={(e) => set(e.target.value)} placeholder={ph} required />
             </div>
           ))}
+
           {error && <div style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <Button variant="ghost" size="sm" type="button" onClick={onClose}>Cancel</Button>
