@@ -17,6 +17,15 @@ const CF_REGIONS = [
   { value: 'ap-northeast-1', label: 'Asia Pacific (Tokyo)' },
 ] as const;
 
+const SECTION_LABEL_STYLE: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: '0.05em',
+  textTransform: 'uppercase',
+  color: 'var(--ink-3)',
+  marginBottom: 10,
+};
+
 function buildCFUrl(region: string): string | null {
   const cfg = getConfig();
   const tpl = cfg.MEMBER_ROLE_TEMPLATE_URL;
@@ -41,12 +50,14 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
   const [roleArn, setRoleArn]         = useState('');
   const [consoleArn, setConsoleArn]   = useState('');
   const [error, setError]             = useState('');
-  const [cfRegion, setCfRegion]       = useState('ap-south-1');
+  const [cfError, setCfError]         = useState('');
+  const [cfRegion, setCfRegion]       = useState<string>(CF_REGIONS[0]?.value ?? 'ap-south-1');
 
   const openCloudFormation = () => {
     const url = buildCFUrl(cfRegion);
-    if (!url) { setError('Portal config not yet available. Try again in a moment.'); return; }
-    window.open(url, '_blank');
+    if (!url) { setCfError('Portal config not yet available. Try again in a moment.'); return; }
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setCfError('');
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -58,15 +69,6 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add account.');
     }
-  };
-
-  const sectionLabelStyle: React.CSSProperties = {
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: '0.05em',
-    textTransform: 'uppercase',
-    color: 'var(--ink-3)',
-    marginBottom: 10,
   };
 
   return (
@@ -81,7 +83,7 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
         <form onSubmit={(e) => { void submit(e); }}>
 
           {/* Step 1 — Deploy cross-account role */}
-          <div style={sectionLabelStyle}>Step 1 — Deploy Cross-Account Role</div>
+          <div style={SECTION_LABEL_STYLE}>Step 1 — Deploy Cross-Account Role</div>
           <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: 14, marginBottom: 20 }}>
             <div className="field" style={{ marginBottom: 12 }}>
               <label className="field-label" htmlFor="cf-region">AWS region to deploy into</label>
@@ -89,7 +91,7 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
                 id="cf-region"
                 className="inp"
                 value={cfRegion}
-                onChange={(e) => setCfRegion(e.target.value)}
+                onChange={(e) => { setCfRegion(e.target.value); setCfError(''); }}
               >
                 {CF_REGIONS.map((r) => (
                   <option key={r.value} value={r.value}>{r.value} — {r.label}</option>
@@ -99,13 +101,14 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
             <Button variant="accent" size="sm" icon="ExternalLink" type="button" onClick={openCloudFormation}>
               Open CloudFormation in AWS Console
             </Button>
+            {cfError && <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 6 }}>{cfError}</div>}
             <div style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
               After the stack reaches <strong>CREATE_COMPLETE</strong>, copy the <strong>RoleArn</strong> and <strong>ConsoleRoleArn</strong> from the Outputs tab into Step 2 below.
             </div>
           </div>
 
           {/* Step 2 — Enter account details */}
-          <div style={sectionLabelStyle}>Step 2 — Enter Account Details</div>
+          <div style={SECTION_LABEL_STYLE}>Step 2 — Enter Account Details</div>
           {[
             { id: 'acct-id',   label: 'Account ID',             val: accountId,   set: setAccountId,   ph: '123456789012' },
             { id: 'acct-name', label: 'Account name',           val: accountName, set: setAccountName, ph: 'My Team Account' },
@@ -177,7 +180,7 @@ function AccountCard({ a }: { a: Account }) {
       if (ext) {
         window.postMessage({ type: 'EC2CTRL_OPEN_CONSOLE', loginUrl: res.loginUrl, accountId: res.accountId, accountName: res.accountName }, '*');
       } else {
-        window.open(res.loginUrl, '_blank');
+        window.open(res.loginUrl, '_blank', 'noopener,noreferrer');
       }
     } catch (err) {
       setMutError(err instanceof Error ? err.message : 'Console login failed.');
