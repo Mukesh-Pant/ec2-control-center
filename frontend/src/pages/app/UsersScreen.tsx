@@ -59,9 +59,9 @@ function UserRow({ u, accounts }: { u: UserRecord; accounts: { accountId: string
       <td><Badge tone={roleTone[role] ?? 'muted'}>{role}</Badge></td>
       <td><Badge tone={u.status === 'CONFIRMED' ? 'ok' : 'muted'} dot>{u.status}</Badge></td>
       <td style={{ fontSize: 12, color: 'var(--ink-2)', fontFamily: 'var(--f-mono)' }}>
-        {u.accounts.length === 0
+        {u.accountAssignments.length === 0
           ? 'None'
-          : u.accounts.map((a) => `${a.accountId} · ${a.accessLevel.toUpperCase()}`).join(', ')}
+          : u.accountAssignments.map((a) => `${a.accountId} · ${a.accessLevel.toUpperCase()}`).join(', ')}
       </td>
       <td>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -77,12 +77,12 @@ function UserRow({ u, accounts }: { u: UserRecord; accounts: { accountId: string
           <select className="inp" style={{ height: 28, fontSize: 12, width: 180 }} value={grantAcct} onChange={(e) => setGrantAcct(e.target.value)}>
             <option value="">Grant account…</option>
             {accounts
-              .filter((a) => !u.accounts.find((ua) => ua.accountId === a.accountId))
+              .filter((a) => !u.accountAssignments.find((ua) => ua.accountId === a.accountId))
               .map((a) => <option key={a.accountId} value={a.accountId}>{a.accountName}</option>)}
           </select>
           <Button size="xs" variant="ghost" icon="Plus" onClick={() => void grantAccount()} disabled={!grantAcct || mut.isPending}>Grant</Button>
         </div>
-        {u.accounts.map((ua) =>
+        {u.accountAssignments.map((ua) =>
           confirmRevoke === ua.accountId ? (
             <div key={ua.accountId} style={{ display: 'flex', gap: 4, marginTop: 4, alignItems: 'center' }}>
               <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>Revoke {ua.accountId}?</span>

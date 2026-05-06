@@ -88,7 +88,7 @@ export interface UserRecord {
   email: string;
   status: string;
   groups: string[];
-  accounts: UserAccount[];
+  accountAssignments: UserAccount[];
 }
 
 export interface UsersResponse {
