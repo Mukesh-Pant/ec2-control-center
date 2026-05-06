@@ -202,18 +202,24 @@ export interface LabPricingBreakdown {
   ec2Hourly: number;
   ec2Cost: number;
   ebsCost: number;
+  ebsPerGbMonth: number;
   eipCost: number;
+  eipHourly: number;
   dataTransferCost: number;
   backupCost: number;
   monitoringCost: number;
+  includeBackup: boolean;
+  includeMonitoring: boolean;
   currencyRate: number;
   currencyCode: string;
   totalUsd: number;
   subtotalUsd: number;
   whtPercent: number;
   whtAmount: number;
+  totalAfterWht: number;
   discountPercent: number;
   discountAmount: number;
+  totalBeforeVat: number;
   vatPercent: number;
   vatAmount: number;
   finalTotalUsd: number;
@@ -226,6 +232,7 @@ export interface LabPricingResponse {
   runningHours: number;
   totalDays: number;
   hoursPerDay: number;
+  pricingSource: string;
 }
 
 export interface LabPaymentUploadResponse {
@@ -245,12 +252,15 @@ export interface LabTemplate {
   name: string;
   description: string;
   badge?: string;
+  badgeClass: string;
+  icon: string;
   instanceType: string;
   vcpu: number;
   ram: string;
   storageGb: number;
   platform: 'ubuntu' | 'windows';
   elasticIp: boolean;
+  detailedMonitor: boolean;
   useCases: string[];
 }
 
@@ -268,6 +278,7 @@ export interface LabPricingSettings {
   includeMonitoring: boolean;
   currencyRate: number;
   currencyCode: string;
+  usdToInrRate: number;
   discountPercent: number;
   showBreakdown: boolean;
 }
