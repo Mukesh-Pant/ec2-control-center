@@ -125,3 +125,9 @@ export interface BackupMutationResponse {
   recoveryPointArn?: string;
   planId?: string;
 }
+
+export interface ConsoleLoginResponse {
+  loginUrl: string;
+  accountId: string;
+  accountName: string;
+}

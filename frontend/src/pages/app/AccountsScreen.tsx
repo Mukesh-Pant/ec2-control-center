@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Badge, Button, Icon, PageHeader } from '@/components/ui';
-import { useAccounts, useAccountMutation } from '@/lib/queries/accounts';
+import { useAccounts, useAccountMutation, useConsoleLogin } from '@/lib/queries/accounts';
+import { getRole } from '@/lib/auth';
 import type { Account } from '@/types/api';
 
 function AddAccountModal({ onClose }: { onClose: () => void }) {
@@ -58,6 +59,7 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
 
 function AccountCard({ a }: { a: Account }) {
   const mut = useAccountMutation();
+  const consoleMut = useConsoleLogin();
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [testResult, setTestResult]       = useState('');
   const [mutError, setMutError]           = useState('');
@@ -88,6 +90,21 @@ function AccountCard({ a }: { a: Account }) {
       await mut.mutateAsync({ action: 'remove', accountId: a.accountId });
     } catch (err) {
       setMutError(err instanceof Error ? err.message : 'Failed to remove account.');
+    }
+  };
+
+  const doConsoleLogin = async () => {
+    setMutError('');
+    try {
+      const res = await consoleMut.mutateAsync({ accountId: a.accountId, region: 'ap-south-1' });
+      const ext = (window as Window & { EC2CTRL_EXTENSION?: boolean }).EC2CTRL_EXTENSION;
+      if (ext) {
+        window.postMessage({ type: 'EC2CTRL_OPEN_CONSOLE', loginUrl: res.loginUrl, accountId: res.accountId, accountName: res.accountName }, '*');
+      } else {
+        window.open(res.loginUrl, '_blank');
+      }
+    } catch (err) {
+      setMutError(err instanceof Error ? err.message : 'Console login failed.');
     }
   };
 
@@ -144,6 +161,9 @@ function AccountCard({ a }: { a: Account }) {
             </Button>
             <Button size="xs" variant="danger" icon="Trash2" onClick={() => setConfirmRemove(true)}>Remove</Button>
           </>
+        )}
+        {!a.isCentral && a.enabled && (getRole() === 'admin' || getRole() === 'operator') && (
+          <Button size="xs" variant="ghost" icon="ExternalLink" onClick={() => void doConsoleLogin()} disabled={consoleMut.isPending}>Console</Button>
         )}
       </div>
     </div>

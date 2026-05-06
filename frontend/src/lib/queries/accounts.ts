@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
-import type { AccountsResponse, AccountActionResponse } from '@/types/api';
+import type { AccountsResponse, AccountActionResponse, ConsoleLoginResponse } from '@/types/api';
 
 export const ACCOUNTS_KEY = ['accounts'] as const;
 
@@ -23,5 +23,15 @@ export function useAccountMutation() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ACCOUNTS_KEY });
     },
+  });
+}
+
+export function useConsoleLogin() {
+  return useMutation({
+    mutationFn: (body: { accountId: string; region: string }) =>
+      apiFetch<ConsoleLoginResponse>('/console-login', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
   });
 }
