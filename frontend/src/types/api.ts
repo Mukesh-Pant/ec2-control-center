@@ -131,3 +131,148 @@ export interface ConsoleLoginResponse {
   accountId: string;
   accountName: string;
 }
+
+// ── Labs (M11) ────────────────────────────────────────────────────────────
+
+export interface LabVpc {
+  vpcId: string;
+  name: string;
+  cidrBlock: string;
+}
+
+export interface LabSubnet {
+  subnetId: string;
+  name: string;
+  cidrBlock: string;
+  availabilityZone: string;
+  vpcId: string;
+}
+
+export interface LabSecurityGroup {
+  groupId: string;
+  groupName: string;
+  description: string;
+  vpcId: string;
+}
+
+export interface LabNetworkOptions {
+  vpcs: LabVpc[];
+  subnets: LabSubnet[];
+  securityGroups: LabSecurityGroup[];
+}
+
+export interface Lab {
+  labId: string;
+  labName: string;
+  userEmail: string;
+  accountId: string;
+  region: string;
+  instanceId?: string;
+  instanceType: string;
+  platform: 'ubuntu' | 'windows';
+  storageGb: number;
+  elasticIp: boolean;
+  subnetId: string;
+  securityGroupIds: string; // JSON-encoded string from backend
+  durationHours: number;
+  expiresAt?: string;
+  status: 'pending_approval' | 'provisioning' | 'running' | 'stopped' | 'terminated' | 'rejected';
+  estimatedCost?: number;
+  paymentS3Key?: string;
+  publicIp?: string;
+  keyName?: string;
+  keyS3Key?: string;
+  allocationId?: string;
+  createdAt?: string;
+}
+
+export interface LabsListResponse {
+  labs: Lab[];
+}
+
+export interface LabMutationResponse {
+  labId?: string;
+  instanceId?: string;
+  status?: string;
+  estimatedCost?: number;
+  message?: string;
+}
+
+export interface LabPricingBreakdown {
+  ec2Hourly: number;
+  ec2Cost: number;
+  ebsCost: number;
+  eipCost: number;
+  dataTransferCost: number;
+  backupCost: number;
+  monitoringCost: number;
+  currencyRate: number;
+  currencyCode: string;
+  totalUsd: number;
+  subtotalUsd: number;
+  whtPercent: number;
+  whtAmount: number;
+  discountPercent: number;
+  discountAmount: number;
+  vatPercent: number;
+  vatAmount: number;
+  finalTotalUsd: number;
+  marginPercent?: number; // admin-only
+  marginAmount?: number;  // admin-only
+}
+
+export interface LabPricingResponse {
+  breakdown: LabPricingBreakdown;
+  runningHours: number;
+  totalDays: number;
+  hoursPerDay: number;
+}
+
+export interface LabPaymentUploadResponse {
+  paymentKey: string; // s3 key; pass as paymentKey in submit body
+}
+
+export interface LabUrlResponse {
+  url: string; // presigned URL — used for keypair download, payment view
+}
+
+export interface LabWindowsPasswordResponse {
+  password: string;
+}
+
+export interface LabTemplate {
+  id: string;
+  name: string;
+  description: string;
+  badge?: string;
+  instanceType: string;
+  vcpu: number;
+  ram: string;
+  storageGb: number;
+  platform: 'ubuntu' | 'windows';
+  elasticIp: boolean;
+  useCases: string[];
+}
+
+export interface LabTemplatesResponse {
+  templates: LabTemplate[];
+  message?: string;
+}
+
+export interface LabPricingSettings {
+  whtPercent: number;
+  vatPercent: number;
+  marginPercent: number;
+  dataTransferMonthlyUsd: number;
+  includeBackup: boolean;
+  includeMonitoring: boolean;
+  currencyRate: number;
+  currencyCode: string;
+  discountPercent: number;
+  showBreakdown: boolean;
+}
+
+export interface LabPricingSettingsResponse {
+  settings: LabPricingSettings;
+  message?: string;
+}
