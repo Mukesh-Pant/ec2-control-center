@@ -48,46 +48,46 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ErrorBoundary>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<LoginPage />} />
 
-          <Route
-            path="/app"
-            element={
-              <RequireAuth>
-                <AppShell />
-              </RequireAuth>
-            }
-          >
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardScreen />} />
-            <Route path="instances" element={<InstancesScreen />} />
-            <Route path="servers" element={<MyServersScreen />} />
-            <Route path="backups" element={<BackupsScreen />} />
-            <Route path="billing" element={<BillingScreen />} />
-            <Route path="analytics" element={<AnalyticsScreen />} />
-            <Route path="audit" element={<AuditScreen />} />
-            <Route path="vendors" element={<VendorsScreen />} />
-            <Route path="customers" element={<CustomersScreen />} />
-            <Route path="alerts" element={<AlertsScreen />} />
-            <Route path="finsettings" element={<FinSettingsScreen />} />
-            <Route path="accounts" element={<AccountsScreen />} />
-            <Route path="users" element={<UsersScreen />} />
-            <Route path="*" element={<Navigate to="dashboard" replace />} />
-          </Route>
+            <Route
+              path="/app"
+              element={
+                <RequireAuth>
+                  <AppShell />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<DashboardScreen />} />
+              <Route path="instances" element={<InstancesScreen />} />
+              <Route path="servers" element={<MyServersScreen />} />
+              <Route path="backups" element={<BackupsScreen />} />
+              <Route path="billing" element={<BillingScreen />} />
+              <Route path="analytics" element={<AnalyticsScreen />} />
+              <Route path="audit" element={<AuditScreen />} />
+              <Route path="vendors" element={<VendorsScreen />} />
+              <Route path="customers" element={<CustomersScreen />} />
+              <Route path="alerts" element={<AlertsScreen />} />
+              <Route path="finsettings" element={<FinSettingsScreen />} />
+              <Route path="accounts" element={<AccountsScreen />} />
+              <Route path="users" element={<UsersScreen />} />
+              <Route path="*" element={<Navigate to="dashboard" replace />} />
+            </Route>
 
-          <Route
-            path="*"
-            element={
-              <PhasePlaceholder
-                phase="404"
-                title="That route doesn't exist yet"
-                description="Try the landing page, or head to /login."
-              />
-            }
-          />
-        </Routes>
+            <Route
+              path="*"
+              element={
+                <PhasePlaceholder
+                  phase="404"
+                  title="That route doesn't exist yet"
+                  description="Try the landing page, or head to /login."
+                />
+              }
+            />
+          </Routes>
         </ErrorBoundary>
       </BrowserRouter>
     </QueryClientProvider>

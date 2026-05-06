@@ -72,7 +72,9 @@
   --sh-glow: 0 0 0 1px rgba(59, 127, 255, .18), 0 8px 32px rgba(59, 127, 255, .18);
 
   /* Semantic accent (referenced by component ports) */
-  --accent: var(--blue);
+  --accent:   var(--blue);
+  --danger:   var(--red-2);
+  --surface-3: #edf0f9;
 }
 
 [data-theme="dark"] {
@@ -80,6 +82,7 @@
   --bg-2:        #08122a;
   --surface:     #0c1934;
   --surface-2:   #122247;
+  --surface-3:   #1c3060;
   --line:        rgba(110, 163, 255, .10);
   --line-2:      rgba(110, 163, 255, .18);
   --ink:         #e8eeff;

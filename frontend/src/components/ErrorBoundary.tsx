@@ -115,7 +115,7 @@ export class ErrorBoundary extends Component<Props, State> {
               lineHeight: 1.5,
             }}
           >
-            A render error was caught. The rest of the app is unaffected.
+            A render error was caught. Reload the page to get back on track.
           </p>
 
           {/* Error message */}
