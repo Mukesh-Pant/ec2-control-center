@@ -184,6 +184,10 @@ export interface Lab {
   keyS3Key?: string;
   allocationId?: string;
   createdAt?: string;
+  amiId?: string;
+  publicDns?: string;
+  paymentStatus?: string;   // 'paid' | 'pending'
+  warningSent?: boolean;
 }
 
 export interface LabsListResponse {
@@ -244,7 +248,8 @@ export interface LabUrlResponse {
 }
 
 export interface LabWindowsPasswordResponse {
-  password: string;
+  password?: string;
+  message?: string;
 }
 
 export interface LabTemplate {
