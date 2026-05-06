@@ -1,5 +1,5 @@
 // src/pages/app/labs/LabRow.tsx
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Badge, Button } from '@/components/ui';
 import { ChevronRight } from 'lucide-react';
 import type { Lab } from '@/types/api';
@@ -44,10 +44,12 @@ function copyToClipboard(text: string) {
 }
 
 function downloadBlob(filename: string, content: string, mimeType = 'text/plain') {
+  const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([content], { type: mimeType }));
+  a.href = url;
   a.download = filename;
   a.click();
+  URL.revokeObjectURL(url);
 }
 
 function ExpandPanel({ lab }: { lab: Lab }) {
@@ -61,6 +63,7 @@ function ExpandPanel({ lab }: { lab: Lab }) {
   const [winPassword, setWinPassword] = useState('');
   const [confirmTerminate, setConfirmTerminate] = useState(false);
   const [mutError, setMutError] = useState('');
+  const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | null>(null);
 
   const viewPayment = async () => {
     setMutError('');
@@ -74,19 +77,25 @@ function ExpandPanel({ lab }: { lab: Lab }) {
 
   const approveLab = async () => {
     setMutError('');
+    setPendingAction('approve');
     try {
       await labMut.mutateAsync({ action: 'approve', labId: lab.labId });
     } catch (err) {
       setMutError(err instanceof Error ? err.message : 'Approval failed.');
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const rejectLab = async () => {
     setMutError('');
+    setPendingAction('reject');
     try {
       await labMut.mutateAsync({ action: 'reject', labId: lab.labId });
     } catch (err) {
       setMutError(err instanceof Error ? err.message : 'Rejection failed.');
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -147,10 +156,10 @@ function ExpandPanel({ lab }: { lab: Lab }) {
       {/* Lab info grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '6px 12px', fontSize: 13, marginBottom: 16 }}>
         {infoRows.map(([k, v]) => (
-          <>
-            <span key={`k-${k}`} style={{ color: 'var(--ink-3)', fontWeight: 500 }}>{k}</span>
-            <span key={`v-${k}`}>{v}</span>
-          </>
+          <React.Fragment key={k}>
+            <span style={{ color: 'var(--ink-3)', fontWeight: 500 }}>{k}</span>
+            <span>{v}</span>
+          </React.Fragment>
         ))}
       </div>
 
@@ -236,11 +245,11 @@ function ExpandPanel({ lab }: { lab: Lab }) {
               <Button size="xs" variant="ghost" onClick={() => void viewPayment()} disabled={paymentViewMut.isPending}>
                 {paymentViewMut.isPending ? 'Loading…' : 'View payment screenshot'}
               </Button>
-              <Button size="xs" variant="accent" onClick={() => void approveLab()} disabled={labMut.isPending}>
-                {labMut.isPending ? 'Approving…' : 'Approve'}
+              <Button size="xs" variant="accent" onClick={() => void approveLab()} disabled={pendingAction !== null}>
+                {pendingAction === 'approve' ? 'Approving…' : 'Approve'}
               </Button>
-              <Button size="xs" variant="danger" onClick={() => void rejectLab()} disabled={labMut.isPending}>
-                {labMut.isPending ? 'Rejecting…' : 'Reject'}
+              <Button size="xs" variant="danger" onClick={() => void rejectLab()} disabled={pendingAction !== null}>
+                {pendingAction === 'reject' ? 'Rejecting…' : 'Reject'}
               </Button>
             </div>
           ) : (
