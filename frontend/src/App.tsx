@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { bindTweaksToDocument } from '@/stores/tweaks';
 import { useAuth } from '@/stores/auth';
 import { RequireAuth } from '@/components/RequireAuth';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import LandingPage from '@/features/landing/LandingPage';
 import LoginPage from '@/features/login/LoginPage';
 import { AppShell } from '@/features/app/AppShell';
@@ -46,6 +47,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <ErrorBoundary>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -86,6 +88,7 @@ function App() {
             }
           />
         </Routes>
+        </ErrorBoundary>
       </BrowserRouter>
     </QueryClientProvider>
   );
