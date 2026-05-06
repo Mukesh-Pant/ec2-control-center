@@ -23,6 +23,7 @@ import AlertsScreen from '@/pages/app/AlertsScreen';
 import FinSettingsScreen from '@/pages/app/FinSettingsScreen';
 import AccountsScreen from '@/pages/app/AccountsScreen';
 import UsersScreen from '@/pages/app/UsersScreen';
+import LabSettingsScreen from '@/pages/app/LabSettingsScreen';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +75,7 @@ function App() {
               <Route path="finsettings" element={<FinSettingsScreen />} />
               <Route path="accounts" element={<AccountsScreen />} />
               <Route path="users" element={<UsersScreen />} />
+              <Route path="lab-settings" element={<LabSettingsScreen />} />
               <Route path="*" element={<Navigate to="dashboard" replace />} />
             </Route>
 

@@ -48,6 +48,7 @@ export const NAV: NavSection[] = [
     items: [
       { id: 'accounts', label: 'Accounts', icon: 'Building2' },
       { id: 'users', label: 'Users', icon: 'UserCog' },
+      { id: 'lab-settings', label: 'Lab Settings', icon: 'Settings2' },
     ],
   },
 ];
@@ -66,10 +67,11 @@ export const PAGE_TITLES: Record<string, string> = {
   finsettings: 'Finance Settings',
   accounts: 'Accounts',
   users: 'Users',
+  'lab-settings': 'Lab Settings',
 };
 
 /**
  * Pages visible only to admins. Operators/viewers see them filtered out
  * of the Sidebar by AppShell.
  */
-export const ADMIN_ONLY_PAGES = new Set(['accounts', 'users']);
+export const ADMIN_ONLY_PAGES = new Set(['accounts', 'users', 'lab-settings']);
