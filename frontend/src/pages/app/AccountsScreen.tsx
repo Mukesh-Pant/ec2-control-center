@@ -58,6 +58,7 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
 }
 
 function AccountCard({ a }: { a: Account }) {
+  const role = getRole();
   const mut = useAccountMutation();
   const consoleMut = useConsoleLogin();
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -96,6 +97,7 @@ function AccountCard({ a }: { a: Account }) {
   const doConsoleLogin = async () => {
     setMutError('');
     try {
+      // ap-south-1 is the project's primary region; Account type carries no region field
       const res = await consoleMut.mutateAsync({ accountId: a.accountId, region: 'ap-south-1' });
       const ext = (window as Window & { EC2CTRL_EXTENSION?: boolean }).EC2CTRL_EXTENSION;
       if (ext) {
@@ -162,8 +164,10 @@ function AccountCard({ a }: { a: Account }) {
             <Button size="xs" variant="danger" icon="Trash2" onClick={() => setConfirmRemove(true)}>Remove</Button>
           </>
         )}
-        {!a.isCentral && a.enabled && (getRole() === 'admin' || getRole() === 'operator') && (
-          <Button size="xs" variant="ghost" icon="ExternalLink" onClick={() => void doConsoleLogin()} disabled={consoleMut.isPending}>Console</Button>
+        {!a.isCentral && a.enabled && (role === 'admin' || role === 'operator') && (
+          <Button size="xs" variant="ghost" icon="ExternalLink" onClick={() => void doConsoleLogin()} disabled={consoleMut.isPending}>
+            {consoleMut.isPending ? 'Opening…' : 'Console'}
+          </Button>
         )}
       </div>
     </div>
