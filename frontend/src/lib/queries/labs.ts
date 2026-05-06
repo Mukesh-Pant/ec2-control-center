@@ -39,7 +39,7 @@ export function useLabsList() {
 export function useLabMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
+    mutationFn: (body: { action: string } & Record<string, unknown>) =>
       apiFetch<LabMutationResponse>('/labs', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -78,7 +78,8 @@ export function useLabPricing(params: LabPricingParams | null) {
   return useQuery({
     queryKey: ['labPricing', params],
     queryFn: () => {
-      const p = params!;
+      if (!params) throw new Error('params required');
+      const p = params;
       const qs = new URLSearchParams({
         instanceType: p.instanceType,
         region: p.region,
@@ -102,7 +103,7 @@ export function useLabNetworkOptions(accountId: string, region: string) {
       apiFetch<LabNetworkOptions>(
         `/labs/network-options?accountId=${encodeURIComponent(accountId)}&region=${encodeURIComponent(region)}`,
       ),
-    enabled: Boolean(accountId),
+    enabled: Boolean(accountId) && Boolean(region),
     staleTime: 300_000,
   });
 }
