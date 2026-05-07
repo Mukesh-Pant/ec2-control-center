@@ -7,14 +7,12 @@ import { LabWizard } from './labs/LabWizard';
 import { LabList } from './labs/LabList';
 
 export default function MyServersScreen() {
+  const [showWizard, setShowWizard] = useState(false);
+
   const role = getRole();
   if (role === 'viewer' || role === 'none') return <Navigate to="/app/instances" replace />;
 
-  const [showWizard, setShowWizard] = useState(false);
-
   const handleSubmitted = () => {
-    // LabList auto-switches to pending bucket after a submit.
-    // Wizard shows Step 4 confirmation; closing it returns to the list.
     setShowWizard(false);
   };
 
