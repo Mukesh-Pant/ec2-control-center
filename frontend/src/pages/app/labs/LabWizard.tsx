@@ -10,7 +10,6 @@ import {
   type LabPricingParams,
 } from '@/lib/queries/labs';
 import { useLabTemplates } from '@/lib/queries/labSettings';
-import type { LabTemplate } from '@/types/api';
 
 const REGION = 'ap-south-1';
 
@@ -47,17 +46,6 @@ const INSTANCE_GROUPS = [
   },
 ];
 
-function applyTemplate(tpl: LabTemplate, setters: {
-  setPlatform: (v: 'ubuntu' | 'windows') => void;
-  setInstanceType: (v: string) => void;
-  setStorageGb: (v: number) => void;
-  setElasticIp: (v: boolean) => void;
-}) {
-  setters.setPlatform(tpl.platform);
-  setters.setInstanceType(tpl.instanceType);
-  setters.setStorageGb(tpl.storageGb);
-  setters.setElasticIp(tpl.elasticIp);
-}
 
 interface Props {
   onClose: () => void;
@@ -103,8 +91,8 @@ export function LabWizard({ onClose, onSubmitted }: Props) {
   }, [accounts, accountId]);
 
   useEffect(() => {
-    if (platform === 'windows' && storageGb < 35) setStorageGb(35);
-  }, [platform, storageGb]);
+    if (platform === 'windows') setStorageGb((s) => Math.max(s, 35));
+  }, [platform]);
 
   const totalDays = months * 30;
   const durationHours = hoursPerDay * totalDays;
@@ -129,7 +117,11 @@ export function LabWizard({ onClose, onSubmitted }: Props) {
     new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
-        const result = reader.result as string;
+        if (typeof reader.result !== 'string') {
+          reject(new Error('Failed to read file'));
+          return;
+        }
+        const result = reader.result;
         const commaIdx = result.indexOf(',');
         const header = result.slice(0, commaIdx);
         const base64 = result.slice(commaIdx + 1);
@@ -213,7 +205,7 @@ export function LabWizard({ onClose, onSubmitted }: Props) {
     fontSize: 11,
     fontWeight: 600,
     letterSpacing: '0.05em',
-    textTransform: 'uppercase' as const,
+    textTransform: 'uppercase',
     color: 'var(--ink-3)',
     marginBottom: 4,
   };
@@ -235,7 +227,12 @@ export function LabWizard({ onClose, onSubmitted }: Props) {
               <button
                 key={tpl.id}
                 type="button"
-                onClick={() => applyTemplate(tpl, { setPlatform, setInstanceType, setStorageGb, setElasticIp })}
+                onClick={() => {
+                  setPlatform(tpl.platform);
+                  setInstanceType(tpl.instanceType);
+                  setStorageGb(tpl.storageGb);
+                  setElasticIp(tpl.elasticIp);
+                }}
                 style={{
                   background: 'var(--surface-2)',
                   border: '1px solid var(--line)',
@@ -283,17 +280,17 @@ export function LabWizard({ onClose, onSubmitted }: Props) {
         <div className="field">
           <label className="field-label">Storage (GB)</label>
           <input className="inp" type="number" min={platform === 'windows' ? 35 : 8} max={500} value={storageGb}
-            onChange={(e) => setStorageGb(parseInt(e.target.value) || 20)} />
+            onChange={(e) => setStorageGb(parseInt(e.target.value, 10) || 20)} />
         </div>
         <div className="field">
           <label className="field-label">Hours / day</label>
           <input className="inp" type="number" min={1} max={24} value={hoursPerDay}
-            onChange={(e) => setHoursPerDay(parseInt(e.target.value) || 8)} />
+            onChange={(e) => setHoursPerDay(parseInt(e.target.value, 10) || 8)} />
         </div>
         <div className="field">
           <label className="field-label">Duration (months)</label>
           <input className="inp" type="number" min={1} max={36} value={months}
-            onChange={(e) => setMonths(parseInt(e.target.value) || 1)} />
+            onChange={(e) => setMonths(parseInt(e.target.value, 10) || 1)} />
         </div>
       </div>
 
@@ -432,7 +429,7 @@ export function LabWizard({ onClose, onSubmitted }: Props) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <Button variant="ghost" onClick={() => setStep(2)}>← Back</Button>
-        <Button variant="primary" onClick={() => void handleSubmit()} disabled={!paymentKey || uploadingPayment || labMut.isPending}>
+        <Button variant="primary" onClick={() => void handleSubmit()} disabled={!paymentKey || uploadingPayment || labMut.isPending || !subnetId}>
           {labMut.isPending ? 'Submitting…' : 'Submit request'}
         </Button>
       </div>
