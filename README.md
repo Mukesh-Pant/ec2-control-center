@@ -2,6 +2,8 @@
 
 A **production SaaS web portal** for managing EC2 instances across multiple AWS accounts — with custom authentication, audit logging, idle auto-stop, billing insights, backup & restore, and direct AWS Console access. Built by **One Cloud Utopia**.
 
+Frontend v2.0.0 is a full **React 18 + TypeScript 5.6 + Vite 5** rewrite — replacing the original vanilla JS/CSS frontend with a type-safe, component-driven SPA.
+
 **Live Portal:** [https://app.onecloudutopia.com](https://app.onecloudutopia.com)
 
 ---
@@ -20,7 +22,8 @@ A **production SaaS web portal** for managing EC2 instances across multiple AWS 
 | **RBAC** | Role-based access control via Cognito groups — admins, operators, viewers with per-account grants |
 | **Backup & Restore** | On-demand and scheduled EC2 backups via AWS Backup; restore to new instance or replace in place |
 | **Console Login** | One-click AWS Console access for any account — each account opens in an isolated Firefox container tab |
-| **Labs** | Self-service EC2 lab provisioning — 4-step wizard, payment upload, admin approval gate before EC2 launch |
+| **My Servers (Labs)** | Self-service EC2 lab provisioning — 4-step wizard, payment upload, admin approval gate, Lab Settings for pricing and templates |
+| **Finance Module** | OCU business finances — Vendors, Customers, Alerts, and Finance Settings (UI live; backend wiring in progress) |
 | **Custom Domain** | Serve on your own domain with apex redirect via CloudFront + ACM + Route 53 |
 | **Zero Infrastructure** | Fully serverless — API Gateway + Lambda + DynamoDB + S3 + CloudFront |
 
@@ -32,13 +35,13 @@ A **production SaaS web portal** for managing EC2 instances across multiple AWS 
 Browser
   │ HTTPS
   ▼
-CloudFront CDN ──────────────► S3 (private — frontend files)
+CloudFront CDN ──────────────► S3 (private — React build artifacts)
   │
-  │ Custom auth page (built-in)
-  ▼
-Cognito SDK (SRP) ──► auth.js (JWT tokens in sessionStorage)
+  │ React 18 SPA (TypeScript strict, Vite 5 build)
+  │ Login page → Cognito SDK (SRP) → JWT tokens in sessionStorage
+  │ lib/auth.ts + stores/auth.ts (Zustand) → auth state
   │
-  │ Bearer JWT on every request
+  │ Bearer JWT on every request (lib/api.ts → apiFetch<T>)
   ▼
 REST API Gateway (v1, REGIONAL, COGNITO_USER_POOLS authorizer)
   │
@@ -46,12 +49,12 @@ REST API Gateway (v1, REGIONAL, COGNITO_USER_POOLS authorizer)
 Lambda: ec2-controller (Python 3.12, 512 MB)
   ├── STS AssumeRole → member accounts (credentials cached 10 min per container)
   ├── ThreadPoolExecutor → parallel multi-account/region queries
-  ├── DynamoDB → account registry + audit logs + user-account RBAC
+  ├── DynamoDB → account registry + audit logs + user-account RBAC + labs
   ├── Cognito IdP → group management (admins/operators/viewers)
   ├── Cost Explorer → billing data
   ├── AWS Backup → ec2-control-vault-production (backup, schedule, restore)
   ├── AWS Federation API → console login URLs (STS AssumeRole → SigninToken)
-  └── Labs EC2 provisioning (key pair + EIP, pending-approval gate)
+  └── My Servers EC2 provisioning (key pair + EIP, pending-approval gate)
 
 Console Login flow:
   Portal (Console Login button)
@@ -64,6 +67,15 @@ Domain: app.onecloudutopia.com → CloudFront
 
 EventBridge (every 15 min) → idle_checker Lambda → CloudWatch → auto-stop + SNS
 ```
+
+### Navigation Structure
+
+| Section | Pages |
+|---------|-------|
+| Overview | Dashboard, Instances, Backups, My Servers |
+| Intelligence | Billing & Cost, Analytics, Audit Log |
+| Finance | Vendors, Customers, Alerts, Fin Settings |
+| Administration | Accounts, Users, Lab Settings *(admin only)* |
 
 ---
 
@@ -82,32 +94,13 @@ EC2-control-center/
 │   │   ├── audit.py              ← Audit log read/write
 │   │   ├── backup.py             ← AWS Backup: on-demand, schedules, restore, delete
 │   │   ├── console_login.py      ← Console login: STS AssumeRole → Federation API → SigninToken URL
-│   │   ├── labs.py               ← Labs: submit/approve/reject provisioning, EIP, payment view
+│   │   ├── labs.py               ← My Servers: submit/approve/reject provisioning, EIP, payment view, pricing settings, templates
 │   │   ├── pricing.py            ← EC2 on-demand pricing lookup
 │   │   └── utils.py              ← CORS helpers, JWT claims, error mapping, RBAC helpers
 │   ├── config_injector/
-│   │   └── index.py              ← Custom resource: injects CONFIG, uploads frontend, invalidates CDN
+│   │   └── index.py              ← Custom resource: injects CONFIG, uploads frontend build, invalidates CDN
 │   └── idle_checker/
 │       └── index.py              ← CPU check, auto-stop, SNS alert
-├── frontend/
-│   ├── index.html                ← SPA shell + auth page (CONFIG auto-injected at deploy)
-│   ├── oculogo.png               ← One Cloud Utopia logo
-│   ├── css/styles.css            ← Dark theme dashboard + auth page styles
-│   └── js/
-│       ├── auth.js               ← Cognito SDK SRP auth, token management
-│       ├── authui.js             ← Auth page UI controller (forms, validation, loading)
-│       ├── api.js                ← Fetch wrapper with auto-refresh
-│       ├── instances.js          ← Instance list + controls (RBAC-aware)
-│       ├── audit.js              ← Audit log + daily cost view
-│       ├── billing.js            ← Billing dashboard
-│       ├── analytics.js          ← Usage analytics
-│       ├── accounts.js           ← Multi-account management + Console Login button
-│       ├── users.js              ← User management: roles, account grants (admin only)
-│       ├── backup.js             ← Backup dashboard: on-demand, schedules, restore
-│       ├── labs.js               ← Labs dashboard: 4-step wizard, pending-approval flow, admin controls
-│       ├── app.js                ← App init, tabs, toast, session timer, role badge, extension detection
-│       └── vendor/
-│           └── amazon-cognito-identity.min.js  ← Cognito SDK v6.3.12 (CDN fallback)
 ├── firefox-extension/
 │   ├── manifest.json             ← MV3 extension manifest (app.onecloudutopia.com)
 │   ├── background.js             ← Container tab manager: one named container per AWS account
@@ -115,9 +108,47 @@ EC2-control-center/
 │   └── icons/
 │       ├── icon-48.png
 │       └── icon-96.png
-├── deploy.sh                     ← One-command deploy
-├── deploy-config.env             ← Your config values (never commit — contains secrets)
-└── CLAUDE.md                     ← Full project context for AI-assisted development
+└── frontend/                     ← React 18 + TypeScript 5.6 + Vite 5 SPA (v2.0.0)
+    ├── package.json
+    ├── vite.config.ts
+    ├── tsconfig.json
+    ├── index.html                ← Vite entry point (CONFIG auto-injected at deploy)
+    └── src/
+        ├── main.tsx              ← React 18 createRoot + QueryClientProvider + RouterProvider
+        ├── App.tsx               ← Root router with <RequireAuth> guard
+        ├── components/ui/        ← Shared UI primitives (Button, Badge, PageHeader, etc.)
+        ├── features/app/
+        │   ├── nav.ts            ← Navigation: 4 sections + ADMIN_ONLY_PAGES set
+        │   └── mockData.ts       ← Placeholder data for Finance module (temporary)
+        ├── hooks/                ← TanStack Query hooks (useLabs, useLabSettings, etc.)
+        ├── lib/
+        │   ├── api.ts            ← apiFetch<T> wrapper: Bearer JWT, ApiError, auto-refresh on 401
+        │   └── auth.ts           ← Cognito SDK SRP wrapper (getRole, getToken, refreshTokens, logout)
+        ├── pages/
+        │   ├── auth/             ← Login, SignUp, VerifyEmail, ForgotPassword
+        │   └── app/
+        │       ├── DashboardScreen.tsx
+        │       ├── InstancesScreen.tsx
+        │       ├── BackupsScreen.tsx
+        │       ├── MyServersScreen.tsx      ← "My Servers" tab; LabWizard + LabList
+        │       ├── BillingScreen.tsx
+        │       ├── AnalyticsScreen.tsx
+        │       ├── AuditScreen.tsx
+        │       ├── AccountsScreen.tsx
+        │       ├── UsersScreen.tsx
+        │       ├── LabSettingsScreen.tsx    ← Admin: pricing settings + template management
+        │       ├── finance/                 ← OCU business finance screens (UI shells)
+        │       │   ├── VendorsScreen.tsx
+        │       │   ├── CustomersScreen.tsx
+        │       │   ├── AlertsScreen.tsx
+        │       │   └── FinSettingsScreen.tsx
+        │       └── labs/
+        │           ├── LabList.tsx          ← Filterable row table with inline expand
+        │           ├── LabRow.tsx           ← Row + inline detail panel
+        │           └── LabWizard.tsx        ← 4-step provisioning wizard
+        └── stores/
+            ├── auth.ts           ← Zustand 5 auth store
+            └── tweaks.ts         ← Zustand 5 UI tweaks store
 ```
 
 ---
@@ -126,6 +157,7 @@ EC2-control-center/
 
 ### Prerequisites
 - AWS CLI configured with admin credentials for your central account
+- Node.js 18+ (for building the React frontend)
 - `zip` utility in your terminal (Git Bash on Windows)
 
 ### 1. Configure `deploy-config.env`
@@ -162,12 +194,13 @@ aws cloudformation describe-stacks --stack-name ec2-control-acm-cert \
 ### 3. Deploy
 
 ```bash
+cd frontend && npm install && npm run build && cd ..
 ./deploy.sh
 ```
 
 This will:
 1. Create the S3 code bucket (if needed)
-2. Zip and upload Lambda functions + frontend
+2. Zip and upload Lambda functions + React frontend build
 3. Deploy/update the CloudFormation stack (including custom domain + Route 53 records if set)
 4. Auto-inject config into the frontend, push to S3, invalidate CloudFront cache
 5. Upload `member-role-stack.yaml` to the public templates bucket (enables the Quick-Create button)
@@ -281,40 +314,61 @@ Recovery points are stored in the central vault `ec2-control-vault-production`.
 
 ---
 
-## Labs
+## My Servers
 
-The **Labs** tab lets operators provision a dedicated EC2 instance for hands-on training, with an admin-gated approval workflow before any EC2 is launched.
+The **My Servers** tab lets operators provision a dedicated EC2 instance for hands-on training, with an admin-gated approval workflow before any EC2 is launched.
 
 ### How it works
 
 1. **Configure** — choose region, instance type (with vCPU/RAM specs shown), OS platform, storage, and usage duration (hours/day × months)
-2. **Pricing** — review the estimated cost breakdown and open the AWS Pricing Calculator for verification
+2. **Pricing** — review the estimated cost breakdown with WHT/VAT/margin applied; open the AWS Pricing Calculator for verification
 3. **Payment** — upload a payment screenshot as proof of funding
 4. **Submitted** — request is saved as `pending_approval`; no EC2 is launched yet
 
-An admin opens the **Pending** filter in the Labs tab, clicks the lab row to expand the inline detail panel, reviews the payment, and clicks **Approve** or **Reject**:
+An admin opens the **Pending** filter in the My Servers tab, clicks the lab row to expand the inline detail panel, reviews the payment, and clicks **Approve** or **Reject**:
 - **Approve** → EC2 is provisioned (key pair created, instance launched, Elastic IP allocated), lab moves to `Running`
 - **Reject** → lab marked `Rejected`, no EC2 created
 
-### Labs dashboard
+### My Servers dashboard
 
-The Labs tab shows a **filterable row-based table** instead of a flat card list:
+The tab shows a **filterable row-based table** with attribute filters (platform, server type, status, account, region, submitted by):
 
 | Filter | Contents |
 |--------|----------|
 | **Active** | Running + Provisioning labs (default view) |
 | **Pending** | Labs awaiting admin approval |
 | **History** | Terminated + Rejected labs |
-| **All** | All labs; auto-selected if Active count = 0 |
+| **All** | All labs |
 
-Clicking any row expands an **inline detail panel** directly beneath it showing Lab Info, connection details (SSH or RDP), Elastic IP allocation ID, and contextual action buttons. Only one panel is open at a time.
+Clicking any row expands an **inline detail panel** showing Lab Info, connection details (SSH or RDP), Elastic IP allocation ID, and contextual action buttons. Only one panel is open at a time.
 
 ### Access & download
 
 - Once running, click the lab row → expand panel → **Download .pem** for SSH access or **Download RDP File** for Windows
 - Windows labs support one-click **RDP password retrieval** from the expanded panel
-- Elastic IP allocation ID is shown in the expanded panel for reference
 - RBAC: operators provision labs for assigned accounts; admins approve and see all labs
+
+### Lab Settings
+
+Admins can configure the My Servers experience from **Administration → Lab Settings**:
+
+- **Pricing Settings** — WHT%, VAT%, margin%, discount%, currency rate, data transfer rate, and toggles for backup/monitoring inclusion in cost estimates
+- **Template Management** — create, edit, and delete saved lab configurations (instance type, platform, storage, duration) that operators can apply in one click from the wizard
+
+---
+
+## Finance Module
+
+The **Finance** section tracks OCU's own business finances — separate from the EC2 billing/cost features:
+
+| Screen | Description |
+|--------|-------------|
+| **Vendors** | Manage suppliers and contractors |
+| **Customers** | Manage client relationships and invoicing |
+| **Alerts** | Finance alerts and notifications |
+| **Fin Settings** | Finance configuration and preferences |
+
+> Finance screens are live in the portal UI. Backend API wiring is in progress.
 
 ---
 
@@ -327,8 +381,7 @@ The portal is optimised for fast initial load and low-latency multi-account oper
 | **STS credentials** | Assumed-role credentials are cached per-account for 10 min (thread-safe). A single `/ec2 list` request no longer fires a fresh `AssumeRole` for every account × thread. |
 | **boto3 clients** | All boto3 clients are module-level singletons — created once per warm Lambda container, not per request. |
 | **DynamoDB pagination** | All table scans paginate over `LastEvaluatedKey` to guarantee all records are returned regardless of table size. |
-| **Script loading** | Non-auth frontend modules use HTML `defer` — the browser parses the full page before downloading them, removing 1–3 s of blank-screen time. |
-| **Dashboard skeleton** | The dashboard renders immediately with shimmer placeholders while the instance list loads from Lambda. |
+| **TanStack Query** | Client-side caching with automatic background refetch; eliminates redundant API calls between page visits. |
 | **Lambda memory** | Main Lambda runs at 512 MB (double the original 256 MB). Lambda CPU scales linearly with memory, reducing execution time for parallel operations by ~30–50%. |
 | **CloudFront edge** | `PriceClass_200` serves users in India, South-East Asia, and Japan from regional edge nodes instead of routing through Europe. |
 
@@ -347,10 +400,14 @@ The portal is optimised for fast initial load and low-latency multi-account oper
 
 | Layer | Service |
 |---|---|
+| Frontend | React 18 + TypeScript 5.6 + Vite 5 |
+| Server state | TanStack Query v5 |
+| Client state | Zustand 5 |
+| Routing | React Router v6 |
 | Frontend hosting | S3 + CloudFront |
-| Auth | Cognito (Custom UI, SRP via amazon-cognito-identity-js) |
+| Auth | Cognito (Custom React UI, SRP via amazon-cognito-identity-js) |
 | API | API Gateway REST v1 + Lambda (Python 3.12) |
-| Database | DynamoDB (account registry + audit logs) |
+| Database | DynamoDB (account registry + audit logs + labs) |
 | Scheduling | EventBridge |
 | Notifications | SNS |
 | Billing | AWS Cost Explorer |

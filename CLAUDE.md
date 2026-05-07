@@ -5,8 +5,12 @@
 **EC2 Control** by **One Cloud Utopia** is a production SaaS web portal for managing EC2 instances
 across multiple AWS accounts. Users sign up, log in via a custom-built auth page (Cognito SDK / SRP),
 see all EC2 instances grouped by account and region, Start / Stop / check Status, view audit logs,
-get idle auto-stop alerts, see billing insights, and manage member AWS accounts.
-Fully serverless, zero infrastructure to manage.
+get idle auto-stop alerts, see billing insights, manage member AWS accounts, and self-provision
+dedicated EC2 lab environments. The portal also includes a Finance module for OCU's own business
+finances (Vendors, Customers, Alerts, FinSettings).
+
+Frontend v2.0.0 is a full React 18 + TypeScript 5.6 + Vite 5 rewrite. Fully serverless, zero
+infrastructure to manage.
 
 **Live URL:** `https://app.onecloudutopia.com`
 **Owner:** Mukesh | **Admin email:** pantm8877@gmail.com | **Region:** ap-south-1
@@ -27,9 +31,11 @@ Fully serverless, zero infrastructure to manage.
 | M8 | RBAC — Cognito groups, user-account assignments, /users admin panel | ✅ LIVE |
 | M9 | Backup — AWS Backup service, on-demand + scheduled backups, restore, /backup endpoint | ✅ LIVE |
 | M10 | Console Login — one-click AWS Console via STS federation + Firefox container tabs extension | ✅ LIVE |
-| M11 | Labs — self-service EC2 lab provisioning, payment upload, pending-approval workflow, admin controls | ✅ LIVE |
+| M11 | My Servers (Labs) — self-service EC2 lab provisioning, payment upload, pending-approval workflow, admin controls, Lab Settings | ✅ LIVE |
 | M12 | Quick-Add Account — CloudFormation Quick-Create button in Add Account modal; public S3 template hosting; pre-filled params | ✅ LIVE |
-| Perf | Performance — STS cred caching, boto3 singletons, script defer, skeleton loading, Lambda 512MB, CloudFront PriceClass_200 | ✅ LIVE |
+| Perf | Performance — STS cred caching, boto3 singletons, skeleton loading, Lambda 512MB, CloudFront PriceClass_200 | ✅ LIVE |
+| Arch | Frontend v2.0.0 — full React 18 + TypeScript 5.6 + Vite 5 rewrite; TanStack Query v5; Zustand 5; React Router v6 | ✅ LIVE |
+| Finance | Finance module — Vendors, Customers, Alerts, FinSettings (OCU business finances) | 🔄 IN PROGRESS (UI shells live, backend wiring pending) |
 
 **API:** REST API v1 (migrated from HTTP API v2) with COGNITO_USER_POOLS authorizer.
 
@@ -62,8 +68,8 @@ Fully serverless, zero infrastructure to manage.
 - **AWS CLI Profile:** `default`
 - No longer used for team dev; kept for reference only
 
-**Prod table names:** `ec2-control-accounts-production`, `ec2-control-audit-production`, `ec2-control-user-accounts-production`
-**Dev table names:** `ec2-control-accounts-development`, `ec2-control-audit-development`, `ec2-control-user-accounts-development`
+**Prod table names:** `ec2-control-accounts-production`, `ec2-control-audit-production`, `ec2-control-user-accounts-production`, `ec2-control-labs-production`
+**Dev table names:** `ec2-control-accounts-development`, `ec2-control-audit-development`, `ec2-control-user-accounts-development`, `ec2-control-labs-development`
 
 ---
 
@@ -76,7 +82,7 @@ EC2-control-center/
 ├── example-deploy-config.env   ← Template for deploy-config.env
 ├── oculogo.png                 ← One Cloud Utopia logo (source)
 ├── cloudformation/
-│   ├── central-stack.yaml      ← All AWS resources (M1-M11 + custom domain + auth + RBAC + Backup + Console Login + Labs)
+│   ├── central-stack.yaml      ← All AWS resources (M1–M12 + custom domain + auth + RBAC + Backup + Console Login + Labs)
 │   ├── acm-cert-stack.yaml     ← ACM cert for custom domain (us-east-1, deploy ONCE)
 │   └── member-role-stack.yaml  ← Cross-account IAM role (deploy in each member account)
 ├── lambda/
@@ -86,11 +92,11 @@ EC2-control-center/
 │   │   ├── audit.py            ← Audit log read/write
 │   │   ├── backup.py           ← AWS Backup: on-demand, schedule, restore, delete (M9)
 │   │   ├── console_login.py    ← Console login: STS AssumeRole → Federation API → SigninToken URL (M10)
-│   │   ├── labs.py             ← Labs: submit/approve/reject provisioning, key pair, EIP, payment view (M11)
+│   │   ├── labs.py             ← Labs: submit/approve/reject provisioning, key pair, EIP, payment view, pricing settings, templates (M11)
 │   │   ├── pricing.py          ← EC2 on-demand pricing lookup
 │   │   └── utils.py            ← CORS helpers, JWT claims, error mapping, RBAC helpers
 │   ├── config_injector/
-│   │   └── index.py            ← Custom resource: injects CONFIG, uploads frontend, invalidates CDN
+│   │   └── index.py            ← Custom resource: injects CONFIG, uploads frontend build, invalidates CDN
 │   └── idle_checker/
 │       └── index.py            ← CPU check, auto-stop, SNS alert
 ├── firefox-extension/
@@ -98,25 +104,49 @@ EC2-control-center/
 │   ├── background.js           ← Container tab manager: one named Firefox container per AWS account
 │   ├── content.js              ← Sets window.wrappedJSObject.EC2CTRL_EXTENSION=true; bridges postMessage → background
 │   └── icons/                  ← icon-48.png + icon-96.png
-└── frontend/
-    ├── index.html              ← SPA shell (CONFIG auto-injected at deploy) + auth page HTML
-    ├── oculogo.png             ← Logo (deployed to S3 with frontend)
-    ├── css/styles.css          ← Dark theme dashboard + auth page styles
-    └── js/
-        ├── auth.js             ← Cognito SDK SRP auth (login, signup, verify, refresh, logout)
-        ├── authui.js           ← Auth page UI controller (form switching, validation, loading)
-        ├── api.js              ← Fetch wrapper with auto-token-refresh
-        ├── instances.js        ← Instance list + start/stop controls
-        ├── audit.js            ← Audit log viewer + daily cost view; filter bar: instance (datalist combobox), user email (datalist combobox, admin), action dropdown (START|STOP|AUTO-STOP|ACCOUNT-LINKED|TERMINATE), account dropdown
-        ├── billing.js          ← Billing dashboard
-        ├── analytics.js        ← Usage analytics
-        ├── accounts.js         ← Multi-account management
-        ├── users.js            ← User management: roles, account grants (admin only)
-        ├── backup.js           ← Backup dashboard: on-demand backup, schedules, restore (M9)
-        ├── labs.js             ← Labs dashboard: 4-step wizard, pending-approval flow, admin controls (M11)
-        ├── app.js              ← App init, tabs, toast, session timer, role badge, extension detection (M10)
-        └── vendor/
-            └── amazon-cognito-identity.min.js  ← Cognito SDK v6.3.12 (CDN fallback)
+└── frontend/                   ← React 18 + TypeScript 5.6 + Vite 5 SPA (v2.0.0)
+    ├── package.json            ← App dependencies; version 2.0.0
+    ├── vite.config.ts          ← Vite 5 build config; path alias @/ → src/
+    ├── tsconfig.json           ← TypeScript 5.6 strict mode
+    ├── index.html              ← Vite SPA entry point (CONFIG auto-injected at deploy)
+    └── src/
+        ├── main.tsx            ← React 18 entry: createRoot + QueryClientProvider + RouterProvider
+        ├── App.tsx             ← Root router: auth routes + app routes under <RequireAuth>
+        ├── components/
+        │   └── ui/             ← Shared UI primitives: Button, Badge, PageHeader, Modal, Spinner, etc.
+        ├── features/
+        │   └── app/
+        │       ├── nav.ts      ← Navigation: 4 sections (Overview, Intelligence, Finance, Administration)
+        │       └── mockData.ts ← Placeholder data for Finance module screens (temporary)
+        ├── hooks/              ← TanStack Query hooks: useLabs, useLabSettings, useLabTemplates, etc.
+        ├── lib/
+        │   ├── api.ts          ← apiFetch<T> wrapper: Bearer JWT, ApiError on non-2xx, auto-refresh on 401
+        │   └── auth.ts         ← Cognito SDK SRP wrapper: getRole, getToken, getEmail, refreshTokens, logout, restoreSession
+        ├── pages/
+        │   ├── auth/           ← Login, SignUp, VerifyEmail, ForgotPassword page components
+        │   └── app/
+        │       ├── DashboardScreen.tsx
+        │       ├── InstancesScreen.tsx
+        │       ├── BackupsScreen.tsx
+        │       ├── MyServersScreen.tsx      ← "My Servers" tab (labs backend); RBAC guard + LabWizard + LabList
+        │       ├── BillingScreen.tsx
+        │       ├── AnalyticsScreen.tsx
+        │       ├── AuditScreen.tsx
+        │       ├── AccountsScreen.tsx
+        │       ├── UsersScreen.tsx
+        │       ├── LabSettingsScreen.tsx    ← Admin only: pricing settings panel + template management panel
+        │       ├── finance/
+        │       │   ├── VendorsScreen.tsx    ← OCU business finance — UI shell (backend wiring pending)
+        │       │   ├── CustomersScreen.tsx  ← OCU business finance — UI shell (backend wiring pending)
+        │       │   ├── AlertsScreen.tsx     ← OCU business finance — UI shell (backend wiring pending)
+        │       │   └── FinSettingsScreen.tsx ← OCU business finance — UI shell (backend wiring pending)
+        │       └── labs/
+        │           ├── LabList.tsx          ← Filterable row-based table with inline expand panel
+        │           ├── LabRow.tsx           ← Single row + inline detail panel rendering
+        │           └── LabWizard.tsx        ← 4-step provisioning wizard (Configure → Pricing → Payment → Submitted)
+        └── stores/
+            ├── auth.ts         ← Zustand 5 auth store: email, role, isAuthenticated, isBooting, syncFromStorage, bootstrap, signOut
+            └── tweaks.ts       ← Zustand 5 UI tweaks/preferences store
 ```
 
 ---
@@ -124,30 +154,30 @@ EC2-control-center/
 ## Architecture
 
 ```
-Browser → CloudFront → S3 (private — frontend files)
+Browser → CloudFront → S3 (private — React build artifacts)
        ↓
-       Custom Auth Page (index.html)
-       ↓ Cognito SDK (SRP — password never leaves browser)
-       auth.js → amazon-cognito-identity-js → Cognito User Pool
-       ↓ JWT tokens stored in sessionStorage
-       api.js → Bearer JWT on every request
+       React 18 SPA (Vite build; TypeScript strict)
+       ↓ Login page (React auth components)
+       lib/auth.ts → amazon-cognito-identity-js → Cognito User Pool (SRP)
+       ↓ JWT tokens stored in sessionStorage; synced to Zustand auth store
+       lib/api.ts → apiFetch<T> → Bearer JWT on every request
        ↓
        REST API Gateway (v1, REGIONAL, COGNITO_USER_POOLS authorizer)
        ↓
-       Lambda: ec2-controller (Python 3.12, 256MB, 120s)
-         ├── STS AssumeRole → member accounts
+       Lambda: ec2-controller (Python 3.12, 512MB, 120s)
+         ├── STS AssumeRole → member accounts (credentials cached 10 min per container)
          ├── ThreadPoolExecutor → parallel multi-account/region queries
-         ├── DynamoDB → account registry + audit logs + user-account assignments
+         ├── DynamoDB → account registry + audit logs + user-account assignments + labs
          ├── Cognito IdP → group management (admins/operators/viewers)
          ├── Cost Explorer → billing data
          ├── AWS Backup → ec2-control-vault-production (on-demand, scheduled, restore)
          ├── AWS Federation API → console login (STS AssumeRole → signin.aws.amazon.com → SigninToken)
-         └── Labs EC2 provisioning (key pair + EIP + EC2 launch, pending-approval gate)
+         └── Labs/My Servers EC2 provisioning (key pair + EIP + EC2 launch, pending-approval gate)
 
 Console Login flow (M10):
-  accounts.js "Console Login" button
+  AccountsScreen "Console Login" button
     → POST /console-login → Lambda STS AssumeRole → Federation SigninToken URL
-    → window.postMessage('EC2CTRL_OPEN_CONSOLE', loginUrl)
+    → window.postMessage({type:'EC2CTRL_OPEN_CONSOLE', ...})
     → content.js bridges to background.js
     → Firefox container tab opened (one named container per AWS account)
 
@@ -156,45 +186,76 @@ Domain: app.onecloudutopia.com → CloudFront
 EventBridge (every 15 min) → idle_checker Lambda → CloudWatch → auto-stop + SNS
 ```
 
+### Navigation Structure (React app)
+| Section | Pages | RBAC |
+|---------|-------|------|
+| Overview | Dashboard, Instances, Backups, My Servers | All authenticated roles |
+| Intelligence | Billing & Cost, Analytics, Audit Log | All authenticated roles |
+| Finance | Vendors, Customers, Alerts, Fin Settings | All authenticated roles (backend pending) |
+| Administration | Accounts, Users, Lab Settings | Admin only |
+
+---
+
+## React Frontend Architecture
+
+### Tech Stack
+- **React 18** — functional components, concurrent features
+- **TypeScript 5.6** — strict mode throughout; no `any` except at API boundaries
+- **Vite 5** — dev server + production build; path alias `@/` → `src/`
+- **TanStack Query v5** — all server state; `useQuery`, `useMutation`
+- **Zustand 5** — auth store + UI tweaks store (client state only)
+- **React Router v6** — nested routes; `<RequireAuth>` guard wraps all app routes
+
+### Key Modules
+
+**`lib/auth.ts`** — Cognito SDK wrapper (module-level, not a class)
+- `getRole()` — returns `'admin'|'operator'|'viewer'|'none'` from sessionStorage
+- `getToken()` — returns JWT id_token string
+- `getEmail()` — returns email string
+- `getExpiry()` — returns Unix ms timestamp
+- `isNearExpiry()` — returns `true` if < 10 min to expiry
+- `refreshTokens()` — returns `Promise<boolean>` (true = success)
+- `logout()` — SDK signOut + sessionStorage clear + redirect
+- `restoreSession()` — tries to restore from sessionStorage tokens
+
+**`lib/api.ts`** — `apiFetch<T>` wrapper
+- Reads Bearer token from `Auth.getToken()`
+- On 401: calls `Auth.refreshTokens()`; if fails → `Auth.logout()` + `window.location.replace('/login')`
+- Throws `ApiError` (`{ status: number, message: string }`) on non-2xx
+- Generic: `apiFetch<MyType>('/endpoint', { method: 'POST', body: JSON.stringify(data) })`
+
+**`stores/auth.ts`** — Zustand auth store
+- State: `email`, `role`, `isAuthenticated`, `isBooting`
+- Actions: `syncFromStorage()` — reads sessionStorage and updates store; `bootstrap()` — full auth init; `signOut()` — calls `Auth.logout()`
+- `useAuthStore` hook used in components requiring auth state reactivity
+
+### Component Conventions
+- All components: functional, TypeScript-typed props
+- `useState` MUST appear before any conditional early returns (Rules of Hooks)
+- `useEffect` functional updater form to avoid stale closure: `setState((prev) => ...)`
+- `<React.Fragment key={k}>` for keyed mapped lists — NEVER `<>` shorthand in `.map()` returns
+- `import React, { useState, useEffect }` — explicit React import (project pattern)
+
+### UI Primitive Constraints
+- **Badge `tone` prop:** ONLY `'ok'|'err'|'warn'|'muted'|'accent'` — `'danger'` is NOT valid
+- **Button `variant` prop:** `'primary'|'ghost'|'accent'|'danger'|'ok'` — `'danger'` IS valid for Button
+- **Button `icon` prop:** Lucide icon name string (e.g. `'Plus'`, `'Trash2'`); optional
+
+### TanStack Query Patterns
+- `refetchInterval` must use function form: `refetchInterval: (query) => query.state.data?.someCondition ? 5000 : false`
+- Mutations: `useMutation({ mutationFn: ..., onSuccess: () => queryClient.invalidateQueries(...) })`
+- Query keys: arrays, e.g. `['labs']`, `['lab-settings']`, `['lab-templates']`
+
 ---
 
 ## Auth System (Custom SRP — M7)
 
-The portal uses a **custom-built login page** (not Cognito Hosted UI) with the `amazon-cognito-identity-js` SDK
-for SRP (Secure Remote Password) authentication. The password never leaves the browser.
+The portal uses a **custom-built React login page** (not Cognito Hosted UI) with the
+`amazon-cognito-identity-js` SDK for SRP authentication. The password never leaves the browser.
 
 ### SDK Loading
-- Primary: CDN `https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js`
-- Fallback: Local copy at `frontend/js/vendor/amazon-cognito-identity.min.js`
-- Inline check: `window.AmazonCognitoIdentity || document.write(fallback script)`
-
-### Modules
-
-**`auth.js`** — Cognito SDK wrapper (IIFE → `Auth` global)
-- `init()` — Checks sessionStorage tokens → tries SDK session restore → shows auth page or boots dashboard
-- `login(email, password)` — SRP auth, returns `{type: 'SUCCESS'}` or `{type: 'NEW_PASSWORD_REQUIRED'}`
-- `completeNewPassword(newPassword)` — Handles admin first-login challenge
-- `signup(email, password)` — `UserPool.signUp()` with email attribute
-- `confirmSignup(email, code)` — Email verification code
-- `resendConfirmationCode(email)`
-- `forgotPassword(email)` / `confirmForgotPassword(email, code, newPassword)`
-- `refreshTokens()` — Returns `true`/`false` (critical: `api.js` depends on this contract)
-- `getToken()`, `getEmail()`, `getExpiry()`, `isNearExpiry()` — Getters for `api.js`
-- `redirectToLogin()` — Clear session + reload (called by `api.js` on 401)
-- `logout()` — SDK signOut + sessionStorage clear + reload
-- `_bootApp(expiry)` — Hides auth page, shows app, calls `App.setUserInfo/setAdmin/setSessionExpiry/App.init`
-- Admin check: reads `cognito:groups` from JWT payload (stored in `user_groups` sessionStorage key); falls back to role `none` → shows pending-approval screen via `AuthUI.showPendingApproval()`
-- `getRole()` — public getter: returns `'admin'`/`'operator'`/`'viewer'`/`'none'` from sessionStorage
-
-**`authui.js`** — Auth page UI controller (IIFE → `AuthUI` global)
-- `showView(view)` — Toggles between 7 form states: `login`, `signup`, `verify`, `forgot`, `reset`, `newpass`, `pending`
-- `showPendingApproval(email)` — Shows pending-approval card for users with no Cognito group
-- Form handlers: `login()`, `signup()`, `confirmSignup()`, `resendCode()`, `forgotPassword()`, `confirmResetPassword()`, `completeNewPassword()`
-- `togglePassword(inputId, btn)` — Show/hide with SVG icon swap
-- `updateStrength(password)` — 4-bar strength indicator (red/amber/green)
-- `_friendlyError(err)` — Maps Cognito error codes to user-friendly messages
-- `_setLoading(btnId, loading)` — Button loading state with CSS spinner
-- Enter key handlers on all form inputs
+- Loaded via npm package (`amazon-cognito-identity-js`) in the React build
+- No CDN or fallback needed — bundled by Vite at build time
 
 ### Token Storage (sessionStorage keys)
 ```
@@ -206,13 +267,13 @@ user_email     — Display name extracted from JWT payload
 user_groups    — JSON array of Cognito groups e.g. ["admins"]
 ```
 
-### api.js Contract (must be preserved)
-```javascript
+### apiFetch Contract (must be preserved)
+```typescript
 Auth.isNearExpiry()    // returns boolean — true if < 10 min to expiry
 Auth.refreshTokens()   // returns Promise<boolean> — true on success, false on failure
 Auth.getToken()        // returns string — JWT id_token
-Auth.getRole()         // returns string — 'admin'|'operator'|'viewer'|'none'
-Auth.redirectToLogin() // clears session, reloads page
+Auth.getRole()         // returns 'admin'|'operator'|'viewer'|'none'
+Auth.logout()          // clears session, redirects to /login
 ```
 
 ### Cognito Configuration (CloudFormation)
@@ -221,20 +282,13 @@ Auth.redirectToLogin() // clears session, reloads page
 - Email verification template configured for sign-up flow
 - `NEW_PASSWORD_REQUIRED` challenge: handled for admin accounts created via CF `CognitoFirstUser`
 
-### Auth Page Design
-- Split-screen: navy gradient brand panel (left 45%) + white form panel (right 55%)
-- Logo: `oculogo.png` (One Cloud Utopia cloud logo)
-- Animated SVG network topology background on brand panel
-- Responsive: stacks vertically at 768px, compact at 480px
-- All styles in `css/styles.css` (classes prefixed `.auth-`)
-
 ---
 
 ## RBAC System (M8)
 
 ### Cognito Groups
-- `admins` — full access: all accounts, start/stop, user management, account management
-- `operators` — assigned accounts only: can start/stop instances
+- `admins` — full access: all accounts, start/stop, user management, account management, Lab Settings
+- `operators` — assigned accounts only: can start/stop instances, provision labs
 - `viewers` — assigned accounts only: read-only (no start/stop)
 - No group — blocked at login with pending-approval screen
 
@@ -249,23 +303,16 @@ Auth.redirectToLogin() // clears session, reloads page
 - `is_admin(event)` — returns True if caller is in admins group
 - `require_admin(event)` — returns 403 error response if not admin; used as guard at top of admin-only handlers
 
+### React RBAC Patterns
+- `getRole()` from `lib/auth.ts` — call in component body (before any conditional returns)
+- Route guard: `<Navigate to="/app/instances" replace />` for unauthorized roles
+- Admin-only routes: Accounts, Users, Lab Settings — protected via `<RequireAuth>` + role check
+- `useState` and all hooks MUST appear before RBAC guard conditional returns
+
 ### /users API Endpoint
 - `GET /users` — admin only; lists all Cognito users with groups + account assignments (enriched via ThreadPoolExecutor)
 - `POST /users` — admin only; actions: `setRole`, `grantAccount`, `revokeAccount`, `getPermissions`
-- **CRITICAL BUG FIX:** `handle_users_mutation` calls `.lower()` on `action`, so comparisons must use lowercase (`'setrole'`, `'grantaccount'`, `'revokeaccount'`, `'getpermissions'`) — NOT camelCase
-
-### Frontend Users Module (users.js)
-- `Users.load()` — fetches GET /users + GET /accounts, renders management table
-- `Users.applyRole(email)` — POST /users `{action:'setRole', email, role}`
-- `Users.openGrantModal(email)` / `confirmGrant()` — grant account access overlay
-- `Users.revokeAccount(email, accountId)` — revoke with confirm dialog
-- `Users.onTabActivated()` — lazy-loads on first visit
-- Role badges: `usr-badge-admins` (blue), `usr-badge-operators` (green), `usr-badge-viewers` (gray), `usr-badge-none` (red)
-
-### Instance Controls RBAC (instances.js)
-- Viewers see "View only" badge instead of Start/Stop buttons (checked via `Auth.getRole()`)
-- Pending-approval users see empty state with message instead of instance list
-- No-accounts-assigned users (have a group but no grants) see separate empty state
+- **CRITICAL:** `handle_users_mutation` calls `.lower()` on `action`, so comparisons must use lowercase (`'setrole'`, `'grantaccount'`, `'revokeaccount'`, `'getpermissions'`) — NOT camelCase
 
 ---
 
@@ -277,7 +324,6 @@ Auth.redirectToLogin() // clears session, reloads page
   - Managed policies: `AWSBackupServiceRolePolicyForBackup` + `AWSBackupServiceRolePolicyForRestores`
 - **Lambda env vars:** `BACKUP_ROLE_ARN` + `BACKUP_VAULT_NAME`
 - **API Gateway:** `/backup` resource — GET (list), POST (mutations), OPTIONS (CORS)
-- **Vault access policy:** allows member account `196750375951:root` to call `backup:CopyIntoBackupVault`
 - **Known limitation:** Adding a new member account requires manually updating vault policy in `central-stack.yaml` and redeploying
 
 ### Lambda (backup.py)
@@ -290,21 +336,6 @@ Auth.redirectToLogin() // clears session, reloads page
 - **Restore metadata:** extracts `subnetId` + `securityGroupIds` from `describe_instances()`; includes `iamInstanceProfileArn` only if present (omit entirely if absent — AWS Backup rejects null/empty)
 - **Schedule naming:** `ec2ctrl-{instanceId}-{preset}` (e.g. `ec2ctrl-i-0abc123-daily`)
 - **RBAC:** admins see all; operators/viewers scoped to allowed accountIds; viewers cannot trigger mutations
-
-### Frontend (backup.js)
-- IIFE module → `Backup` global
-- Public API: `init()`, `onTabActivated()`, `load(instanceId)`, `backupNow()`, `openRestoreModal(arn)`, `confirmRestore()`, `openScheduleForm(planId)`, `saveSchedule()`, `deleteSchedule(planId)`, `deleteRecovery(arn)`, `onTimeChange()`
-- **Inline expand pattern** — restore form expands inside Recovery Points panel; schedule form expands inside Backup Schedules panel (no floating modals)
-- **Active row highlighting** — `data-arn` on `.bk-rp-row` + `.bk-rp-row--active` CSS class
-- **Cron time picker** — `#bk-sched-hour` (00–23) + `#bk-sched-minute` (00/15/30/45); `_buildCron(preset, h, m)` generates AWS EventBridge cron syntax
-- **Hidden cron input** — `#bk-sched-cron` (hidden, always holds current cron); `#bk-sched-cron-display` (visible text input, only shown for Custom preset, syncs to hidden)
-- **Cron presets:** Daily → `cron(m h * * ? *)`, Weekly → `cron(m h ? * SUN *)`, Monthly → `cron(m h 1 * ? *)`
-- `_friendlyCron(cron)` — renders e.g. "Daily at 14:30 UTC" in schedule table
-- **Critical:** `confirmRestore()` captures `restoreArn` into `arnToRestore` BEFORE calling `_closeRestoreInline()` which nulls `restoreArn`
-
-### api.js additions
-- `getBackups(instanceId, accountId, region)` — GET /backup
-- `postBackup(body)` — POST /backup
 
 ### Adding a New Member Account (Backup)
 After onboarding via Accounts tab, also add account ARN to vault `AccessPolicy` in `central-stack.yaml` and redeploy.
@@ -319,19 +350,7 @@ Replaces the fully manual "deploy YAML yourself" onboarding with a one-click Clo
 ### Infrastructure
 - **TemplatesBucket:** `ec2-control-templates-{accountId}-{region}` (public S3) — hosts `member-role-stack.yaml` with public `s3:GetObject` restricted to exactly that one object path (no wildcard)
 - **deploy.sh Step 5b:** uploads `cloudformation/member-role-stack.yaml` to `TemplatesBucket` after CF deploy
-- **config_injector:** now injects 3 new CONFIG keys — `CENTRAL_ACCOUNT_ID`, `ENVIRONMENT`, `MEMBER_ROLE_TEMPLATE_URL` — plus empties `TemplatesBucket` on stack delete alongside `PortalBucket`
-
-### Frontend (accounts.js)
-- `_buildQuickCreateUrl(region)` — builds `https://{region}.console.aws.amazon.com/cloudformation/home?region={region}#/stacks/create/review?templateURL={encoded}&stackName=ec2-control-member-role&param_CentralAccountId={id}&param_Environment={env}`
-  - Guards: returns `null` if any CONFIG key is undefined
-  - All three CONFIG values are `encodeURIComponent`-encoded
-- `openDeployConsole()` — reads `#modal-cf-region` dropdown (9 regions, default `ap-south-1`), calls `window.open(url, '_blank')`, shows toast via `App.showToast` if CONFIG not yet available
-- Both functions are inside the `Accounts` IIFE; `openDeployConsole` exposed in public return object
-
-### Modal UI (index.html)
-- Step 1 card (above existing form fields): region dropdown + "Open CloudFormation in AWS Console" button + post-deploy instructions (CREATE_COMPLETE → Outputs → copy RoleArn + ConsoleRoleArn)
-- Step 2 divider: "STEP 2 — ENTER ACCOUNT DETAILS" above the 4 existing input fields
-- Region dropdown: `id="modal-cf-region"`, `ap-south-1` selected by default, 9 AWS regions
+- **config_injector:** injects 3 CONFIG keys — `CENTRAL_ACCOUNT_ID`, `ENVIRONMENT`, `MEMBER_ROLE_TEMPLATE_URL` — plus empties `TemplatesBucket` on stack delete alongside `PortalBucket`
 
 ### CloudFormation Quick-Create URL format
 ```
@@ -365,27 +384,22 @@ The `?` after `#/stacks/create/review` is the SPA fragment query separator — t
 - **background.js**: one named Firefox container per AWS account (`EC2Ctrl — <accountName>`); if account tab is already open → focus it; containerId persisted across restarts; tabId cleared on tab close
 - Extension detection: page checks `window.EC2CTRL_EXTENSION`; content.js also dispatches `EC2CTRL_EXTENSION_READY` CustomEvent; install banner shown after 800ms if absent
 
-### Frontend (accounts.js + app.js)
-- `App.isExtensionPresent()` — checks `window.EC2CTRL_EXTENSION` flag
-- `App.consoleLogin(accountId, accountName)` — calls `api.consoleLogin(accountId, region)`, then `window.postMessage({type:'EC2CTRL_OPEN_CONSOLE', ...})`
-- Console Login button visible on each enabled non-LOCAL account card (admins + operators only)
-- Install banner shown if extension not detected after 800ms delay
-
-### api.js addition
-- `consoleLogin(accountId, region)` — POST /console-login
-
 ---
 
-## Labs System (M11)
+## My Servers / Labs System (M11)
+
+**UI name:** "My Servers" (tab label, page title, user-facing copy throughout the React app)
+**Backend name:** "labs" (API paths `/labs/*`, DynamoDB table `ec2-control-labs-*`, Python module `labs.py`, query keys `['labs']`)
+Never rename the backend or API paths — only the UI label changed.
 
 ### Overview
-Labs lets operators provision a dedicated EC2 instance ("lab") for hands-on training. The flow uses a pending-approval gate so an admin must review payment before any EC2 is launched.
+My Servers lets operators provision a dedicated EC2 instance ("lab") for hands-on training. The flow uses a pending-approval gate so an admin must review payment before any EC2 is launched.
 
 ```
 User: 4-step wizard (Configure → Pricing → Payment → Submitted)
   → POST /labs { action:'submit' } → DynamoDB status='pending_approval', no EC2 launched
 
-Admin: Labs tab → Pending filter → click row to expand → View Payment → Approve / Reject
+Admin: My Servers tab → Pending filter → click row to expand → View Payment → Approve / Reject
   → POST /labs { action:'approve', labId } → EC2 provisioned (key pair + EIP + instance)
   → POST /labs { action:'reject',  labId } → DynamoDB status='rejected', no EC2
 ```
@@ -423,9 +437,9 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 ### Backend — `labs.py`
 - `handle_labs_list(event)` — GET /labs: returns all labs (admin) or caller's labs (operator)
 - `handle_labs_provision(event)` — POST /labs: routes on `action` field (`.strip().lower()`)
-  - `'submit'` → `_handle_labs_submit`: validates fields, verifies payment in S3, writes `pending_approval` record
-  - `'approve'` → `_handle_labs_approve`: admin only; calls `_do_provision_ec2`; updates DynamoDB
-  - `'reject'` → `_handle_labs_reject`: admin only; sets `status='rejected'`
+  - `'submit'` → validates fields, verifies payment in S3, writes `pending_approval` record
+  - `'approve'` → admin only; calls `_do_provision_ec2`; updates DynamoDB
+  - `'reject'` → admin only; sets `status='rejected'`
 - `handle_labs_delete(event)` — DELETE /labs: terminate instance + cleanup
 - `handle_labs_payment(event)` — POST /labs/payment: generate presigned S3 upload URL for payment screenshot
 - `handle_labs_payment_view(event)` — GET /labs/payment: admin only; returns 15-min presigned download URL
@@ -433,6 +447,8 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 - `handle_labs_windows_password(event)` — GET /labs/windows-password: retrieves RDP password
 - `handle_labs_pricing(event)` — GET /labs/pricing: on-demand pricing for wizard pricing step
 - `handle_labs_network_options(event)` — GET /labs/network-options: lists subnets + security groups
+- `handle_labs_pricing_settings(event)` — GET /labs/pricing-settings: returns stored pricing settings (WHT%, VAT%, margin, discount, currency, etc.); POST saves (admin only)
+- `handle_labs_templates(event)` — GET /labs/templates: returns saved lab templates list; POST full-replaces the list (admin only)
 - `_do_provision_ec2(fields, lab_id, estimated_cost, caller_email)` → `(item_dict, instance_id)`: full provisioning (key pair + EIP + EC2 launch + DynamoDB write)
 - `_validate_lab_fields(body)` → `(fields_dict, None)` or `(None, error_response)`: shared validation
 
@@ -443,57 +459,41 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 
 **EIP cleanup rule:** if EIP allocation/association fails, terminate the EC2 instance BEFORE deleting key pair + .pem (to avoid orphaned running instances).
 
-### Frontend — `labs.js`
-- IIFE → `Labs` global
-- **Wizard steps:** 1=Configure, 2=Pricing, 3=Payment, 4=Submitted confirmation
-- `INSTANCE_GROUPS`: grouped by family; each type is `{value, label}` — label includes vCPU/RAM/chip (e.g. `t3.micro — 2 vCPU · 1 GB RAM · Burstable`)
-- `_onPlatformChange()` — bumps EBS input to 35 when Windows selected
-- `_onDurationInput()` — live preview: `X hrs/day × Y months = Z hours`
-- Step 2 (`fetchPricing`) — shows breakdown table + `lbs-calc-hint` block with AWS Pricing Calculator link
-- Step 3 — Payment upload; submit button calls `_handleLabsSubmit()` (POST `action:'submit'`)
-- Step 4 — "Request Submitted" confirmation screen; `_exitWizard()` sets `_activeFilter = 'pending'` so user lands on Pending filter
-- **Lab list UI (redesigned):** filterable row-based table replaces flat card grid
-  - **Attribute filter bar** (replaces old pill filters): Platform | All types | All status | All accounts | All regions | Submitted by (admin combobox)
-  - Filter state: `_labFilters = { platform, serverType, status, account, region, submittedBy }`; `_clearLabFilters()` resets all
-  - Account dropdown displays `"Name (accountId)"` using cached `_accounts` array
-  - Submitted By (admin only): `<input list="lbs-sb-list">` combobox populated with operator+admin emails from `GET /users` (`_labsUsers`); focus is restored after every re-render via `_restoreFocus()`
-  - Filter buckets: Active = `running`+`provisioning`; Pending = `pending_approval`; History = `terminated`+`rejected`
-  - **Table columns:** Chevron | Lab Name | Platform | Instance Type | Status | Account | Region | Expires
-  - **Inline expansion:** clicking a row inserts a detail `<tr>` directly below it; only one expanded at a time; X close button in panel top-right
-- **State variables:** `_activeFilter` (`'all'|'active'|'pending'|'history'`) + `_expandedLabId` (labId of open row, or null)
-- **Key functions:**
-  - `_renderLabsList()` — computes bucket counts, applies auto-fallback, filters visible labs, builds filter bar + table HTML; saves/restores DOM focus via `_restoreFocus()` to prevent input focus-loss on re-render
-  - `_renderFilterBar()` — returns attribute filter bar HTML (dropdowns + Submitted By combobox)
-  - `_setLabFilter(field, value)` — sets `_labFilters[field]`, re-renders (public)
-  - `_setFilter(filter)` — sets `_activeFilter`, clears `_expandedLabId`, re-renders (public)
-  - `_renderRow(lab)` — returns `<tr>` HTML with chevron, all columns, correct expanded class
-  - `_renderExpiry(lab)` — returns colored `<span>` using `_formatExpiry()`; yellow = future, gray = expired/absent
-  - `_toggleRowDetail(labId)` — expands/collapses inline detail `<tr>`; collapses any previously open row (public)
-  - `_collapseDetail()` — removes detail `<tr>`, resets chevron + row class, clears `_expandedLabId`
-  - `_renderDetailPanel(lab)` — returns full HTML for expanded panel based on status + role:
-    - All statuses: Lab Info grid (Lab ID, Instance ID, Public IP, Elastic IP with allocationId, Platform, Instance Type, Storage, Cost, Expires); admin also shows "Submitted by"
-    - `running`: Connection section (SSH command + keypair download OR RDP file + Windows password) + Actions (Download Lab Info; admin also Terminate)
-    - `provisioning`: pulsing provisioning message; admin gets Terminate
-    - `pending_approval`: admin sees View Payment / Approve / Reject; non-admin sees "Awaiting admin approval"
-    - `terminated`/`rejected`: Lab Info only
-  - Windows password div uses per-row namespaced ID `lbs-win-pass-${labId}` to avoid collisions
-- `_approveLab(labId)` — POST `action:'approve'`; sets `_expandedLabId = null`, refreshes list
-- `_rejectLab(labId)` — POST `action:'reject'`; sets `_expandedLabId = null`, refreshes list
-- `_viewPayment(labId)` — GET presigned URL; opens in new tab
-- `pollStatus()` — on `running`: sets `_activeFilter = 'active'`, calls `_renderLabsList()` then `_toggleRowDetail(labId)` to auto-expand the ready lab (replaces old `showConnectInfo`)
-- **Public API:** `init`, `onTabActivated`, `_setFilter`, `_toggleRowDetail`, `_approveLab`, `_rejectLab`, `_viewPayment`, `_getWindowsPassword`, `_downloadKeypair`, `_downloadLabInfo`, `_downloadRdp`, `_confirmDelete`
+### React Frontend — My Servers
 
-**Status labels + badge classes:**
-| Status | Label | Class |
-|--------|-------|-------|
-| `pending_approval` | Pending Approval | `lbs-badge--yellow` |
-| `provisioning` | Provisioning | `lbs-badge--blue` |
-| `running` | Running | `lbs-badge--green` |
-| `stopped` | Stopped | `lbs-badge--gray` |
-| `terminated` | Terminated | `lbs-badge--red` |
-| `rejected` | Rejected | `lbs-badge--red` |
+**`MyServersScreen.tsx`** — route `/app/servers`
+- RBAC guard: viewers and unapproved users redirected to `/app/instances`
+- `useState` hooks declared before RBAC guard (Rules of Hooks requirement)
+- Toggle button: "New Lab" (primary, Plus icon) → "Cancel" (ghost, no icon) controls wizard visibility
+- Renders `<LabWizard>` (when open) + `<LabList>` (always)
 
-### API endpoints (M11)
+**`LabWizard.tsx`** — 4-step provisioning wizard
+- Step 1 (Configure): region, instance type grouped by family, platform (ubuntu/windows), storage GB, hours/day, months; Windows auto-bumps storage to min 35 GB via `useEffect([platform])`
+- Step 2 (Pricing): fetches `/labs/pricing` + `/labs/pricing-settings`; shows cost breakdown with WHT/VAT/margin applied; AWS Pricing Calculator link
+- Step 3 (Payment): file upload → presigned S3 URL; submit button disabled until `paymentKey && !uploadingPayment && !labMut.isPending && subnetId`
+- Step 4 (Submitted): confirmation; auto-navigates to Pending filter on exit
+- FileReader null guard: `if (typeof reader.result !== 'string') { reject(new Error('Failed to read file')); return; }` before using result
+- All `parseInt` calls include radix 10: `parseInt(e.target.value, 10)`
+
+**`LabList.tsx`** — filterable row-based table
+- Filters: Active (running + provisioning), Pending, History, All; attribute filters: platform, server type, status, account, region, submitted by (admin combobox)
+- One inline detail panel open at a time; clicking same row again collapses it
+
+**`LabSettingsScreen.tsx`** — route `/app/lab-settings` (admin only)
+- **PricingSettingsPanel**: 6 numeric fields (WHT%, VAT%, margin%, discount%, currency rate, data transfer per GB), currency code text input, 2 checkboxes (includeBackup, includeMonitoring)
+- **TemplateManagementPanel**: template table with Add (form above table), Edit (inline below row), Delete; all mutations use full-replace via `POST /labs/templates`; uses `<React.Fragment key={tpl.id}>` for keyed rows with conditional inline edit row
+
+**Status badges:**
+| Status | Tone |
+|--------|------|
+| `pending_approval` | `warn` |
+| `provisioning` | `accent` |
+| `running` | `ok` |
+| `stopped` | `muted` |
+| `terminated` | `err` |
+| `rejected` | `err` |
+
+### API endpoints (Labs / My Servers)
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | /labs | List labs (admin: all; operator: own) |
@@ -505,20 +505,36 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 | GET | /labs/windows-password | RDP password for Windows labs |
 | GET | /labs/pricing | On-demand pricing for wizard |
 | GET | /labs/network-options | Subnets + security groups for an account/region |
+| GET | /labs/pricing-settings | Stored pricing settings (WHT%, VAT%, margin, currency, etc.) |
+| POST | /labs/pricing-settings | Save pricing settings (admin only) |
+| GET | /labs/templates | Lab templates list |
+| POST | /labs/templates | Full-replace lab templates list (admin only) |
 
-### api.js additions (M11)
-- `getLabsList()` — GET /labs
-- `provisionLab(body)` — POST /labs
-- `deleteLabInstance(body)` — DELETE /labs
-- `uploadLabPayment(body)` — POST /labs/payment
-- `getLabPaymentScreenshot(labId)` — GET /labs/payment
-- `getLabKeypair(labId)` — GET /labs/keypair
-- `getLabWindowsPassword(labId)` — GET /labs/windows-password
-- `getLabPricing(params)` — GET /labs/pricing
-- `getLabNetworkOptions(accountId, region)` — GET /labs/network-options
+---
 
-### Script load order (updated for M11)
-`cognito-sdk` → `auth` → `authui` → `api` → `instances` → `audit` → `billing` → `analytics` → `accounts` → `users` → `backup` → `labs` → `app`
+## Finance Module
+
+The Finance module tracks **OCU's own business finances** — not end-user billing. It is separate from
+the Billing & Cost tab (which shows AWS spend per EC2 instance).
+
+### Screens
+| Screen | Route | Description |
+|--------|-------|-------------|
+| Vendors | `/app/vendors` | OCU vendor management (suppliers, contractors) |
+| Customers | `/app/customers` | OCU customer management (invoicing, relationships) |
+| Alerts | `/app/alerts` | Finance alerts and notifications |
+| Fin Settings | `/app/finsettings` | Finance configuration |
+
+### Current State
+- All 4 screens are live **UI shells** in the React app — navigation works, pages render
+- No live API calls; using placeholder/mock data from `features/app/mockData.ts`
+- Backend (`/finance` endpoints) not yet built — these screens will be wired in a future milestone
+- `FinSettingsScreen.tsx` imports from `@/features/app/mockData` — indicator that live data is not yet connected
+
+### Design Principle
+- Finance module is part of the standard nav for all authenticated users
+- When backend is wired, follow the same `apiFetch<T>` + TanStack Query patterns as other screens
+- Keep Finance API under a new `/finance` path (do NOT reuse `/labs` or `/ec2`)
 
 ---
 
@@ -528,7 +544,10 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 |----------|--------|-----|
 | API Gateway | REST API v1 REGIONAL | COGNITO_USER_POOLS authorizer; explicit CORS per method |
 | Auth | Custom SRP via amazon-cognito-identity-js SDK | Full design control; password never leaves browser; no Hosted UI redirect |
-| Auth UI | Built-in login page in index.html | Enterprise branding; 6 form states; no external redirect |
+| Frontend | React 18 + TypeScript 5.6 + Vite 5 | Original vanilla JS/IIFE grew to 15+ modules; TS strict + component model + TanStack Query brings type safety, server state management, and long-term maintainability |
+| Server state | TanStack Query v5 | Declarative caching, background refetch, mutation invalidation — replaces manual fetch + `onTabActivated` patterns |
+| Client state | Zustand 5 | Minimal boilerplate auth store; no Redux overhead |
+| Routing | React Router v6 nested routes | `<RequireAuth>` guard + `<Navigate>` for RBAC; layout nesting without prop drilling |
 | Self-signup | Open to all (Cognito rate-limited) | SaaS product — anyone can create an account |
 | Domain | `app.onecloudutopia.com` (subdomain of company domain) | Hosted under One Cloud Utopia's official domain; no apex redirect needed for a subdomain |
 | Lambda code | Versioned S3 zip key | Forces code update on every CF deploy |
@@ -541,6 +560,7 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 | Lambda memory | 512 MB | Doubles CPU allocation vs 256MB; needed for 20-thread STS/EC2 ThreadPoolExecutor to run efficiently |
 | CloudFront PriceClass | PriceClass_200 | Includes Asia Pacific (Mumbai) edge nodes; India users served locally not via Europe |
 | STS cred caching | Module-level TTL dict + threading.Lock (10 min TTL) | 20 concurrent threads × N accounts = STS rate-limit without cache; creds last 15 min so 10 min cache is safe |
+| UI tab name | "My Servers" (was "Labs") | Product branding decision — operators relate to "servers" not "labs"; backend paths unchanged |
 
 ---
 
@@ -568,6 +588,10 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 | GET | /labs/windows-password | RDP password (Windows labs only) |
 | GET | /labs/pricing | On-demand pricing for wizard pricing step |
 | GET | /labs/network-options | Subnets + security groups for an account/region |
+| GET | /labs/pricing-settings | Pricing settings (WHT%, VAT%, margin%, discount%, currency, data transfer rate, etc.) |
+| POST | /labs/pricing-settings | Save pricing settings (admin only) |
+| GET | /labs/templates | Lab templates list |
+| POST | /labs/templates | Full-replace lab templates list (admin only) |
 
 ---
 
@@ -583,18 +607,43 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 - **STS credential caching:** `accounts.py` and `labs.py` cache assumed-role credentials in a module-level dict with a `threading.Lock` and 10-min TTL. `get_ec2_client()` and `_get_member_creds()` never call `assume_role()` more than once per 10 min per account per warm container. Do NOT remove this cache — the ThreadPoolExecutor fires 20+ concurrent STS calls without it, causing throttling.
 - **DynamoDB pagination:** All `table.scan()` calls must loop over `LastEvaluatedKey` to retrieve all pages. A single `scan()` only returns up to ~1MB; silently drops records beyond that. Both `get_accounts()` and `get_all_accounts()` in `accounts.py` handle pagination correctly — follow the same pattern for any new scan.
 
-### Frontend (JavaScript)
-- All modules: IIFE pattern — `const ModuleName = (function() { ... return {...}; })()`
-- **Script load order:** `cognito-sdk (CDN+fallback)` → `auth` → `authui` → `api` → `instances` → `audit` → `billing` → `analytics` → `accounts` → `users` → `backup` → `labs` → `app`
-- **Script loading:** Cognito SDK + `auth.js` + `authui.js` are synchronous (CDN fallback uses `document.write`; `Auth` must be defined before bootstrap). All other modules (`api.js` → `app.js`) use `defer`. `Auth.init()` is called inside a `DOMContentLoaded` listener to guarantee `App` is defined when `Auth._bootApp()` calls `App.init()`.
-- `const CONFIG = { /*__INJECT__*/ };` in index.html — replaced at deploy by config_injector with: `COGNITO_DOMAIN`, `CLIENT_ID`, `REDIRECT_URI`, `API_URL`, `USER_POOL_ID`, `CENTRAL_ACCOUNT_ID`, `ENVIRONMENT`, `MEMBER_ROLE_TEMPLATE_URL`
-- Auth uses `sessionStorage`; `isNearExpiry()` = < 10 min buffer (handles Cognito clock skew)
-- `Auth.init()` is the entry point — decides whether to show login page or boot dashboard
-- Dashboard pages: `dashboard`, `instances`, `billing`, `analytics`, `audit`, `accounts`, `users`, `backup`, `labs`
-- Admin-only pages: `accounts` and `users` tabs visible only when `App.setAdmin(true)`
-- Role badge shown in sidebar: `rbac-admin` (blue) / `rbac-operator` (green) / `rbac-viewer` (gray)
-- **Skeleton loading:** `App.init()` injects `.skeleton-row` shimmer placeholders into `#dash-list` and `#ag-wrap` before `Instances.refresh()` fires, so the dashboard is never blank while Lambda responds
-- **`onInstancesRefreshed` hook pattern:** After `Instances.refresh()` loads `allInstances`, it calls `Backup.onInstancesRefreshed()` and `Audit.onInstancesRefreshed()` so those modules can populate their instance datalists immediately, even if those tabs haven't been visited yet
+### Frontend (React / TypeScript)
+- All pages: functional components with typed props; TypeScript strict (no `any` except at API boundaries)
+- **Rules of Hooks:** `useState`, `useEffect`, `useQuery`, etc. MUST appear before any conditional early return — including RBAC guards
+- **RBAC guard pattern:**
+  ```typescript
+  export default function MyScreen() {
+    const [state, setState] = useState(false); // hooks first — always
+    const role = getRole();
+    if (role !== 'admin') return <Navigate to="/app/instances" replace />;
+    // render
+  }
+  ```
+- **apiFetch pattern:**
+  ```typescript
+  const data = await apiFetch<MyType>('/endpoint', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  ```
+- **TanStack Query:**
+  ```typescript
+  const { data, isLoading } = useQuery({ queryKey: ['labs'], queryFn: () => apiFetch<Lab[]>('/labs') });
+  const mut = useMutation({ mutationFn: (body) => apiFetch('/labs', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['labs'] }) });
+  // refetchInterval must be a function (v5 API):
+  refetchInterval: (query) => query.state.data?.status === 'provisioning' ? 5000 : false,
+  ```
+- **Fragment keys:** `<React.Fragment key={item.id}>` — NEVER `<>` inside `.map()` when a key is needed
+- **useEffect functional updater:**
+  ```typescript
+  useEffect(() => {
+    if (platform === 'windows') setStorageGb((s) => Math.max(s, 35));
+  }, [platform]); // functional updater removes storageGb from deps
+  ```
+- **Badge tones:** `'ok'|'err'|'warn'|'muted'|'accent'` — `'danger'` is NOT valid for Badge
+- **Button variants:** `'primary'|'ghost'|'accent'|'danger'|'ok'` — `'danger'` IS valid for Button
+- CONFIG injected at deploy by `config_injector` — keys: `COGNITO_DOMAIN`, `CLIENT_ID`, `REDIRECT_URI`, `API_URL`, `USER_POOL_ID`, `CENTRAL_ACCOUNT_ID`, `ENVIRONMENT`, `MEMBER_ROLE_TEMPLATE_URL`
 
 ### CloudFormation
 - `AuthorizationType: COGNITO_USER_POOLS` + `AuthorizerId: !Ref RestApiAuthorizer`
@@ -606,7 +655,6 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 - deploy.sh flushes REST API deployment snapshot after every CF deploy (prevents stale auth)
 - `EarlyValidation::ResourceExistenceCheck` fails if named resources already exist (orphaned from failed deploy) — delete them manually before re-deploying
 - S3 buckets with versioning: must delete all object versions before CF or manual deletion
-- CloudFront Function (`ApexRedirectFunction`): always created but only associated when `ApexDomain` is set; checks `Host` header and returns 301
 
 ### Custom Domain (CloudFront + ACM + Route 53)
 - ACM cert MUST be in us-east-1 (CloudFront requirement), even if stack is in another region
@@ -618,6 +666,11 @@ Admin: Labs tab → Pending filter → click row to expand → View Payment → 
 ---
 
 ## Deploy
+
+**Build frontend (required before deploy):**
+```bash
+cd frontend && npm install && npm run build
+```
 
 **Standard deploy (all config already set in deploy-config.env):**
 ```bash
@@ -664,7 +717,7 @@ aws cloudformation deploy \
 - **CI/CD:** GitHub Actions — `.github/workflows/deploy-dev.yml` + `.github/workflows/deploy-prod.yml` (OIDC auth, no stored AWS keys)
 - **Workflow:** `feat/branch` → PR to `develop` (1 approval, any member) → PR to `main` (Mukesh approval)
 - **Commit at milestone/feature completion only**
-- **Never commit:** `deploy-config.env`, `deploy-config-dev.env`, `.zip` files, `__pycache__/`, secrets
+- **Never commit:** `deploy-config.env`, `deploy-config-dev.env`, `.zip` files, `__pycache__/`, `node_modules/`, `frontend/dist/`, secrets
 - **Commit types:** `feat`, `fix`, `chore`, `docs`, `refactor`
 - **Portfolio sync after prod release:** `git checkout main && git pull origin main && git push personal main`
 
