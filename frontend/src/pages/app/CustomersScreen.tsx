@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Badge, Button, Card, EmptyState, Icon, PageHeader, Stat } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, PageHeader, Stat } from '@/components/ui';
 import { getRole } from '@/lib/auth';
 import { useCustomers, useCustomerMutation } from '@/lib/queries/finance';
 import type { Customer } from '@/types/api';

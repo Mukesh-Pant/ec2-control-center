@@ -1,4 +1,3 @@
-import React from 'react';
 import { Badge, Card, EmptyState, Icon, PageHeader } from '@/components/ui';
 import { useFinanceAlerts } from '@/lib/queries/finance';
 import type { FinanceAlert } from '@/types/api';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button, Card, PageHeader } from '@/components/ui';
 import { useAccounts } from '@/lib/queries/accounts';
 import { useFinanceSettings, useFinanceSettingsMutation } from '@/lib/queries/finance';
@@ -67,7 +67,7 @@ export default function FinSettingsScreen() {
     }
   };
 
-  const applyAccountTax = async (accountId: string) => {
+  const applyAccountTax = async (_accountId: string) => {
     setSaveMsg('');
     setSaveErr('');
     try {
