@@ -35,7 +35,7 @@ infrastructure to manage.
 | M12 | Quick-Add Account — CloudFormation Quick-Create button in Add Account modal; public S3 template hosting; pre-filled params | ✅ LIVE |
 | Perf | Performance — STS cred caching, boto3 singletons, skeleton loading, Lambda 512MB, CloudFront PriceClass_200 | ✅ LIVE |
 | Arch | Frontend v2.0.0 — full React 18 + TypeScript 5.6 + Vite 5 rewrite; TanStack Query v5; Zustand 5; React Router v6 | ✅ LIVE |
-| Finance | Finance module — Vendors, Customers, Alerts, FinSettings (OCU business finances) | 🔄 IN PROGRESS (UI shells live, backend wiring pending) |
+| Finance | Finance module — Vendors, Customers, Alerts, FinSettings (OCU business finances) | ✅ LIVE |
 
 **API:** REST API v1 (migrated from HTTP API v2) with COGNITO_USER_POOLS authorizer.
 
@@ -117,7 +117,7 @@ EC2-control-center/
         ├── features/
         │   └── app/
         │       ├── nav.ts      ← Navigation: 4 sections (Overview, Intelligence, Finance, Administration)
-        │       └── mockData.ts ← Placeholder data for Finance module screens (temporary)
+        │       └── mockData.ts ← Unused placeholder data (Finance module is now fully wired)
         ├── hooks/              ← TanStack Query hooks: useLabs, useLabSettings, useLabTemplates, etc.
         ├── lib/
         │   ├── api.ts          ← apiFetch<T> wrapper: Bearer JWT, ApiError on non-2xx, auto-refresh on 401
@@ -136,10 +136,10 @@ EC2-control-center/
         │       ├── UsersScreen.tsx
         │       ├── LabSettingsScreen.tsx    ← Admin only: pricing settings panel + template management panel
         │       ├── finance/
-        │       │   ├── VendorsScreen.tsx    ← OCU business finance — UI shell (backend wiring pending)
-        │       │   ├── CustomersScreen.tsx  ← OCU business finance — UI shell (backend wiring pending)
-        │       │   ├── AlertsScreen.tsx     ← OCU business finance — UI shell (backend wiring pending)
-        │       │   └── FinSettingsScreen.tsx ← OCU business finance — UI shell (backend wiring pending)
+        │       │   ├── VendorsScreen.tsx    ← OCU business finance — full CRUD (useVendors + useVendorMutation)
+        │       │   ├── CustomersScreen.tsx  ← OCU business finance — full CRUD (useCustomers + useCustomerMutation)
+        │       │   ├── AlertsScreen.tsx     ← OCU business finance — live alerts (useFinanceAlerts)
+        │       │   └── FinSettingsScreen.tsx ← OCU business finance — live settings save (useFinanceSettings + useFinanceSettingsMutation)
         │       └── labs/
         │           ├── LabList.tsx          ← Filterable row-based table with inline expand panel
         │           ├── LabRow.tsx           ← Single row + inline detail panel rendering
@@ -526,15 +526,15 @@ the Billing & Cost tab (which shows AWS spend per EC2 instance).
 | Fin Settings | `/app/finsettings` | Finance configuration |
 
 ### Current State
-- All 4 screens are live **UI shells** in the React app — navigation works, pages render
-- No live API calls; using placeholder/mock data from `features/app/mockData.ts`
-- Backend (`/finance` endpoints) not yet built — these screens will be wired in a future milestone
-- `FinSettingsScreen.tsx` imports from `@/features/app/mockData` — indicator that live data is not yet connected
+- All 4 screens are **fully wired** — live API calls, real data, no mock imports
+- Query hooks in `lib/queries/finance.ts`: `useVendors`, `useVendorMutation`, `useCustomers`, `useCustomerMutation`, `useFinanceAlerts`, `useFinanceSettings`, `useFinanceSettingsMutation`
+- Backend (`/finance` endpoints) is complete — DynamoDB single table `ec2-control-finance-{env}`, `require_admin` on all handlers
+- `features/app/mockData.ts` still exists but is no longer imported anywhere — safe to delete if desired
 
 ### Design Principle
 - Finance module is part of the standard nav for all authenticated users
-- When backend is wired, follow the same `apiFetch<T>` + TanStack Query patterns as other screens
-- Keep Finance API under a new `/finance` path (do NOT reuse `/labs` or `/ec2`)
+- Follows the same `apiFetch<T>` + TanStack Query patterns as all other screens
+- Finance API lives under `/finance` path (separate from `/labs` and `/ec2`)
 
 ---
 
