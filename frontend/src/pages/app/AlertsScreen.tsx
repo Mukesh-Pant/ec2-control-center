@@ -21,6 +21,7 @@ function alertColor(severity: FinanceAlert['severity']): string {
 export default function AlertsScreen() {
   const { data, isLoading, error } = useFinanceAlerts();
   const alerts = data?.alerts ?? [];
+  const showTable = !isLoading && !error && alerts.length > 0;
 
   return (
     <div className="page">
@@ -29,12 +30,12 @@ export default function AlertsScreen() {
         title="Alerts & Notifications"
         sub="Contract expirations, payment reminders, and cost anomalies."
       />
-      <Card pad={!isLoading && !error && alerts.length > 0 ? false : undefined}>
+      <Card pad={showTable ? false : undefined}>
         {isLoading && (
-          <p style={{ padding: 24, color: 'var(--ink-3)', fontSize: 13 }}>Loading alerts…</p>
+          <p style={{ padding: 'var(--pad)', color: 'var(--ink-3)', fontSize: 13 }}>Loading alerts…</p>
         )}
         {error && (
-          <p style={{ padding: 24, color: 'var(--danger)', fontSize: 13 }}>
+          <p style={{ padding: 'var(--pad)', color: 'var(--danger)', fontSize: 13 }}>
             {error instanceof Error ? error.message : 'Failed to load alerts.'}
           </p>
         )}
@@ -45,7 +46,7 @@ export default function AlertsScreen() {
             description="Alerts appear here when contracts are about to expire, payments are overdue, or cost anomalies are detected."
           />
         )}
-        {!isLoading && !error && alerts.length > 0 && (
+        {showTable && (
           <table className="tbl">
             <thead>
               <tr>
@@ -56,8 +57,8 @@ export default function AlertsScreen() {
               </tr>
             </thead>
             <tbody>
-              {alerts.map((a, i) => (
-                <tr key={i}>
+              {alerts.map((a) => (
+                <tr key={`${a.entityType}-${a.entityId}`}>
                   <td>
                     <Icon
                       name={alertIconName(a.type)}
