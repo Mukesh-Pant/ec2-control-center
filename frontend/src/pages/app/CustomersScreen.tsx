@@ -120,7 +120,7 @@ function CustomerFormPanel({ initial, isPending, onSave, onCancel }: CustomerFor
           <input
             className="inp"
             type="date"
-            value={form.nextDueDate ?? ''}
+            value={form.nextDueDate}
             onChange={(e) => set('nextDueDate', e.target.value || '')}
           />
         </div>
@@ -129,7 +129,7 @@ function CustomerFormPanel({ initial, isPending, onSave, onCancel }: CustomerFor
           <input
             className="inp"
             type="date"
-            value={form.agreementEnd ?? ''}
+            value={form.agreementEnd}
             onChange={(e) => set('agreementEnd', e.target.value || '')}
           />
         </div>
@@ -137,7 +137,7 @@ function CustomerFormPanel({ initial, isPending, onSave, onCancel }: CustomerFor
           <label className="field-label">Notes (optional)</label>
           <textarea
             className="inp"
-            value={form.notes ?? ''}
+            value={form.notes}
             onChange={(e) => set('notes', e.target.value)}
             rows={2}
             style={{ resize: 'vertical' }}
@@ -200,6 +200,7 @@ export default function CustomersScreen() {
   }, [customers, typeFilter, currencyFilter]);
 
   const handleAdd = async (form: CustomerForm) => {
+    if (!isAdmin) return;
     setMutError('');
     try {
       await mut.mutateAsync({ action: 'add', ...form });
@@ -210,6 +211,7 @@ export default function CustomersScreen() {
   };
 
   const handleUpdate = async (entityId: string, form: CustomerForm) => {
+    if (!isAdmin) return;
     setMutError('');
     try {
       await mut.mutateAsync({ action: 'update', entityId, ...form });
@@ -220,6 +222,7 @@ export default function CustomersScreen() {
   };
 
   const handleDelete = async (entityId: string) => {
+    if (!isAdmin) return;
     setMutError('');
     try {
       await mut.mutateAsync({ action: 'delete', entityId });
@@ -356,7 +359,7 @@ export default function CustomersScreen() {
                 <th>Name / Type</th>
                 <th>Currency</th>
                 <th className="num">Contract Value</th>
-                <th className="num">Outstanding</th>
+                <th className="num">Outstanding Amount</th>
                 <th>Next Due Date</th>
                 <th>Agreement End</th>
                 {isAdmin && <th style={{ width: 140 }}>Actions</th>}
@@ -419,7 +422,7 @@ export default function CustomersScreen() {
                             <Button
                               size="xs"
                               variant="ghost"
-                              onClick={() => setDeletingId(null)}
+                              onClick={() => { setDeletingId(null); setMutError(''); }}
                               disabled={mut.isPending}
                             >
                               Cancel
