@@ -292,3 +292,91 @@ export interface LabPricingSettingsResponse {
   settings: LabPricingSettings;
   message?: string;
 }
+
+// ── Finance module ────────────────────────────────────────────────────────
+
+export interface Vendor {
+  entityId: string;
+  name: string;
+  category: string;
+  billingType: 'recurring' | 'one-time' | 'variable';
+  currency: 'USD' | 'NPR' | 'INR';
+  amount: number;
+  agreementEnd?: string;   // ISO date YYYY-MM-DD
+  manualStatus: 'active' | 'inactive';
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface VendorsResponse {
+  items: Vendor[];
+}
+
+export interface VendorMutationResponse {
+  vendorId?: string;
+  deleted?: string;
+}
+
+export interface Customer {
+  entityId: string;
+  name: string;
+  type: 'Business' | 'Individual';
+  currency: 'USD' | 'NPR' | 'INR';
+  contractValue: number;
+  outstandingAmount: number;
+  nextDueDate?: string;   // ISO date YYYY-MM-DD — triggers payment alerts
+  agreementEnd?: string;  // ISO date YYYY-MM-DD — triggers contract expiry alerts
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CustomersResponse {
+  items: Customer[];
+}
+
+export interface CustomerMutationResponse {
+  customerId?: string;
+  deleted?: string;
+}
+
+export interface FinanceSettings {
+  usdToNpr: number;
+  inrToNpr: number;
+  expiryWarningDays: number;
+  paymentWarningDays: number;
+  defaultCurrency: 'USD' | 'NPR' | 'INR';
+  wht_rate: number;     // decimal, e.g. 0.18 = 18%
+  margin_rate: number;  // decimal
+  vat_rate: number;     // decimal
+  taxAccounts: Record<string, { wht?: number; vat?: number; margin?: number; rebate?: number }>;
+}
+
+export interface FinanceSettingsMutationResponse {
+  saved: boolean;
+}
+
+export type FinanceAlertType =
+  | 'vendor_expired'
+  | 'vendor_expiring'
+  | 'payment_overdue'
+  | 'payment_due'
+  | 'milestone_overdue'
+  | 'contract_expiring';
+
+export type FinanceAlertSeverity = 'critical' | 'warning';
+
+export interface FinanceAlert {
+  type: FinanceAlertType;
+  severity: FinanceAlertSeverity;
+  entityType: 'VENDOR' | 'CUSTOMER';
+  entityId: string;
+  entityName: string;
+  message: string;
+  link: string;
+}
+
+export interface FinanceAlertsResponse {
+  alerts: FinanceAlert[];
+}
