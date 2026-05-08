@@ -26,7 +26,7 @@ export function useVendors() {
 export function useVendorMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
+    mutationFn: (body: { action: string } & Record<string, unknown>) =>
       apiFetch<VendorMutationResponse>('/finance/vendors', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -48,7 +48,7 @@ export function useCustomers() {
 export function useCustomerMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
+    mutationFn: (body: { action: string } & Record<string, unknown>) =>
       apiFetch<CustomerMutationResponse>('/finance/customers', {
         method: 'POST',
         body: JSON.stringify(body),
