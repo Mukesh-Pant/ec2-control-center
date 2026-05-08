@@ -4,8 +4,6 @@ import { getRole } from '@/lib/auth';
 import { useVendors, useVendorMutation } from '@/lib/queries/finance';
 import type { Vendor } from '@/types/api';
 
-// ── Form blank / helpers ──────────────────────────────────────────────────────
-
 type VendorForm = Omit<Vendor, 'entityId' | 'createdAt' | 'updatedAt'>;
 
 function blankForm(): VendorForm {
@@ -34,7 +32,7 @@ function formFromVendor(v: Vendor): VendorForm {
   };
 }
 
-function billingLabel(t: Vendor['billingType']) {
+function billingLabel(t: Vendor['billingType']): string {
   if (t === 'recurring') return 'Recurring';
   if (t === 'one-time') return 'One-time';
   return 'Variable';
@@ -43,8 +41,6 @@ function billingLabel(t: Vendor['billingType']) {
 function statusTone(s: Vendor['manualStatus']): 'ok' | 'muted' {
   return s === 'active' ? 'ok' : 'muted';
 }
-
-// ── Inline vendor form ────────────────────────────────────────────────────────
 
 interface VendorFormPanelProps {
   initial: VendorForm;
@@ -173,12 +169,10 @@ function VendorFormPanel({ initial, isPending, onSave, onCancel }: VendorFormPan
   );
 }
 
-// ── Main screen ───────────────────────────────────────────────────────────────
-
 export default function VendorsScreen() {
-  // All hooks before any conditional returns (Rules of Hooks)
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [searchText, setSearchText] = useState('');
@@ -196,7 +190,7 @@ export default function VendorsScreen() {
   const totalCount = vendors.length;
   const activeCount = vendors.filter((v) => v.manualStatus === 'active').length;
   const monthlySpend = vendors
-    .filter((v) => v.manualStatus === 'active' && v.billingType === 'recurring')
+    .filter((v) => v.manualStatus === 'active' && v.billingType === 'recurring' && v.currency === 'USD')
     .reduce((sum, v) => sum + v.amount, 0);
 
   // Unique categories for filter dropdown
@@ -217,8 +211,6 @@ export default function VendorsScreen() {
       return true;
     });
   }, [vendors, statusFilter, categoryFilter, searchText]);
-
-  // ── Mutation helpers ────────────────────────────────────────────────────────
 
   const handleAdd = async (form: VendorForm) => {
     setMutError('');
@@ -244,12 +236,11 @@ export default function VendorsScreen() {
     setMutError('');
     try {
       await mut.mutateAsync({ action: 'delete', entityId });
+      setDeletingId(null);
     } catch (err) {
       setMutError(err instanceof Error ? err.message : 'Failed to delete vendor.');
     }
   };
-
-  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="page">
@@ -292,10 +283,10 @@ export default function VendorsScreen() {
           meta="currently active"
         />
         <Stat
-          label="Monthly spend"
+          label="Monthly (USD)"
           icon="DollarSign"
           value={monthlySpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          meta="active recurring vendors"
+          meta="USD active recurring vendors"
         />
       </div>
 
@@ -441,36 +432,61 @@ export default function VendorsScreen() {
                     </td>
                     {isAdmin && (
                       <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            icon="Pencil"
-                            onClick={() => {
-                              setEditingId(editingId === v.entityId ? null : v.entityId);
-                              setShowAdd(false);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="danger"
-                            icon="Trash2"
-                            onClick={() => void handleDelete(v.entityId)}
-                            disabled={mut.isPending}
-                          >
-                            Delete
-                          </Button>
-                        </div>
+                        {deletingId === v.entityId ? (
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>
+                              Are you sure?
+                            </span>
+                            <Button
+                              size="xs"
+                              variant="danger"
+                              onClick={() => void handleDelete(v.entityId)}
+                              disabled={mut.isPending}
+                            >
+                              Confirm
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => setDeletingId(null)}
+                              disabled={mut.isPending}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              icon="Pencil"
+                              onClick={() => {
+                                setEditingId(editingId === v.entityId ? null : v.entityId);
+                                setShowAdd(false);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="danger"
+                              icon="Trash2"
+                              onClick={() => setDeletingId(v.entityId)}
+                              disabled={mut.isPending}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        )}
                       </td>
                     )}
                   </tr>
-                  {isAdmin && editingId === v.entityId && (
+                  {editingId === v.entityId && (
                     <tr>
                       <td colSpan={isAdmin ? 7 : 6} style={{ padding: 0 }}>
                         <div style={{ padding: '8px 12px' }}>
                           <VendorFormPanel
+                            key={v.entityId}
                             initial={formFromVendor(v)}
                             isPending={mut.isPending}
                             onSave={(form) => void handleUpdate(v.entityId, form)}
