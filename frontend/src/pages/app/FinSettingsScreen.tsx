@@ -8,7 +8,7 @@ type TaxRow = { wht: string; vat: string; margin: string; rebate: string };
 
 export default function FinSettingsScreen() {
   const { data: settingsData, isLoading: settingsLoading } = useFinanceSettings();
-  const { data: accountsData } = useAccounts();
+  const { data: accountsData, isLoading: accountsLoading } = useAccounts();
   const mut = useFinanceSettingsMutation();
 
   const [form, setForm] = useState<Partial<FinanceSettings>>({});
@@ -72,7 +72,7 @@ export default function FinSettingsScreen() {
     setSaveErr('');
     try {
       await mut.mutateAsync(buildSaveBody());
-      setSaveMsg(`Tax settings applied for ${accountId}.`);
+      setSaveMsg('Settings saved.');
     } catch (err) {
       setSaveErr(err instanceof Error ? err.message : 'Save failed.');
     }
@@ -193,7 +193,7 @@ export default function FinSettingsScreen() {
               const setTax = (field: keyof TaxRow, val: string) =>
                 setTaxEdits((prev) => ({
                   ...prev,
-                  [a.accountId]: { ...row, [field]: val },
+                  [a.accountId]: { ...(prev[a.accountId] ?? { wht: '', vat: '', margin: '', rebate: '' }), [field]: val },
                 }));
               return (
                 <tr key={a.accountId}>
@@ -262,7 +262,7 @@ export default function FinSettingsScreen() {
                 </tr>
               );
             })}
-            {accounts.length === 0 && !settingsLoading && (
+            {accounts.length === 0 && !accountsLoading && (
               <tr>
                 <td colSpan={6} style={{ textAlign: 'center', color: 'var(--ink-4)', fontSize: 13, padding: 20 }}>
                   No accounts found.
