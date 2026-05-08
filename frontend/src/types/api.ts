@@ -355,6 +355,7 @@ export interface FinanceSettings {
 
 export interface FinanceSettingsMutationResponse {
   saved: boolean;
+  message?: string;
 }
 
 export type FinanceAlertType =
